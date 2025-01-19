@@ -204,5 +204,5 @@ class BehaviorCloningExperiment():
 
 
 if __name__ == "__main__":
-    exp = BehaviorCloningExperiment(config_path="train_transformer.json")
+    exp = BehaviorCloningExperiment(config_path="train_transformer_single.json")
     exp.run()

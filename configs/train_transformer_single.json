@@ -24,13 +24,13 @@
           "name": "ResNet18",
           "siamese": false,
           "params": {
-            "img_size": 120,
-            "crop_size": 110,
+            "img_size": 200,
+            "crop_size": 190,
             "SpatialSoftmax": {
               "num_kp": 32,
               "in_c": 512,
-              "in_h": 4,
-              "in_w": 4
+              "in_h": 6,
+              "in_w": 6
             }
           }
         }
@@ -58,7 +58,7 @@
     "num_train_steps_per_epoch": 100,
     "num_val_steps_per_epoch": 10,
     "num_epochs_save": 3,
-    "batch_size": 32,
+    "batch_size": 16,
     "num_data_workers": 2
   },
 

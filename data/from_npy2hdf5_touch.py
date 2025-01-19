@@ -23,8 +23,9 @@ def trans_imgs_to_square(imgs,img_size,cut2square):
         height, width = imgs[0].shape[0], imgs[0].shape[1]
     elif len(imgs.shape) == 3:
         height, width = imgs.shape[0], imgs.shape[1]
-
-    if height!=img_size or width!=img_size:
+    if height<img_size or width<img_size:
+        raise RuntimeError('Upsampling is forbidden.')
+    elif height!=img_size or width!=img_size:
         if cut2square:
             if width > height:
                 left = (width - height) // 2
@@ -51,10 +52,10 @@ def trans_imgs_to_square(imgs,img_size,cut2square):
         return imgs
 
 if __name__ == '__main__':
-    img_size=120
+    img_size=200
     # current_date = datetime.datetime.now()
     # hdf_date = current_date.strftime('%Y.%m.%d')
-    date='25.01.18'
+    date='25.01.17'
     replace_exist=True
     cut_to_square=True
     # formatted_date='2024.11.07'
@@ -117,7 +118,8 @@ if __name__ == '__main__':
         new_f_out.create_dataset('data/demo_{}/user_acting'.format(i), data=np.zeros((row_1, 1)))
 
         ori_h,ori_w=data_img[0].shape[0:2]
-        data_img=trans_imgs_to_square(data_img,img_size,cut_to_square)
+        if ori_h!=img_size or ori_w!=img_size:
+            data_img=trans_imgs_to_square(data_img,img_size,cut_to_square)
 
         obs_path = 'data/demo_{}/obs'.format(i)
         action_path = 'data/demo_{}/actions'.format(i)

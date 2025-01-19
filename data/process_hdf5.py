@@ -5,7 +5,7 @@ import random
 from utils.hdf5 import split_train_val_from_hdf5
 
 if __name__ == '__main__':
-    date='25.01.18'
+    date='25.01.17'
     fn=os.path.join('/media/kiriyamagk/One Touch/AlignAnything',date,'hdf5/mimic.hdf5')
 
     disturb_abs_rot=True

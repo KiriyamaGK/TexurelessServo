@@ -48,6 +48,7 @@ if __name__ == '__main__':
     cut_to_square=config["cut_to_square"]
     ckpts_dir=config["ckpts_dir"]
     num_objs=config['num_objs']
+    npy_size=config['npy_img_size']
     eval_epoch_num=config['eval_epoch_num']
     time_threshold=config['time_threshold']
     cv2_visualize=config['cv2_visualize']
@@ -75,8 +76,10 @@ if __name__ == '__main__':
         if cv2_visualize:
             img_goal_vis = cv2.cvtColor(img_goal.copy(), cv2.COLOR_BGR2RGB)
         if cut_to_square:
-            img_goal = clip_image(img_goal, img_h)
+            img_goal = clip_image(img_goal, npy_size)
         else:
+            img_goal = cv2.resize(img_goal, (npy_size, npy_size))
+        if npy_size!= img_w and npy_size!= img_h:
             img_goal = cv2.resize(img_goal, (img_w, img_h))
         env.act_with_abs_dict(init_transform_dict)
         print("[INFO] start rollout_ ...".format(idx))
@@ -94,11 +97,11 @@ if __name__ == '__main__':
                     env.init()
                     break
             if cut_to_square:
-                img=clip_image(img,img_h)
+                img=clip_image(img,npy_size)
             else:
+                img=cv2.resize(img, (npy_size, npy_size))
+            if npy_size!= img_w and npy_size!= img_h:
                 img=cv2.resize(img,(img_w,img_h))
-            # cv2.imshow('Images', img)
-            # cv2.waitKey(0)
             obs_dict={
                 "robot0_eye_in_hand_image": img,
                 "robot0_eye_in_hand_image_goal": img_goal,
