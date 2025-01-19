@@ -1,0 +1,19 @@
+{
+    "intrinsic": {
+        "width": 640,
+        "height": 480,
+        "build_with_K": "True",
+        "K": [
+            606.502 ,      0.0, 320.373 ,
+                 0.0, 606.239, 253.444,
+                 0.0,      0.0,      1.0
+        ],
+        "near": 0.02,
+        "far": 1,
+        "fov": 60
+    },
+    "num_objs": 10,
+    "demo_total_num": 5000,
+    "trans_vel": 0.001,
+    "rot_vel": 0.5
+}
