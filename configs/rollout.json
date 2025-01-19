@@ -14,7 +14,7 @@
     },
     "cut_to_square": true,
     "logs_dir":  "/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-01-19_20-00-28/config.json",
-    "ckpts_dir": "/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-01-19_20-00-28/epoch_57_validation_loss:0.002431495867494959.pth",
+    "ckpts_dir": "/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-01-19_20-00-28/epoch_30_best_validation_loss:0.0008118727710098028.pth",
     "num_objs": 1,
     "eval_epoch_num": 200,
     "bgr2rgb": false,

@@ -4,9 +4,28 @@ import os
 import random
 from utils.hdf5 import split_train_val_from_hdf5
 
+def insert_images(f, ep_key, dataset_name, trans_id, rot_id, add_num, row_1):
+    if dataset_name in f[ep_key]:
+        # 获取数据集的形状和dtype
+        dset = f[f'{ep_key}/{dataset_name}']
+        shape = dset.shape
+        dtype = dset.dtype
+
+        # 创建一个新的数据集来存储修改后的数据
+        new_dset = f[ep_key].create_dataset(f'{dataset_name}_temp', shape=(row_1, *shape[1:]), dtype=dtype)
+
+        # 将原数据集的数据复制到新数据集的相应位置
+        new_dset[:rot_id] = dset[:rot_id]
+        new_dset[rot_id:rot_id+add_num] = np.repeat(dset[trans_id+1][np.newaxis, :], add_num, axis=0)
+        new_dset[rot_id+add_num:] = dset[rot_id:row_1-add_num]
+
+        # 删除原数据集并重命名新数据集
+        del f[ep_key][dataset_name]
+        f[ep_key].move(f'{dataset_name}_temp', dataset_name)
+
 if __name__ == '__main__':
     date='25.01.17'
-    fn=os.path.join('/media/kiriyamagk/One Touch/AlignAnything',date,'hdf5/mimic.hdf5')
+    fn=os.path.join('/media/kiriyamagk/One Touch/AlignAnything',date,'hdf5/mimic1.hdf5')
 
     disturb_abs_rot=True
 
@@ -128,7 +147,6 @@ if __name__ == '__main__':
 
     if add_medium_episode:         #增加过渡数据集add_medium_num帧，每帧action平移量、旋转量各取一半
         add_num=add_medium_num
-        total_samples = 0
         f = h5py.File(fn, "r+")
         for ep in f['data']:
             print("processing", ep)
@@ -181,35 +199,37 @@ if __name__ == '__main__':
 
                 ep_key = 'data/{}/obs'.format(ep)
                 if 'robot0_eye_in_hand_image' in f[ep_key]:
-                    wrist_img = f['{}/robot0_eye_in_hand_image'.format(ep_key)][trans_id+1].copy()
-                    wrist_lst = f['{}/robot0_eye_in_hand_image'.format(ep_key)][:]
-                    wrist_lst = np.concatenate((wrist_lst[0:rot_id], np.repeat(wrist_img[np.newaxis, :], add_num, axis=0),wrist_lst[rot_id:]))
-                    assert wrist_lst.shape[0] == row_1
-                    del f[ep_key]['robot0_eye_in_hand_image']
-                    f[ep_key].create_dataset('robot0_eye_in_hand_image', data=wrist_lst)
+                    # wrist_img = f['{}/robot0_eye_in_hand_image'.format(ep_key)][trans_id+1].copy()
+                    # wrist_lst = f['{}/robot0_eye_in_hand_image'.format(ep_key)][:]
+                    # wrist_lst = np.concatenate((wrist_lst[0:rot_id], np.repeat(wrist_img[np.newaxis, :], add_num, axis=0),wrist_lst[rot_id:]))
+                    # assert wrist_lst.shape[0] == row_1
+                    # del f[ep_key]['robot0_eye_in_hand_image']
+                    # f[ep_key].create_dataset('robot0_eye_in_hand_image', data=wrist_lst)
+                    insert_images(f, ep_key, 'robot0_eye_in_hand_image', trans_id, rot_id, add_num, row_1)
 
                 if 'robot0_eye_in_hand_image_goal' in f[ep_key]:
-                    wrist_img_goal = f['{}/robot0_eye_in_hand_image_goal'.format(ep_key)][trans_id+1].copy()
-                    wrist_goal_lst = f['{}/robot0_eye_in_hand_image_goal'.format(ep_key)][:]
-                    wrist_goal_lst = np.concatenate((wrist_goal_lst[0:rot_id], np.repeat(wrist_img_goal[np.newaxis, :], add_num, axis=0),wrist_goal_lst[rot_id:]))
-                    assert wrist_goal_lst.shape[0] == row_1
-                    del f[ep_key]['robot0_eye_in_hand_image_goal']
-                    f[ep_key].create_dataset('robot0_eye_in_hand_image_goal', data=wrist_goal_lst)
-
+                    # wrist_img_goal = f['{}/robot0_eye_in_hand_image_goal'.format(ep_key)][trans_id+1].copy()
+                    # wrist_goal_lst = f['{}/robot0_eye_in_hand_image_goal'.format(ep_key)][:]
+                    # wrist_goal_lst = np.concatenate((wrist_goal_lst[0:rot_id], np.repeat(wrist_img_goal[np.newaxis, :], add_num, axis=0),wrist_goal_lst[rot_id:]))
+                    # assert wrist_goal_lst.shape[0] == row_1
+                    # del f[ep_key]['robot0_eye_in_hand_image_goal']
+                    # f[ep_key].create_dataset('robot0_eye_in_hand_image_goal', data=wrist_goal_lst)
+                    insert_images(f, ep_key, 'robot0_eye_in_hand_image_goal', trans_id, rot_id, add_num, row_1)
         f.close()
 
-        f = h5py.File(fn, "a")  # edit mode
-        for ep in f["data"]:
-            # add "num_samples" into per-episode metadata
-            if "num_samples" in f["data/{}".format(ep)].attrs:
-                del f["data/{}".format(ep)].attrs["num_samples"]
-            n_sample = f["data/{}/actions".format(ep)].shape[0] - 1
-            f["data/{}".format(ep)].attrs["num_samples"] = n_sample
-            total_samples += n_sample
+    total_samples = 0
+    f = h5py.File(fn, "a")  # edit mode
+    for ep in f["data"]:
+        # add "num_samples" into per-episode metadata
+        if "num_samples" in f["data/{}".format(ep)].attrs:
+            del f["data/{}".format(ep)].attrs["num_samples"]
+        n_sample = f["data/{}/actions".format(ep)].shape[0] - 1
+        f["data/{}".format(ep)].attrs["num_samples"] = n_sample
+        total_samples += n_sample
 
-            # print("num_samples:",n_sample)
-        # add total samples to global metadata
-        if "total" in f["data"].attrs:
-            del f["data"].attrs["total"]
-        f["data"].attrs["total"] = total_samples
-        split_train_val_from_hdf5(fn)
+        # print("num_samples:",n_sample)
+    # add total samples to global metadata
+    if "total" in f["data"].attrs:
+        del f["data"].attrs["total"]
+    f["data"].attrs["total"] = total_samples
+    split_train_val_from_hdf5(fn)

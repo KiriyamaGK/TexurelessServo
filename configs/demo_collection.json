@@ -13,7 +13,7 @@
         "fov": 60
     },
     "num_objs": 10,
-    "demo_total_num": 5000,
+    "demo_total_num": 5,
     "trans_vel": 0.001,
     "rot_vel": 0.5,
     "trans_and_rot_type": "simultaneously"

@@ -52,7 +52,7 @@ def trans_imgs_to_square(imgs,img_size,cut2square):
         return imgs
 
 if __name__ == '__main__':
-    img_size=200
+    img_size=120
     # current_date = datetime.datetime.now()
     # hdf_date = current_date.strftime('%Y.%m.%d')
     date='25.01.17'
