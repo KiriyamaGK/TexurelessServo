@@ -1,0 +1,4 @@
+常见cropped_img_size和spatial_softmax的in_w，in_h维度关系
+106->4
+200->7
+450->15

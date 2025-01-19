@@ -1,0 +1,84 @@
+{
+  "algorithm": {
+    "name": "BC",
+    "policy": {
+      "name": "TransformerSingle",
+      "params": {
+        "embedding_size": 656,
+        "n_layer": 4,
+        "n_head": 4,
+        "block_size": 10,
+        "low_dim_hidden_sizes": [
+          32,
+          64,
+          30
+        ],
+        "output_head_sizes": [
+          256,
+          128
+        ],
+        "activation": "ReLU",
+        "output_activation": null,
+        "use_gmm": true,
+        "encoder": {
+          "name": "ResNet18",
+          "siamese": false,
+          "params": {
+            "img_size": 120,
+            "crop_size": 110,
+            "SpatialSoftmax": {
+              "num_kp": 32,
+              "in_c": 512,
+              "in_h": 4,
+              "in_w": 4
+            }
+          }
+        }
+      }
+  },
+    "optimizer": {
+      "name": "Adam",
+      "params": {
+        "lr": 0.0001
+      }
+    },
+    "loss":
+      {
+        "name": "CustomLoss",
+        "weight":
+        {
+          "weight_tr": 500.0,
+          "weight_rot": 1.0
+        }
+      }
+  },
+  "training": {
+    "num_epochs": 2000,
+    "num_epochs_logging_and_valid": 1,
+    "num_train_steps_per_epoch": 100,
+    "num_val_steps_per_epoch": 10,
+    "num_epochs_save": 3,
+    "batch_size": 32,
+    "num_data_workers": 2
+  },
+
+
+  "dataset": {
+    "hdf5_path": "/media/kiriyamagk/One Touch/AlignAnything/25.01.17/hdf5/mimic.hdf5",
+    "specific_obs_keys": [
+      "robot0_eye_in_hand_image",
+      "abs_rot"
+    ],
+    "num_demos": 1500,
+    "seq_length": 10,
+    "input_low_dim": 1,
+    "output_dim": 3,
+    "hdf5_cache_mode": "low_dim",
+    "hdf5_use_swmr": true,
+    "bgr2rgb": false
+  },
+  "seed": 42,
+  "model_out_dir": "trial",
+  "log_dir": "trial"
+
+}
