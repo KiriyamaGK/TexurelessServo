@@ -47,7 +47,7 @@ if __name__ == '__main__':
     img_h=img_w
     cut_to_square=config["cut_to_square"]
     ckpts_dir=config["ckpts_dir"]
-    num_objs=config['num_objs']
+    objs_descriptor=config['objs_descriptor']
     npy_size=config['npy_img_size']
     eval_epoch_num=config['eval_epoch_num']
     time_threshold=config['time_threshold']
@@ -66,7 +66,7 @@ if __name__ == '__main__':
 
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
     cv2.namedWindow('Images', cv2.WINDOW_NORMAL)
-    env=Environment(camera_intrinsic,num_objs=num_objs)
+    env=Environment(camera_intrinsic,objs_descriptor=objs_descriptor)
     env.init()
 
     for idx in range(eval_epoch_num):
@@ -81,6 +81,7 @@ if __name__ == '__main__':
             img_goal = cv2.resize(img_goal, (npy_size, npy_size))
         if npy_size!= img_w and npy_size!= img_h:
             img_goal = cv2.resize(img_goal, (img_w, img_h))
+        # cv2.imwrite('/media/kiriyamagk/One Touch/AlignAnything/imgs/{}.png'.format(idx+1),img_goal_vis)
         env.act_with_abs_dict(init_transform_dict)
         print("[INFO] start rollout_ ...".format(idx))
         while True:

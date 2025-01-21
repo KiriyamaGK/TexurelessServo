@@ -50,6 +50,7 @@
       }
 },
   "training": {
+    "finetune":false,
     "num_epochs": 1000,
     "num_epochs_logging_and_valid": 10,
     "num_train_steps_per_epoch": 100,

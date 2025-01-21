@@ -55,7 +55,7 @@ if __name__ == '__main__':
     img_size=120
     # current_date = datetime.datetime.now()
     # hdf_date = current_date.strftime('%Y.%m.%d')
-    date='25.01.17'
+    date='25.01.19'
     replace_exist=True
     cut_to_square=True
     # formatted_date='2024.11.07'
@@ -63,6 +63,7 @@ if __name__ == '__main__':
     exact_abs_rot_list=True
     add_goal_image=True
     base='/media/kiriyamagk/One Touch/AlignAnything'
+    val_ratio = 0.1
 
 
     base_dir=os.path.join(base,date)
@@ -260,4 +261,4 @@ if __name__ == '__main__':
     if "total" in f["data"].attrs:
         del f["data"].attrs["total"]
     f["data"].attrs["total"] = total_samples
-    split_train_val_from_hdf5(hdf5_path)
+    split_train_val_from_hdf5(hdf5_path,val_ratio)

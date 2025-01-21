@@ -19,7 +19,8 @@ class Environment(object):
     def __init__(
         self,
         camera_config: Optional[Union[str, CameraIntrinsic]],
-        num_objs=20
+        objs_descriptor=20,
+        use_max_rot=False
     ):
         cwT = np.array([[-1, 0, 0, 0],  # 外参，左上角c右下角w，前三列是c系在w系中的表示,按列排列，最后一列是从c的原点指向w的原点并在c系中表示
                         [0, 1, 0, -0.02],
@@ -33,9 +34,12 @@ class Environment(object):
         self.dist_eps = 0.0007  # m
         self.init_trans=0.05    # m
         self.init_rot=60       # degree
+        self.use_max_rot=use_max_rot
 
         self.obj_idx = 0
-        self.obj_total_num=num_objs
+        self.obj_idx_pointer = 0
+        self.obj_total_num=23
+        self.objs_descriptor=objs_descriptor
         self.obj_scale_factor = 0.001
         self.table_scale_factor = 3
         self.objStartPos = [0, 0, 1.88]
@@ -73,6 +77,24 @@ class Environment(object):
         self.axes_cam = DebugAxesCam(self.client)
         self.axes_gripper = DebugAxesGripper(self.client)
 
+        self.determine_obj_idxes()
+
+    def determine_obj_idxes(self):
+        if isinstance(self.objs_descriptor,int):
+            if self.objs_descriptor>0:
+                self.obj_idxs=list(range(1, self.objs_descriptor+ 1))
+            elif self.objs_descriptor<0:
+                self.obj_idxs = list(range(self.obj_total_num+self.objs_descriptor+1, self.obj_total_num + 1))
+            else:
+                raise RuntimeError('objs_descriptor must not be 0 as an integer')
+        elif isinstance(self.objs_descriptor, list):
+            self.obj_idxs = sorted(self.objs_descriptor)
+            if len(self.obj_idxs)!=len(set(self.obj_idxs)):
+                raise RuntimeError('objs_descriptor must not contain duplicates')
+            if self.obj_idxs[0]<1 or self.obj_idxs[-1]>self.obj_total_num:
+                raise RuntimeError('objs_descriptor has invalid index')
+        else:
+            raise RuntimeError('objs_descriptor must be an integer or a list')
     def gen_scene(self):
         self.clear_axes()
 
@@ -102,7 +124,10 @@ class Environment(object):
             p.stepSimulation(physicsClientId=self.client)
 
     def sample_init_pos(self):
-        ang = random.uniform(0, self.init_rot) * (random.randint(0, 1) - 0.5) * 2
+        if not self.use_max_rot:
+            ang = random.uniform(0, self.init_rot) * (random.randint(0, 1) - 0.5) * 2
+        else:
+            ang=self.init_rot*(random.randint(0, 1) - 0.5) * 2
         ori = random.uniform(0, np.pi*2)
 
         dT=np.eye(4)
@@ -115,12 +140,13 @@ class Environment(object):
         self.wcT=dT@self.wcT_tar
 
     def init(self):
-        if self.obj_idx>=self.obj_total_num:
-            self.obj_idx=0
-        self.obj_idx+=1
+        if self.obj_idx_pointer>=len(self.obj_idxs):
+            self.obj_idx_pointer=0
+        self.obj_idx=self.obj_idxs[self.obj_idx_pointer]
         self.sample_init_pos()
         self.gen_scene()
         self.init_flag = True
+        self.obj_idx_pointer+=1
 
     def observation(self):
         frame = self.camera.render(self.cwT, self.client)

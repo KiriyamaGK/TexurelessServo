@@ -25,16 +25,17 @@ if __name__ == '__main__':
 
     with open(config_dir, "r") as j:
         config = json.load(j)
-    num_objs=config['num_objs']
+    objs_descriptor=config['objs_descriptor']
     motion_type=config['trans_and_rot_type']
     demo_total_num=config['demo_total_num']
     trans_vel_norm=config['trans_vel'] #m
     rot_vel_norm=config['rot_vel']    #deg
+    use_max_rot=config['use_max_rot']
 
     # a=p.connect(p.GUI)
     # print(a)
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env=Environment(camera_intrinsic,num_objs=num_objs)
+    env=Environment(camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot)
     env.init()
     base_dir = "/media/kiriyamagk/One Touch"
     for idx in range(demo_total_num):

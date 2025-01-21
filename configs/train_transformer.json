@@ -25,7 +25,7 @@
           "siamese": false,
           "params": {
             "img_size": 120,
-            "crop_size": 110,
+            "crop_size": 106,
             "SpatialSoftmax": {
               "num_kp": 32,
               "in_c": 512,
@@ -53,10 +53,12 @@
       }
   },
   "training": {
+    "finetune": false,
+    "ckpts_dict":"/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-01-20_02-31-15/epoch_320_best_validation_loss_0.0003566169696568977.pth",
     "num_epochs": 2000,
     "num_epochs_logging_and_valid": 1,
-    "num_train_steps_per_epoch": 1000,
-    "num_val_steps_per_epoch": 100,
+    "num_train_steps_per_epoch": 100,
+    "num_val_steps_per_epoch": 10,
     "num_epochs_save": 3,
     "batch_size": 32,
     "num_data_workers": 2
@@ -64,13 +66,13 @@
 
 
   "dataset": {
-    "hdf5_path": "/media/kiriyamagk/One Touch/AlignAnything/25.01.18/hdf5/mimic.hdf5",
+    "hdf5_path": "/media/kiriyamagk/One Touch/AlignAnything/25.01.19/hdf5/merged.hdf5",
     "specific_obs_keys": [
       "robot0_eye_in_hand_image",
       "robot0_eye_in_hand_image_goal",
       "abs_rot"
     ],
-    "num_demos": 5000,
+    "num_demos": 30,
     "seq_length": 10,
     "input_low_dim": 1,
     "output_dim": 3,

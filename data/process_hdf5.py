@@ -24,8 +24,8 @@ def insert_images(f, ep_key, dataset_name, trans_id, rot_id, add_num, row_1):
         f[ep_key].move(f'{dataset_name}_temp', dataset_name)
 
 if __name__ == '__main__':
-    date='25.01.17'
-    fn=os.path.join('/media/kiriyamagk/One Touch/AlignAnything',date,'hdf5/mimic1.hdf5')
+    date='25.01.19'
+    fn=os.path.join('/media/kiriyamagk/One Touch/AlignAnything',date,'hdf5/mimic.hdf5')
 
     disturb_abs_rot=True
 
