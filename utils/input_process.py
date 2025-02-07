@@ -24,11 +24,12 @@ def clip_image(img,img_size):
     return img_cropped
 
 def image_preprocess(img:np.ndarray,bgr2rgb:bool=False):
-    assert img.shape[-1] == 3
+    assert img.shape[-1] in [1,3]
     if bgr2rgb:
         img=img[:,:,::-1]
     img=torch.from_numpy(img).type(torch.float32)
-    img = img / 255.
+    if img.shape[-1] == 3:
+        img = img / 255.
     img = img.permute(2, 0, 1)
     return img
 

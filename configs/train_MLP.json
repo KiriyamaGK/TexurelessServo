@@ -56,7 +56,8 @@
     "num_train_steps_per_epoch": 100,
     "num_val_steps_per_epoch": 10,
     "num_epochs_save": 1,
-    "batch_size": 32
+    "batch_size": 32,
+    "num_data_workers": 2
   },
   "dataset": {
     "hdf5_path": "wp/Panda_Panda_TwoArmPickPlace_2025-01-02_17-10-41/demo.hdf5",

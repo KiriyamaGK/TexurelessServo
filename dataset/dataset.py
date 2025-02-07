@@ -415,8 +415,16 @@ class SequenceDataset(torch.utils.data.Dataset):
         # fetch observation from the dataset file
         seq = dict()
         for k in keys:
-            data = self.get_dataset_for_ep(demo_id, k)
-            seq[k] = data[seq_begin_index: seq_end_index]
+            if not "goal" in k:
+                data = self.get_dataset_for_ep(demo_id, k)
+                seq[k] = data[seq_begin_index: seq_end_index]
+            else:
+                data = self.get_dataset_for_ep(demo_id, k[:-5])
+                for idx in range(0, seq_end_index-seq_begin_index):
+                    if idx==0:
+                        seq[k] = data[-1][np.newaxis,:]
+                    else:
+                        seq[k] = np.concatenate((seq[k], data[-1][np.newaxis,:]),axis=0)
 
         seq = TensorUtils.pad_sequence(seq, padding=(seq_begin_pad, seq_end_pad), pad_same=True)
         pad_mask = np.array([0] * seq_begin_pad + [1] * (seq_end_index - seq_begin_index) + [0] * seq_end_pad)

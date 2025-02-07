@@ -169,7 +169,7 @@ class MLP(NetworkBase):
             x_img_goal_grid_shifted = self.random_crop_grid(x_img_goal, self.grid_source)
             x_img_goal = F.grid_sample(x_img_goal, x_img_goal_grid_shifted, align_corners=True)
             x_img_goal=self.img_enc_goal(x_img_goal)
-            x_img_goal=self.spatial_softmax(x_img_goal)
+            x_img_goal=self.spatial_softmax_goal(x_img_goal)
             x_img_goal=self.ee_ln_goal(x_img_goal)
             x_img_goal=x_img_goal.view(b*seq,-1).contiguous()
         else:

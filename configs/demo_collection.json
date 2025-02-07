@@ -12,10 +12,11 @@
         "far": 1,
         "fov": 60
     },
-    "objs_descriptor": [11,12,13,14,15,16,17,18,19,20],
-    "demo_total_num": 100,
+    "objs_descriptor": 14,
+    "demo_total_num": 1000,
     "trans_vel": 0.001,
     "rot_vel": 0.5,
     "trans_and_rot_type": "trans_first",
-    "use_max_rot": true
+    "use_max_rot": true,
+    "project_obj_kps": true
 }

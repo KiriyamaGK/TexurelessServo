@@ -2,27 +2,24 @@
   "algorithm": {
     "name": "BC",
     "policy": {
-      "name": "Transformer",
+      "name": "centernet",
       "params": {
-        "embedding_size": 656,
-        "n_layer": 4,
-        "n_head": 4,
-        "block_size": 10,
         "low_dim_hidden_sizes": [
           32,
-          64,
-          30
+          64
         ],
-        "output_head_sizes": [
-          256,
-          128
+        "hidden_sizes": [
+          600,
+          1000,
+          600,
+          300
         ],
         "activation": "ReLU",
         "output_activation": null,
         "use_gmm": true,
         "encoder": {
           "name": "ResNet18",
-          "siamese": false,
+          "siamese": true,
           "params": {
             "img_size": 256,
             "crop_size": 256,
@@ -35,50 +32,50 @@
           }
         }
       }
-  },
+    },
     "optimizer": {
       "name": "Adam",
       "params": {
         "lr": 0.0001
       }
     },
-    "loss":
+      "loss":
       {
-        "name": "CustomLoss",
+        "name": "focal",
         "weight":
         {
-          "weight_tr": 500.0,
+          "weight_tr": 1.0,
           "weight_rot": 1.0
         }
       }
-  },
+},
   "training": {
-    "finetune": false,
-    "ckpts_dict":"/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-01-20_02-31-15/epoch_320_best_validation_loss_0.0003566169696568977.pth",
-    "num_epochs": 2000,
+    "finetune":false,
+    "ckpts_dict":"/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-02-03_22-42-07/epoch_38_best_validation_loss_3.3223172760009767.pth",
+    "num_epochs": 1000,
     "num_epochs_logging_and_valid": 1,
-    "num_train_steps_per_epoch": 100,
-    "num_val_steps_per_epoch": 10,
+    "num_train_steps_per_epoch": 500,
+    "num_val_steps_per_epoch": 50,
     "num_epochs_save": 3,
     "batch_size": 32,
     "num_data_workers": 2
   },
-
-
   "dataset": {
-    "hdf5_path": "/media/kiriyamagk/One Touch/AlignAnything/25.01.21/hdf5/mimic.hdf5",
+    "hdf5_path": "/media/kiriyamagk/One Touch/AlignAnything/25.01.22/hdf5/mimic.hdf5",
     "specific_obs_keys": [
       "robot0_eye_in_hand_image",
-      "abs_rot"
+      "gaussian_img_ct",
+      "gaussian_img_kpt"
     ],
-    "num_demos": 30,
-    "seq_length": 10,
+    "num_demos": 2000,
+    "seq_length": 1,
     "input_low_dim": 1,
     "output_dim": 3,
     "hdf5_cache_mode": "low_dim",
     "hdf5_use_swmr": true,
     "bgr2rgb": false
   },
+
   "seed": 42,
   "model_out_dir": "trial",
   "log_dir": "trial"

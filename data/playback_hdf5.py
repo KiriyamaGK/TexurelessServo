@@ -4,7 +4,7 @@ import cv2
 import os
 
 if __name__ == '__main__':
-    hdf_pth='/media/kiriyamagk/One Touch/AlignAnything/25.01.19/hdf5/mimic.hdf5'
+    hdf_pth='/media/kiriyamagk/One Touch/AlignAnything/25.01.21/hdf5/mimic.hdf5'
 
     # temp_dir='/media/kiriyamagk/One Touch/AlignAnything/25.01.17/hdf5/temp'
     hdf_base=os.path.dirname(hdf_pth)

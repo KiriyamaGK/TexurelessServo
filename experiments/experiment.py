@@ -167,18 +167,19 @@ class BehaviorCloningExperiment():
         """
         Set up the model.
         """
-        model = get_network_cls(model_config["algorithm"]["policy"]["name"])
-
-        return model(
-            input_low_dim=model_config["dataset"]["input_low_dim"],
-            output_dim=model_config["dataset"]["output_dim"],
-            obs_keys=model_config["dataset"]["specific_obs_keys"],
-            batch_size=model_config["training"]["batch_size"],
-            seq_length=model_config["dataset"]["seq_length"],
-            training=True,
-            **model_config["algorithm"]["policy"]["params"]
-        )  # **动态传参，字典中的键与函数参数名完全匹配
-
+        model,need_init_params = get_network_cls(model_config["algorithm"]["policy"]["name"])
+        if need_init_params:
+            return model(
+                input_low_dim=model_config["dataset"]["input_low_dim"],
+                output_dim=model_config["dataset"]["output_dim"],
+                obs_keys=model_config["dataset"]["specific_obs_keys"],
+                batch_size=model_config["training"]["batch_size"],
+                seq_length=model_config["dataset"]["seq_length"],
+                training=True,
+                **model_config["algorithm"]["policy"]["params"]
+            )  # **动态传参，字典中的键与函数参数名完全匹配
+        else:
+            return model()
     @staticmethod
     def _setup_optimizer(optimizer_config: dict, model: torch.nn.Module):
         """
@@ -194,8 +195,8 @@ class BehaviorCloningExperiment():
         """
 
         def composed_loss_fn(x, x_hat):
-            x = x.reshape(x.size(0), -1)
-            x_hat = x_hat.reshape(x_hat.size(0), -1)
+            # x = x.reshape(x.size(0), -1)
+            # x_hat = x_hat.reshape(x_hat.size(0), -1)
             loss_fn = get_loss_fn(criterion_config_name["name"],criterion_config_name["weight"],seq_length,output_dim)
             loss_dict = loss_fn(x, x_hat)
             return loss_dict
@@ -204,6 +205,6 @@ class BehaviorCloningExperiment():
 
 
 if __name__ == "__main__":
-    exp = BehaviorCloningExperiment(config_path="train_transformer.json")
+    exp = BehaviorCloningExperiment(config_path="train_centernet.json")
     # exp = BehaviorCloningExperiment(config_path="train_transformer_single.json")
     exp.run()

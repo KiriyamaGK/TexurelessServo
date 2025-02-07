@@ -52,16 +52,18 @@ def trans_imgs_to_square(imgs,img_size,cut2square):
         return imgs
 
 if __name__ == '__main__':
-    img_size=120
+    img_size=256
+    gau_size=64
     # current_date = datetime.datetime.now()
     # hdf_date = current_date.strftime('%Y.%m.%d')
-    date='25.01.19'
+    date='25.01.22'
     replace_exist=True
     cut_to_square=True
     # formatted_date='2024.11.07'
     # npy_date=hdf_date[2:]
+    exact_gauss_img=True
     exact_abs_rot_list=True
-    add_goal_image=True
+    add_goal_image=False
     base='/media/kiriyamagk/One Touch/AlignAnything'
     val_ratio = 0.1
 
@@ -97,6 +99,11 @@ if __name__ == '__main__':
         data_act=data['action_list']
         if exact_abs_rot_list:
             data_rot=data['abs_rot']
+        if exact_gauss_img:
+            data_gauss_img_ct=data['gauss_img_ct'][0]
+            data_gauss_img_ct=data_gauss_img_ct.reshape(-1,gau_size,gau_size,1)
+            data_gauss_img_kpt = data['gauss_img_kpt'][0]
+            data_gauss_img_kpt = data_gauss_img_kpt.reshape(-1, gau_size, gau_size, 1)
         row_1=len(data_img)
 
         if row_1==0:
@@ -109,6 +116,11 @@ if __name__ == '__main__':
             data_act = data['action_list']
             if exact_abs_rot_list:
                 data_rot = data['abs_rot']
+            if exact_gauss_img:
+                data_gauss_img_ct = data['gauss_img_ct'][0]
+                data_gauss_img_ct = data_gauss_img_ct.reshape(-1, gau_size, gau_size, 1)
+                data_gauss_img_kpt = data['gauss_img_kpt'][0]
+                data_gauss_img_kpt = data_gauss_img_kpt.reshape(-1, gau_size, gau_size, 1)
             row_1 = len(data_img)
 
         new_f_out.create_dataset('data/demo_{}/dones'.format(i), data=np.zeros((row_1 - 1)))
@@ -127,10 +139,17 @@ if __name__ == '__main__':
 
         new_f_out.create_dataset(action_path, data=data_act)
         new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image', data=data_img)
-
+        if exact_gauss_img:
+            new_f_out.create_dataset(obs_path + '/gaussian_img_kpt', data=data_gauss_img_kpt)
+            new_f_out.create_dataset(obs_path + '/gaussian_img_ct', data=data_gauss_img_ct)
         if add_goal_image:
             data_goal=np.array([np.stack(data_img[-1]) for kk in range(row_1)])
             new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image_goal', data=data_goal)
+            if exact_gauss_img:
+                data_gauss_img_kpt_goal = np.array([np.stack(data_gauss_img_kpt[-1]) for kk in range(row_1)])
+                new_f_out.create_dataset(obs_path + '/gaussian_img_kpt_goal', data=data_gauss_img_kpt_goal)
+                data_gauss_img_ct_goal = np.array([np.stack(data_gauss_img_ct[-1]) for kk in range(row_1)])
+                new_f_out.create_dataset(obs_path + '/gaussian_img_ct_goal', data=data_gauss_img_ct_goal)
         if exact_abs_rot_list:
             new_f_out.create_dataset(obs_path + '/abs_rot', data=data_rot)
 
@@ -203,50 +222,6 @@ if __name__ == '__main__':
     new_f_out.close()
 
     total_samples = 0
-
-    f = h5py.File(hdf5_path, "r+")
-    for ep in f['data']:
-         num=len(f['data/{}/obs/robot0_eye_in_hand_image'.format(ep)])
-         if num==1:
-             print("{} len is only 1,adding......".format(ep))
-             row_1=num+1
-             del f['data/{}/dones'.format(ep)]
-             del f['data/{}/interventions'.format(ep)]
-             del f['data/{}/policy_acting'.format(ep)]
-             del f['data/{}/rewards'.format(ep)]
-             del f['data/{}/states'.format(ep)]
-             del f['data/{}/user_acting'.format(ep)]
-
-             f.create_dataset('data/{}/dones'.format(ep), data=np.zeros((row_1 - 1)))
-             f.create_dataset('data/{}/interventions'.format(ep), data=np.zeros((row_1, 1)))
-             f.create_dataset('data/{}/policy_acting'.format(ep), data=np.zeros((row_1)))
-             f.create_dataset('data/{}/rewards'.format(ep), data=np.zeros((row_1 - 1)))
-             f.create_dataset('data/{}/states'.format(ep), data=np.zeros((0)))
-             f.create_dataset('data/{}/user_acting'.format(ep), data=np.zeros((row_1, 1)))
-
-             act=f['data/{}/actions'.format(ep)][0].copy()
-
-             del f['data/{}/actions'.format(ep)]
-
-             f['data/{}/actions'.format(ep)]=[act,act]
-
-
-             wrist_img = f['data/{}/obs/robot0_eye_in_hand_image'.format(ep)][0].copy()
-             del f['data/{}/obs/robot0_eye_in_hand_image'.format(ep)]
-             f['data/{}/obs/robot0_eye_in_hand_image'.format(ep)] = [wrist_img, wrist_img]
-
-             if 'robot0_eye_in_hand_image_goal' in f['data/{}/obs'.format(ep)]:
-                 wrist_img = f['data/{}/obs/robot0_eye_in_hand_image_goal'.format(ep)][0].copy()
-                 del f['data/{}/obs/robot0_eye_in_hand_image_goal'.format(ep)]
-                 f['data/{}/obs/robot0_eye_in_hand_image_goal'.format(ep)] = [wrist_img, wrist_img]
-
-             if 'abs_rot' in f['data/{}/obs'.format(ep)]:
-                 abs_rot = f['data/{}/obs/abs_rot'.format(ep)][0].copy()
-                 del f['data/{}/obs/abs_rot'.format(ep)]
-                 f['data/{}/obs/abs_rot'.format(ep)] = [abs_rot, abs_rot]
-
-    f.close()
-
     f = h5py.File(hdf5_path, "a")  # edit mode
     for ep in f["data"]:
         # add "num_samples" into per-episode metadata

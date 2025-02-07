@@ -9,6 +9,8 @@ from networks.SpatialSoftmax import SpatialSoftmax
 from torchvision import models
 from torch.nn import functional as F
 import torch.distributions as D
+from torchvision.models import resnet18
+
 import functools
 import operator
 
@@ -387,7 +389,7 @@ class GPT(nn.Module):
 
         return idx
 
-class Transformer(NetworkBase):
+class TransformerCenternet(NetworkBase):
     def __init__(self, input_low_dim, output_dim, obs_keys,batch_size,seq_length,training,embedding_size=656,n_layer=4,n_head=4,block_size=10,low_dim_hidden_sizes=None,output_head_sizes=None,activation="relu", output_activation=None,use_gmm=False,
                  encoder=None):
         super().__init__(input_low_dim, output_dim)
@@ -432,16 +434,34 @@ class Transformer(NetworkBase):
         self.activation = get_activation_fn(activation)
         self.output_activation = get_activation_fn(output_activation) if output_activation is not None else None
 
-        #for img
-        self.img_enc = torch.nn.Sequential(*(list(models.resnet18().children())[:-2]))
+        self.img_enc = torch.nn.Sequential(*list(models.resnet18(pretrained=True).children())[:-2])
+
+        self.deconv_layers = nn.Sequential(
+            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True)
+        )
+
+        # 输出头：预测中心点热图、偏移量和物体尺寸
+        self.head_heatmap = nn.Sequential(
+            nn.Conv2d(64, 64, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 1, kernel_size=1)
+        )
         self.spatial_softmax=SpatialSoftmax(self.ss_in_c,self.ss_in_h,self.ss_in_w,self.ss_num_kp)
         self.ee_ln = nn.Linear(self.ss_num_kp * 2, (self.feat_dim-self.low_dim_hidden_sizes[-1])//2)
-        self.grid_source = self.build_grid(self.crop_size, self.crop_size)
-
         if not self.use_siamese:
             self.img_enc_goal = torch.nn.Sequential(*(list(models.resnet18().children())[:-2]))
             self.spatial_softmax_goal = SpatialSoftmax(self.ss_in_c, self.ss_in_h, self.ss_in_w, self.ss_num_kp)
-            self.ee_ln_goal = nn.Linear(self.ss_num_kp * 2, (self.feat_dim - self.low_dim_hidden_sizes[-1]) // 2)
+            self.ee_ln_goal = nn.Linear(self.ss_num_kp * 2, (self.feat_dim-self.low_dim_hidden_sizes[-1])//2)
+        self.grid_source = self.build_grid(self.crop_size, self.crop_size)
 
         #for low_dim
         self.mlp_pos = nn.Sequential(
@@ -512,6 +532,8 @@ class Transformer(NetworkBase):
     def forward(self, x):
         x_img = x['robot0_eye_in_hand_image'].to(self.device)
         x_img_goal = x['robot0_eye_in_hand_image_goal'].to(self.device)
+        x_kpt = x['gaussian_img_kpt'].to(self.device)
+        x_kpt = x_kpt.view(-1, 1, self.img_size//4, self.img_size//4)
 
         # assert x_img.shape[-3:] == (3, self.img_size, self.img_size) #元组而不是列表
         if not  x_img.shape[-3:] == (3, self.img_size, self.img_size):
@@ -528,7 +550,7 @@ class Transformer(NetworkBase):
             b, seq = x_img.shape[0], x_img.shape[1]
         else:
             raise RuntimeError('x_img.shape should between 3 and 5')
-
+        #low_dim
         x_low_dim = torch.tensor([])
         assert len(self.low_dim_keys)==1
         for k in x:
@@ -536,34 +558,43 @@ class Transformer(NetworkBase):
                 x_low_dim = torch.cat((x_low_dim, x[k].view(b * seq, -1)), dim=-1).contiguous()  # [b*seq,total_len]
         x_low_dim = x_low_dim / 360
         x_low_dim=x_low_dim.to(self.device)
-
-        x_img = x_img.view(b * seq, 3, self.img_size, self.img_size)
-        x_img_grid_shifted = self.random_crop_grid(x_img, self.grid_source)
-        x_img = F.grid_sample(x_img, x_img_grid_shifted, align_corners=True)
-        x_img = self.img_enc(x_img)
-        x_img = self.spatial_softmax(x_img)
-        x_img = self.ee_ln(x_img)
-        x_img = x_img.view(b * seq, -1).contiguous()
-
+        # img
         if not self.use_siamese:
             x_img_goal = x_img_goal.view(b * seq, 3, self.img_size, self.img_size)
-            x_img_goal_grid_shifted = self.random_crop_grid(x_img_goal, self.grid_source)
-            x_img_goal = F.grid_sample(x_img_goal, x_img_goal_grid_shifted, align_corners=True)
+            if self.crop_size < self.img_size:
+                x_img_goal_grid_shifted = self.random_crop_grid(x_img_goal, self.grid_source)
+                x_img_goal = F.grid_sample(x_img_goal, x_img_goal_grid_shifted, align_corners=True)
             x_img_goal = self.img_enc_goal(x_img_goal)
             x_img_goal = self.spatial_softmax_goal(x_img_goal)
             x_img_goal = self.ee_ln_goal(x_img_goal)
             x_img_goal = x_img_goal.view(b * seq, -1).contiguous()
         else:
             x_img_goal = x_img_goal.view(b * seq, 3, self.img_size, self.img_size)
-            x_img_goal_grid_shifted = self.random_crop_grid(x_img_goal, self.grid_source)
-            x_img_goal = F.grid_sample(x_img_goal, x_img_goal_grid_shifted, align_corners=True)
+            if self.crop_size < self.img_size:
+                x_img_goal_grid_shifted = self.random_crop_grid(x_img_goal, self.grid_source)
+                x_img_goal = F.grid_sample(x_img_goal, x_img_goal_grid_shifted, align_corners=True)
             x_img_goal = self.img_enc(x_img_goal)
             x_img_goal = self.spatial_softmax(x_img_goal)
             x_img_goal = self.ee_ln(x_img_goal)
             x_img_goal = x_img_goal.view(b * seq, -1).contiguous()
 
+        x_img = x_img.view(b * seq, 3, self.img_size, self.img_size)
+        if self.crop_size<self.img_size:
+            x_img_grid_shifted = self.random_crop_grid(x_img, self.grid_source)
+            x_img = F.grid_sample(x_img, x_img_grid_shifted, align_corners=True)
+        x_img = self.img_enc(x_img)
+
+        #======================heatmap_dec=====================
+        heatmap = self.deconv_layers(x_img.clone())
+        heatmap = self.head_heatmap(heatmap)
+        heatmap = heatmap.view(-1, 1, self.img_size//4, self.img_size//4)
+        # ======================heatmap_dec=====================
+        x_img = self.spatial_softmax(x_img)
+        x_img = self.ee_ln(x_img)
+        x_img = x_img.view(b * seq, -1).contiguous()
+
         x_low_dim = self.mlp_pos(x_low_dim)  # [b*seq,ldhs]
-        input_tensor = torch.cat((x_img, x_img_goal, x_low_dim), dim=-1)  # [b*seq,hs]
+        input_tensor = torch.cat((x_img,x_img_goal, x_low_dim), dim=-1)  # [b*seq,hs]
         input_tensor=input_tensor.view(b , seq, -1).contiguous() # [b,seq,hs]
 
         N = seq
@@ -626,4 +657,9 @@ class Transformer(NetworkBase):
                 component_distribution=component_distribution,
             )
             output_tensor = dists.mean
-        return output_tensor
+            rtn_dict={
+            "pred_act": output_tensor,
+            "pred_heatmap":heatmap,
+            "kpt_heatmap_gt":x_kpt,
+            }
+        return rtn_dict

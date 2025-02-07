@@ -24,7 +24,7 @@ def insert_images(f, ep_key, dataset_name, trans_id, rot_id, add_num, row_1):
         f[ep_key].move(f'{dataset_name}_temp', dataset_name)
 
 if __name__ == '__main__':
-    date='25.01.19'
+    date='25.01.22'
     fn=os.path.join('/media/kiriyamagk/One Touch/AlignAnything',date,'hdf5/mimic.hdf5')
 
     disturb_abs_rot=True
@@ -143,6 +143,20 @@ if __name__ == '__main__':
                 wrist_goal_lst = np.concatenate((wrist_goal_lst, np.repeat(wrist_img_goal[np.newaxis, :], add_num, axis=0)))
                 del f[ep_key]['robot0_eye_in_hand_image_goal']
                 f[ep_key].create_dataset('robot0_eye_in_hand_image_goal', data=wrist_goal_lst)
+
+            if 'gaussian_img_kpt' in f[ep_key]:
+                gauss_kpt = f['{}/gaussian_img_kpt'.format(ep_key)][-1].copy()
+                gauss_kpt_lst = f['{}/gaussian_img_kpt'.format(ep_key)][:]
+                gauss_kpt_lst = np.concatenate((gauss_kpt_lst, np.repeat(gauss_kpt[np.newaxis, :], add_num, axis=0)))
+                del f[ep_key]['gaussian_img_kpt']
+                f[ep_key].create_dataset('gaussian_img_kpt', data=gauss_kpt_lst)
+
+            if 'gaussian_img_ct' in f[ep_key]:
+                gauss_ct = f['{}/gaussian_img_ct'.format(ep_key)][-1].copy()
+                gauss_ct_lst = f['{}/gaussian_img_ct'.format(ep_key)][:]
+                gauss_ct_lst = np.concatenate((gauss_ct_lst, np.repeat(gauss_ct[np.newaxis, :], add_num, axis=0)))
+                del f[ep_key]['gaussian_img_ct']
+                f[ep_key].create_dataset('gaussian_img_ct', data=gauss_ct_lst)
         f.close()
 
     if add_medium_episode:         #增加过渡数据集add_medium_num帧，每帧action平移量、旋转量各取一半
@@ -215,6 +229,10 @@ if __name__ == '__main__':
                     # del f[ep_key]['robot0_eye_in_hand_image_goal']
                     # f[ep_key].create_dataset('robot0_eye_in_hand_image_goal', data=wrist_goal_lst)
                     insert_images(f, ep_key, 'robot0_eye_in_hand_image_goal', trans_id, rot_id, add_num, row_1)
+                if 'gaussian_img_kpt' in f[ep_key]:
+                    insert_images(f, ep_key, 'gaussian_img_kpt', trans_id, rot_id, add_num, row_1)
+                if 'gaussian_img_ct' in f[ep_key]:
+                    insert_images(f, ep_key, 'gaussian_img_ct', trans_id, rot_id, add_num, row_1)
         f.close()
 
     total_samples = 0

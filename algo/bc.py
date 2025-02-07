@@ -1,13 +1,8 @@
-import collections
-import json
 import torch
 import os
-from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
-import time
 from utils import log_utils as LogUtils
-import numpy as np
-
+from networks.CenterNet import CenterNet_ResNet18
 
 class BehaviorCloning():
     """
@@ -61,21 +56,15 @@ class BehaviorCloning():
             print("====================epoch_{}=====================".format(epoch))
             train_loss_dict=self.train(train_loader, num_train_steps,logger=logger)
             # visualize training curve
-            writer.add_scalar('Loss/train', train_loss_dict['loss'], epoch)
-            if "loss_tr" in train_loss_dict:
-                writer.add_scalar('Loss/train_translation', train_loss_dict["loss_tr"], epoch)
-            if "loss_rot" in train_loss_dict:
-                writer.add_scalar('Loss/train_rotation', train_loss_dict["loss_rot"], epoch)
+            for itm_tr in train_loss_dict:
+                writer.add_scalar('Loss/train/{}'.format(itm_tr), train_loss_dict[itm_tr], epoch)
             #eval:
             if epoch % num_epochs_logging == 0:
                 eval_loss_dict = self.evaluate(test_loader,num_val_steps)
                 eval_loss=eval_loss_dict['loss']
                 # visualize training curve
-                writer.add_scalar('Loss/val', eval_loss, epoch)
-                if "loss_tr" in eval_loss_dict:
-                    writer.add_scalar('Loss/val_translation', eval_loss_dict["loss_tr"], epoch)
-                if "loss_rot" in eval_loss_dict:
-                    writer.add_scalar('Loss/val_rotation', eval_loss_dict["loss_rot"], epoch)
+                for itm_val in eval_loss_dict:
+                    writer.add_scalar('Loss/val/{}'.format(itm_val), eval_loss_dict[itm_val], epoch)
                 if logger is not None:
                     logger.info(f"Epoch: {epoch}, Evaluation Loss: {eval_loss:.4f}")
                 best_eval_flag = eval_loss < best_eval_loss
@@ -85,9 +74,9 @@ class BehaviorCloning():
                     ckpt_name='epoch_{}_best_validation_loss_'.format(epoch)+str(eval_loss)+'.pth'
                     torch.save(self.model.state_dict(), os.path.join(model_out_dir, ckpt_name))
                     continue
-                if epoch%num_epochs_save==0:
-                    ckpt_name='epoch_{}_validation_loss:'.format(epoch)+str(eval_loss)+'.pth'
-                    torch.save(self.model.state_dict(), os.path.join(model_out_dir, ckpt_name))
+            if epoch%num_epochs_save==0:
+                ckpt_name='epoch_{}_validation_loss:'.format(epoch)+str(eval_loss)+'.pth'
+                torch.save(self.model.state_dict(), os.path.join(model_out_dir, ckpt_name))
         writer.close()
 
 
@@ -172,8 +161,15 @@ class BehaviorCloning():
     def train_on_batch(self, batch) -> dict:
         self.model.train()
         self.optimizer.zero_grad()
-        predictions = self.model(batch["obs"])
-        loss_dict = self.criterion(predictions, batch["actions"])
+        if isinstance(self.model, CenterNet_ResNet18):
+            pred,label= self.model(batch["obs"])
+            loss_1 = self.criterion(pred,label)
+            # loss_2 = self.criterion(gau2, x4)
+            # loss = loss_1 + loss_2
+            loss_dict = {'loss': loss_1}
+        else:
+            predictions = self.model(batch["obs"])
+            loss_dict = self.criterion(predictions, batch["actions"])
         loss=loss_dict['loss']
         loss.backward()
         self.optimizer.step()
@@ -183,8 +179,15 @@ class BehaviorCloning():
 
     def eval_on_batch(self, batch) -> dict:
         self.model.eval()
-        predictions = self.model(batch["obs"])
-        loss_dict = self.criterion(predictions, batch["actions"])
+        if isinstance(self.model, CenterNet_ResNet18):
+            pred, label = self.model(batch["obs"])
+            loss_1 = self.criterion(pred, label)
+            # loss_2 = self.criterion(gau2, x4)
+            # loss = loss_1 + loss_2
+            loss_dict = {'loss': loss_1}
+        else:
+            predictions = self.model(batch["obs"])
+            loss_dict = self.criterion(predictions, batch["actions"])
         for k, v in loss_dict.items():
             loss_dict[k] = v.item()
         return loss_dict

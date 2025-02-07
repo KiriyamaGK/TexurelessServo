@@ -1,6 +1,5 @@
 from math import sin,cos,sqrt,atan2
 import numpy as np
-from kornia.geometry.conversions import rotation_matrix_to_axis_angle
 
 def is_number(var):
     return isinstance(var, (int, float, complex))
@@ -152,3 +151,14 @@ def rmat2euler_rz_degree(Matrix: np.array):
         Euler[2] += pi*2
     Euler[2] = Euler[2] / pi * 180
     return Euler[2]
+def project_XYZw_to_uv(intr: np.array,cwT:np.array,XYZw:np.array):
+    assert XYZw.shape == (3,)
+    intr=np.concatenate((intr,np.array([[0],[0],[0]])),axis=1)
+    XYZw=np.concatenate((XYZw,np.array([1])),axis=0)
+    XYZc=XYZw@cwT.T
+    Zc=XYZc[2]
+    uv=XYZc@intr.T/Zc
+    uv=uv[0:2]
+    uv[0]=int(uv[0])
+    uv[1]=int(uv[1])
+    return uv

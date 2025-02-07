@@ -2,9 +2,9 @@
   "algorithm": {
     "name": "BC",
     "policy": {
-      "name": "Transformer",
+      "name": "TransformerCenternet",
       "params": {
-        "embedding_size": 656,
+        "embedding_size": 300,
         "n_layer": 4,
         "n_head": 4,
         "block_size": 10,
@@ -29,8 +29,8 @@
             "SpatialSoftmax": {
               "num_kp": 32,
               "in_c": 512,
-              "in_h": 4,
-              "in_w": 4
+              "in_h": 8,
+              "in_w": 8
             }
           }
         }
@@ -44,31 +44,35 @@
     },
     "loss":
       {
-        "name": "CustomLoss",
+        "name": "focal_and_mse",
         "weight":
         {
           "weight_tr": 500.0,
-          "weight_rot": 1.0
+          "weight_rot": 1.0,
+          "weight_heatmap": 0.1
         }
       }
   },
   "training": {
     "finetune": false,
-    "ckpts_dict":"/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-01-20_02-31-15/epoch_320_best_validation_loss_0.0003566169696568977.pth",
+    "ckpts_dict": "/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-02-06_11-38-18/epoch_18_best_validation_loss_0.26407817055781685.pth",
     "num_epochs": 2000,
     "num_epochs_logging_and_valid": 1,
-    "num_train_steps_per_epoch": 100,
-    "num_val_steps_per_epoch": 10,
+    "num_train_steps_per_epoch": 300,
+    "num_val_steps_per_epoch": 30,
     "num_epochs_save": 3,
-    "batch_size": 32,
+    "batch_size": 8,
     "num_data_workers": 2
   },
 
 
   "dataset": {
-    "hdf5_path": "/media/kiriyamagk/One Touch/AlignAnything/25.01.21/hdf5/mimic.hdf5",
+    "hdf5_path": "/media/kiriyamagk/One Touch/AlignAnything/25.01.22/hdf5/mimic.hdf5",
     "specific_obs_keys": [
       "robot0_eye_in_hand_image",
+      "robot0_eye_in_hand_image_goal",
+      "gaussian_img_kpt",
+      "gaussian_img_kpt_goal",
       "abs_rot"
     ],
     "num_demos": 30,

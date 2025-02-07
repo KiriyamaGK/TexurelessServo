@@ -23,7 +23,7 @@ def _setup_model(model_config: dict):
     """
     Set up the model.
     """
-    model = get_network_cls(model_config["algorithm"]["policy"]["name"])
+    model,_ = get_network_cls(model_config["algorithm"]["policy"]["name"])
     return model(
         input_low_dim=model_config["dataset"]["input_low_dim"],
         output_dim=model_config["dataset"]["output_dim"],
@@ -70,6 +70,7 @@ if __name__ == '__main__':
     env.init()
 
     for idx in range(eval_epoch_num):
+        model.buffer=[]
         init_transform_dict = env.return_cur_pos_info()
         env.act_to_goal()
         img_goal = env.observation()
@@ -79,7 +80,7 @@ if __name__ == '__main__':
             img_goal = clip_image(img_goal, npy_size)
         else:
             img_goal = cv2.resize(img_goal, (npy_size, npy_size))
-        if npy_size!= img_w and npy_size!= img_h:
+        if npy_size!= img_w or npy_size!= img_h:
             img_goal = cv2.resize(img_goal, (img_w, img_h))
         # cv2.imwrite('/media/kiriyamagk/One Touch/AlignAnything/imgs/{}.png'.format(idx+1),img_goal_vis)
         env.act_with_abs_dict(init_transform_dict)
@@ -101,15 +102,22 @@ if __name__ == '__main__':
                 img=clip_image(img,npy_size)
             else:
                 img=cv2.resize(img, (npy_size, npy_size))
-            if npy_size!= img_w and npy_size!= img_h:
+            if npy_size!= img_w or npy_size!= img_h:
                 img=cv2.resize(img,(img_w,img_h))
             obs_dict={
                 "robot0_eye_in_hand_image": img,
                 "robot0_eye_in_hand_image_goal": img_goal,
+                'gaussian_img_kpt': np.zeros((img_w//4, img_h//4,1)),
+                'gaussian_img_kpt_goal': np.zeros((img_w // 4, img_h // 4, 1)),
                 "abs_rot": np.array([rz]),
             }
             obs_dict=input_dict_preprocess(obs_dict,rollout=True)
-            predictions=model(obs_dict).detach().cpu().numpy().reshape(-1,)
+            pred=model(obs_dict)
+            if isinstance(pred, dict):
+                predictions=pred['pred_act']
+            else:
+                predictions=pred
+            predictions=predictions.detach().cpu().numpy().reshape(-1,)
             print("pred:",predictions)
             # predictions/=4
             vel_tr=predictions[0:2]
@@ -118,7 +126,7 @@ if __name__ == '__main__':
             dT[0:3,0:3]=rotation_matrix_z(vel_rot/180*np.pi)
             env.action(dT)
             # time.sleep(0.1)
-            if env.reinit():
+            if env.reinit():  #close_enough
                 break
             if time.time()-t_0 > time_threshold:
                 env.init()

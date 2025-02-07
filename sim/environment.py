@@ -40,7 +40,7 @@ class Environment(object):
         self.obj_idx_pointer = 0
         self.obj_total_num=23
         self.objs_descriptor=objs_descriptor
-        self.obj_scale_factor = 0.001
+        self.obj_scale_factor = 0.001                     #mm2m
         self.table_scale_factor = 3
         self.objStartPos = [0, 0, 1.88]
         self.objStartOrientation = p.getQuaternionFromEuler([0, 0, 0])
