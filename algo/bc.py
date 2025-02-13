@@ -75,7 +75,7 @@ class BehaviorCloning():
                     torch.save(self.model.state_dict(), os.path.join(model_out_dir, ckpt_name))
                     continue
             if epoch%num_epochs_save==0:
-                ckpt_name='epoch_{}_validation_loss:'.format(epoch)+str(eval_loss)+'.pth'
+                ckpt_name='epoch_{}_validation_loss_'.format(epoch)+str(eval_loss)+'.pth'
                 torch.save(self.model.state_dict(), os.path.join(model_out_dir, ckpt_name))
         writer.close()
 
