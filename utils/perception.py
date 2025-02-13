@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 import open3d as o3d
 import pybullet as p

@@ -54,3 +54,45 @@ def input_dict_preprocess(dic:dict,bgr2rgb:bool=False,rollout=False):
             dic[k] = torch.from_numpy(dic[k]).type(torch.float32)
     return dic
 
+def make_scaled_img(img: torch.Tensor):
+    alpha = 1.1 + (1.5 - 1.1) * torch.rand(1).item()
+    beta = 3 + (10 - 3) * torch.rand(1).item()
+    beta/=255.
+    img = img.float()
+    adjusted_image = torch.clamp(alpha * img + beta, 0, 1)
+    return adjusted_image
+
+def generate_gaussian_spot(size, sigma):
+    """
+    生成一个高斯斑点
+    :param size: 高斯斑点的大小（正方形的边长）
+    :param sigma: 高斯分布的标准差
+    :return: 高斯斑点张量
+    """
+    x = torch.linspace(-size // 2, size // 2, size)
+    y = torch.linspace(-size // 2, size // 2, size)
+    x, y = torch.meshgrid(x, y, indexing='ij')
+    spot = torch.exp(-(x ** 2 + y ** 2) / (2 * sigma ** 2))
+    return spot / spot.max()  # [0, 1]
+
+def add_gaussian_spot_to_image(img: torch.Tensor, size:int,sigma:int, position,to_device=False):
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    #position:左上角点
+    C, H, W = img.shape
+    spot = generate_gaussian_spot(size, sigma)
+    spot_size = spot.shape[0]
+    x, y = position
+
+    # 确保斑点位置在图像范围内
+    x = max(0, min(x, W - spot_size))
+    y = max(0, min(y, H - spot_size))
+
+    if to_device:
+        spot = spot.to(device)
+    # 将斑点添加到图像上
+    for c in range(C):
+        img[c, y:y+spot_size, x:x+spot_size] += spot
+
+    # 裁剪结果，确保值在 [0, 1] 范围内
+    img = torch.clamp(img, 0, 1)
+    return img

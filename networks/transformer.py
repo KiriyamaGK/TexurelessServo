@@ -1,8 +1,12 @@
 import collections
+import random
+
 import torch
 import math
 import numpy as np
 import torch.nn as nn
+from ultralytics import YOLO
+
 from networks.Network import NetworkBase
 from networks.helpers import get_activation_fn
 from networks.SpatialSoftmax import SpatialSoftmax
@@ -11,6 +15,7 @@ from torch.nn import functional as F
 import torch.distributions as D
 import functools
 import operator
+from utils.input_process import add_gaussian_spot_to_image,make_scaled_img
 
 class FixableSequential(torch.nn.Sequential):
     def __init__(self, fixed, *args, **kwargs):
@@ -392,11 +397,23 @@ class Transformer(NetworkBase):
                  encoder=None):
         super().__init__(input_low_dim, output_dim)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+        self.freeze_encoder=encoder['freeze']
+        #img
         self.encoder_name = encoder['name']
-        assert self.encoder_name == 'ResNet18'
-        self.use_siamese = encoder['siamese']
+        assert self.encoder_name in ['ResNet18','YOLO_v11']
+        if self.encoder_name == 'YOLO_v11':
+            self.pretrained_path=encoder['pretrained_path']
+            self.img_enc_num_layers=encoder['params']['num_layers']
+            yolo_mdl=YOLO(self.pretrained_path)
+            self.img_enc = nn.Sequential(*list(yolo_mdl.model.model)[:self.img_enc_num_layers])
+        elif self.encoder_name == 'ResNet18':
+            self.img_enc = torch.nn.Sequential(*(list(models.resnet18().children())[:-2]))
 
+        if self.freeze_encoder:
+            for param in self.img_enc.parameters():
+                param.requires_grad = False
+
+        self.use_siamese = encoder['siamese']
         self.batch_size = batch_size
         self.seq_length = seq_length
 
@@ -429,19 +446,32 @@ class Transformer(NetworkBase):
         self.use_GMM = use_gmm
         self.is_training = training
 
+        if self.is_training:
+            self.use_data_augmentation=encoder['data_augmentation']
+            self.use_tcl_loss=encoder['task_consistency_loss']
+        else:
+            self.use_data_augmentation=False
+            self.use_tcl_loss=False
+        if self.use_tcl_loss:
+            assert self.use_data_augmentation
+
         self.activation = get_activation_fn(activation)
         self.output_activation = get_activation_fn(output_activation) if output_activation is not None else None
 
-        #for img
-        self.img_enc = torch.nn.Sequential(*(list(models.resnet18().children())[:-2]))
         self.spatial_softmax=SpatialSoftmax(self.ss_in_c,self.ss_in_h,self.ss_in_w,self.ss_num_kp)
         self.ee_ln = nn.Linear(self.ss_num_kp * 2, (self.feat_dim-self.low_dim_hidden_sizes[-1])//2)
         self.grid_source = self.build_grid(self.crop_size, self.crop_size)
 
         if not self.use_siamese:
-            self.img_enc_goal = torch.nn.Sequential(*(list(models.resnet18().children())[:-2]))
+            if self.encoder_name=='ResNet18':
+                self.img_enc_goal = torch.nn.Sequential(*(list(models.resnet18().children())[:-2]))
+            else:
+                self.img_enc_goal = nn.Sequential(*list(yolo_mdl.model.model)[:self.img_enc_num_layers])
             self.spatial_softmax_goal = SpatialSoftmax(self.ss_in_c, self.ss_in_h, self.ss_in_w, self.ss_num_kp)
             self.ee_ln_goal = nn.Linear(self.ss_num_kp * 2, (self.feat_dim - self.low_dim_hidden_sizes[-1]) // 2)
+            if self.freeze_encoder:
+                for param in self.img_enc_goal.parameters():
+                    param.requires_grad = False
 
         #for low_dim
         self.mlp_pos = nn.Sequential(
@@ -538,36 +568,94 @@ class Transformer(NetworkBase):
         x_low_dim=x_low_dim.to(self.device)
 
         x_img = x_img.view(b * seq, 3, self.img_size, self.img_size)
-        x_img_grid_shifted = self.random_crop_grid(x_img, self.grid_source)
-        x_img = F.grid_sample(x_img, x_img_grid_shifted, align_corners=True)
+        if self.crop_size < self.img_size:
+            x_img_grid_shifted = self.random_crop_grid(x_img, self.grid_source)
+            x_img = F.grid_sample(x_img, x_img_grid_shifted, align_corners=True)
+        if self.use_tcl_loss:
+            x_img_aug=x_img.clone()
+            for idx in range(x_img.shape[0]):
+                x = random.randint(0, min(self.img_size,self.crop_size) - 1)
+                y = random.randint(0, min(self.img_size,self.crop_size) - 1)
+                x_img_aug[idx]=add_gaussian_spot_to_image(x_img_aug[idx], size=50,sigma=10, position=(x, y),to_device=True)
+        else:
+            if self.use_data_augmentation:
+                for idx in range(x_img.shape[0]):
+                    x = random.randint(0, min(self.img_size, self.crop_size) - 1)
+                    y = random.randint(0, min(self.img_size, self.crop_size) - 1)
+                    x_img[idx] = add_gaussian_spot_to_image(x_img[idx], size=50, sigma=10, position=(x, y),to_device=True)
+
         x_img = self.img_enc(x_img)
+        if self.use_tcl_loss:
+            x_img_feat=x_img.clone()
         x_img = self.spatial_softmax(x_img)
         x_img = self.ee_ln(x_img)
         x_img = x_img.view(b * seq, -1).contiguous()
 
-        if not self.use_siamese:
-            x_img_goal = x_img_goal.view(b * seq, 3, self.img_size, self.img_size)
+        if self.use_tcl_loss:
+            x_img_aug=self.img_enc(x_img_aug)
+            if self.use_tcl_loss:
+                x_img_aug_feat = x_img_aug.clone()
+            x_img_aug = self.spatial_softmax(x_img_aug)
+            x_img_aug = self.ee_ln(x_img_aug)
+            x_img_aug = x_img_aug.view(b * seq, -1).contiguous()
+
+        x_img_goal = x_img_goal.view(b * seq, 3, self.img_size, self.img_size)
+        if self.crop_size < self.img_size:
             x_img_goal_grid_shifted = self.random_crop_grid(x_img_goal, self.grid_source)
             x_img_goal = F.grid_sample(x_img_goal, x_img_goal_grid_shifted, align_corners=True)
+        if self.use_tcl_loss:
+            x_img_goal_aug = x_img_goal.clone()
+            for idx in range(x_img_goal.shape[0]):
+                x = random.randint(0, min(self.img_size,self.crop_size) - 1)
+                y = random.randint(0, min(self.img_size,self.crop_size) - 1)
+                x_img_goal_aug[idx]=add_gaussian_spot_to_image(x_img_goal_aug[idx], size=50,sigma=10, position=(x, y),to_device=True)
+        else:
+            if self.use_data_augmentation:
+                for idx in range(x_img.shape[0]):
+                    x = random.randint(0, min(self.img_size, self.crop_size) - 1)
+                    y = random.randint(0, min(self.img_size, self.crop_size) - 1)
+                    x_img_goal[idx] = add_gaussian_spot_to_image(x_img_goal[idx], size=50, sigma=10, position=(x, y),to_device=True)
+
+        if not self.use_siamese:
             x_img_goal = self.img_enc_goal(x_img_goal)
+            if self.use_tcl_loss:
+                x_img_goal_feat = x_img_goal.clone()
             x_img_goal = self.spatial_softmax_goal(x_img_goal)
             x_img_goal = self.ee_ln_goal(x_img_goal)
             x_img_goal = x_img_goal.view(b * seq, -1).contiguous()
+            if self.use_tcl_loss:
+                x_img_goal_aug = self.img_enc_goal(x_img_goal_aug)
+                if self.use_tcl_loss:
+                    x_img_goal_aug_feat = x_img_goal_aug.clone()
+                x_img_goal_aug = self.spatial_softmax_goal(x_img_goal_aug)
+                x_img_goal_aug = self.ee_ln_goal(x_img_goal_aug)
+                x_img_goal_aug = x_img_goal_aug.view(b * seq, -1).contiguous()
         else:
-            x_img_goal = x_img_goal.view(b * seq, 3, self.img_size, self.img_size)
-            x_img_goal_grid_shifted = self.random_crop_grid(x_img_goal, self.grid_source)
-            x_img_goal = F.grid_sample(x_img_goal, x_img_goal_grid_shifted, align_corners=True)
             x_img_goal = self.img_enc(x_img_goal)
+            if self.use_tcl_loss:
+                x_img_goal_feat = x_img_goal.clone()
             x_img_goal = self.spatial_softmax(x_img_goal)
             x_img_goal = self.ee_ln(x_img_goal)
             x_img_goal = x_img_goal.view(b * seq, -1).contiguous()
+            if self.use_tcl_loss:
+                x_img_goal_aug = self.img_enc(x_img_goal_aug)
+                if self.use_tcl_loss:
+                    x_img_goal_aug_feat = x_img_goal_aug.clone()
+                x_img_goal_aug = self.spatial_softmax(x_img_goal_aug)
+                x_img_goal_aug = self.ee_ln(x_img_goal_aug)
+                x_img_goal_aug = x_img_goal_aug.view(b * seq, -1).contiguous()
 
         x_low_dim = self.mlp_pos(x_low_dim)  # [b*seq,ldhs]
         input_tensor = torch.cat((x_img, x_img_goal, x_low_dim), dim=-1)  # [b*seq,hs]
         input_tensor=input_tensor.view(b , seq, -1).contiguous() # [b,seq,hs]
 
+        if self.use_tcl_loss:
+            input_tensor_aug = torch.cat((x_img_aug, x_img_goal_aug, x_low_dim), dim=-1)  # [b*seq,hs]
+            input_tensor_aug = input_tensor_aug.view(b, seq, -1).contiguous()  # [b,seq,hs]
+
         N = seq
         output_tensor = None
+        output_tensor_aug=None
         if self.is_training:
             for i in range(N):
                 idx = input_tensor[:, :(i + 1), :]
@@ -582,6 +670,20 @@ class Transformer(NetworkBase):
                     output_tensor = logits.clone().contiguous()
                 else:
                     output_tensor = torch.cat((output_tensor, logits), dim=1).contiguous()
+
+                if self.use_tcl_loss:
+                    idx_aug = input_tensor_aug[:, :(i + 1), :]
+                    # if the sequence context is growing too long we must crop it at block_size
+                    idx_cond_aug = idx_aug if idx_aug.size(1) <= self.gpt_model.block_size else idx_aug[:, -self.gpt_model.block_size:]
+                    # forward the model to get the logits for the index in the sequence
+                    logits_aug, loss_aug = self.gpt_model(idx_cond_aug)
+                    # pluck the logits at the final step and scale by desired temperature
+                    logits_aug = logits_aug[:, -1:, :]
+                    # print('idx.shape, logits.shape: ', idx.shape, logits.shape)
+                    if output_tensor_aug == None:
+                        output_tensor_aug = logits_aug.clone().contiguous()
+                    else:
+                        output_tensor_aug = torch.cat((output_tensor_aug, logits_aug), dim=1).contiguous()
         else:
             self.buffer.append(input_tensor.clone())
             if len(self.buffer) > self.gpt_model.block_size:
@@ -595,10 +697,15 @@ class Transformer(NetworkBase):
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1:, :]
             output_tensor = logits.contiguous()
+
         if not self.use_GMM:
             output_tensor = self.mlp_output_head(output_tensor)
+            if self.use_tcl_loss:
+                output_tensor_aug = self.mlp_output_head(output_tensor_aug)
             if self.output_activation is not None:
                 output_tensor = self.output_activation(output_tensor)
+                if self.use_tcl_loss:
+                    output_tensor_aug = self.output_activation(output_tensor_aug)
         else:
             x_means = self.mlp_decoder_mean(output_tensor)
             x_scales = self.mlp_decoder_scale(output_tensor)
@@ -626,4 +733,35 @@ class Transformer(NetworkBase):
                 component_distribution=component_distribution,
             )
             output_tensor = dists.mean
-        return output_tensor
+
+            if self.use_tcl_loss:
+                x_means_aug = self.mlp_decoder_mean(output_tensor_aug)
+                x_scales_aug = self.mlp_decoder_scale(output_tensor_aug)
+                x_logits_aug = self.mlp_decoder_logits(output_tensor_aug)
+
+                x_means_aug = x_means_aug.view(b, seq, self.gmm_modes, self.output_dim).contiguous()
+                x_scales_aug = x_scales_aug.view(b, seq, self.gmm_modes, self.output_dim).contiguous()
+                x_logits_aug = x_logits_aug.view(b, seq, self.gmm_modes).contiguous()
+
+                if self.low_noise_eval and seq == 1:
+                    # low-noise for all Gaussian dists
+                    x_scales_aug = torch.ones_like(x_means_aug) * 1e-4
+                else:
+                    # post-process the scale accordingly
+                    x_scales_aug = self.activations[self.std_activation](x_scales_aug) + self.min_std
+
+                component_distribution_aug = D.Normal(loc=x_means_aug, scale=x_scales_aug)
+                component_distribution_aug = D.Independent(component_distribution_aug, 1)  # shift action dim to event shape
+
+                # unnormalized logits to categorical distribution for mixing the modes
+                mixture_distribution_aug = D.Categorical(logits=x_logits_aug)
+
+                dists_aug = D.MixtureSameFamily(
+                    mixture_distribution=mixture_distribution_aug,
+                    component_distribution=component_distribution_aug,
+                )
+                output_tensor_aug = dists_aug.mean
+        if not self.use_tcl_loss:
+            return output_tensor
+        else:
+            return {"output_tensor": output_tensor, "output_tensor_aug": output_tensor_aug,"x_img_feat": x_img_feat,"x_img_goal_feat": x_img_goal_feat,"x_img_aug_feat": x_img_aug_feat,"x_img_goal_aug_feat": x_img_goal_aug_feat}

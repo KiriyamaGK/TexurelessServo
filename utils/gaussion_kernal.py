@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -46,4 +47,9 @@ def gaussian_img(image_size, pts, kernel_size=100, sigma=2.0):
 
     return image
 
-
+if __name__ == '__main__':
+    a=gaussian_img([480,640],np.array([0,0]),100,50)
+    b=a.copy()*255
+    cv2.imshow('a',a)
+    cv2.imshow('b',b.astype(np.uint8))
+    cv2.waitKey(0)

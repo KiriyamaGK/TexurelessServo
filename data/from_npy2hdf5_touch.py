@@ -52,16 +52,16 @@ def trans_imgs_to_square(imgs,img_size,cut2square):
         return imgs
 
 if __name__ == '__main__':
-    img_size=256
+    img_size=220
     gau_size=64
     # current_date = datetime.datetime.now()
     # hdf_date = current_date.strftime('%Y.%m.%d')
-    date='25.01.22'
+    date='25.01.23'
     replace_exist=True
     cut_to_square=True
     # formatted_date='2024.11.07'
     # npy_date=hdf_date[2:]
-    exact_gauss_img=True
+    exact_gauss_img=False
     exact_abs_rot_list=True
     add_goal_image=False
     base='/media/kiriyamagk/One Touch/AlignAnything'

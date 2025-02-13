@@ -30,12 +30,13 @@ def pixel_cord_from_frame1_to_frame3(h,w,h_hat,u1,v1):
      return np.array([(u1-w/2+h/2)*h_hat/h,v1*h_hat/h])
 
 if __name__ == '__main__':
-    img_w=256
-    img_h=256
+    img_w=220
+    img_h=220
     gau_h=64
     cut_to_square=True
+    random_light_dir=True
     config_dir= "../configs/demo_collection.json"
-    current_date = "25.01.22"
+    current_date = "25.01.23"
 
     with open(config_dir, "r") as j:
         config = json.load(j)
@@ -83,7 +84,7 @@ if __name__ == '__main__':
         gaussian_img_kpt_lst = []
         while True:
             dT=np.eye(4)
-            img=env.observation()
+            img=env.observation(random_light_dir)
             wgT_tar=env.wgT_tar
             wgT=env.wgT
             rz=rmat2euler_rz_degree(wgT)

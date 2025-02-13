@@ -148,7 +148,11 @@ class Environment(object):
         self.init_flag = True
         self.obj_idx_pointer+=1
 
-    def observation(self):
+    def observation(self,random_light_dir=False):
+        if random_light_dir:# 50% percent random_light_dir
+            rand=random.uniform(0,1)
+            if rand<0.5:
+                p.configureDebugVisualizer(lightPosition=random_light_direction())
         frame = self.camera.render(self.cwT, self.client)
         rgb = frame.color_image()
         return rgb
@@ -278,3 +282,13 @@ class DebugAxesGripper(object):
         p.removeUserDebugItem(self.uids[1], physicsClientId=self.client)
         p.removeUserDebugItem(self.uids[2], physicsClientId=self.client)
         self.uids = [-2, -2, -2]
+
+def random_light_direction():
+    # 随机生成一个单位向量作为光照方向
+    phi = np.random.uniform(0, 2 * np.pi)
+    costheta = np.random.uniform(-1, 1)
+    sintheta = np.sqrt(1 - costheta**2)*random.choice([1, -1])
+    x = sintheta * np.cos(phi)
+    y = sintheta * np.sin(phi)
+    z = costheta
+    return [x, y, z]

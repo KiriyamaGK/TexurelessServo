@@ -119,7 +119,7 @@ class BehaviorCloningExperiment():
         train_set  = dataset_factory(self._config["dataset"],  filter_by_attribute='train') # TODO: remember to convert
         valid_set  = dataset_factory(self._config["dataset"],  filter_by_attribute='valid')
 
-        self._train_loader = DataLoader(
+        self._train_loader = DataLoader(  # shuffle=True：每个epoch开始时重新随机打乱并采样batch
             dataset=train_set,
             batch_size=self._config["training"]["batch_size"],
             shuffle=True,
@@ -205,6 +205,6 @@ class BehaviorCloningExperiment():
 
 
 if __name__ == "__main__":
-    exp = BehaviorCloningExperiment(config_path="train_centernet.json")
+    exp = BehaviorCloningExperiment(config_path="train_transformer.json")
     # exp = BehaviorCloningExperiment(config_path="train_transformer_single.json")
     exp.run()

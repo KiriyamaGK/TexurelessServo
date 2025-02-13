@@ -4,7 +4,7 @@ from torch.nn.modules import activation
 from torch.nn.modules import loss
 import torch.optim as optim
 from networks.Network import NetworkBase
-from networks.losses import CustomLoss,ModifiedFocalLoss,MSE_and_ModifiedFocalLoss
+from networks.losses import CustomLoss,ModifiedFocalLoss,MSE_and_ModifiedFocalLoss,TCL_MSE
 
 Activation = Callable[..., Module]
 def get_activation_fn(act: str) -> Activation:
@@ -34,6 +34,8 @@ def get_loss_fn(lss: str,weight:dict,seq_length:int,output_dim:int) -> Callable[
         return ModifiedFocalLoss()
     elif lss == "focal_and_mse":
         return MSE_and_ModifiedFocalLoss(weight,seq_length,output_dim)
+    elif lss=="tcl_loss":
+        return TCL_MSE(weight,seq_length,output_dim)
     else:
         raise ValueError(f"Cannot find loss function for string <{lss}>")
 

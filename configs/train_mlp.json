@@ -19,15 +19,20 @@
         "use_gmm": true,
         "encoder": {
           "name": "ResNet18",
-          "siamese": true,
+          "data_augmentation": true,
+          "task_consistency_loss": false,
+          "pretrained_path": "/home/kiriyamagk/桌面/ultralytics/runs/pose/train/weights/best.pt",
+          "freeze":false,
+          "siamese": false,
           "params": {
-            "img_size": 200,
-            "crop_size": 185,
+            "num_layers": 11,
+            "img_size": 220,
+            "crop_size": 190,
             "SpatialSoftmax": {
               "num_kp": 32,
               "in_c": 512,
-              "in_h": 4,
-              "in_w": 4
+              "in_h": 6,
+              "in_w": 6
             }
           }
         }
@@ -36,15 +41,17 @@
     "optimizer": {
       "name": "Adam",
       "params": {
-        "lr": 0.001
+        "lr": 0.0001
       }
     },
       "loss":
       {
-        "name": "MSELoss",
+        "name": "CustomLoss",
         "weight":
         {
-          "weight_tr": 1.0,
+          "weight_tcl_img": 1,
+          "weight_tcl_act": 1,
+          "weight_tr": 500.0,
           "weight_rot": 1.0
         }
       }
@@ -52,21 +59,21 @@
   "training": {
     "finetune":false,
     "num_epochs": 1000,
-    "num_epochs_logging_and_valid": 10,
+    "num_epochs_logging_and_valid": 1,
     "num_train_steps_per_epoch": 100,
     "num_val_steps_per_epoch": 10,
-    "num_epochs_save": 1,
-    "batch_size": 32,
+    "num_epochs_save": 3,
+    "batch_size": 16,
     "num_data_workers": 2
   },
   "dataset": {
-    "hdf5_path": "wp/Panda_Panda_TwoArmPickPlace_2025-01-02_17-10-41/demo.hdf5",
+    "hdf5_path": "/media/kiriyamagk/One Touch/AlignAnything/25.01.23/hdf5/mimic.hdf5",
     "specific_obs_keys": [
       "robot0_eye_in_hand_image",
       "robot0_eye_in_hand_image_goal",
       "abs_rot"
     ],
-    "num_demos": 5001,
+    "num_demos": 5000,
     "seq_length": 10,
     "input_low_dim": 1,
     "output_dim": 3,

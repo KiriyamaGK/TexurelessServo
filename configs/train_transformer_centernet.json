@@ -75,7 +75,7 @@
       "gaussian_img_kpt_goal",
       "abs_rot"
     ],
-    "num_demos": 30,
+    "num_demos": 10000,
     "seq_length": 10,
     "input_low_dim": 1,
     "output_dim": 3,

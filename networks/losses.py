@@ -110,6 +110,43 @@ class MSE_and_ModifiedFocalLoss(nn.Module):
           "loss_heatmap": loss_htmp}
       return loss_dict
 
+class TCL_MSE(nn.Module):
+    def __init__(self,weight,seq_length,output_dim):
+        super().__init__()
+        self.weight_tr = weight["weight_tr"]
+        self.weight_rot = weight["weight_rot"]
+        self.weight_img= weight["weight_tcl_img"]
+        self.weight_act= weight["weight_tcl_act"]
 
+        self.seq_length = seq_length
+        self.output_dim = output_dim
+    def forward(self, input_dict, target_act):
+        # 自定义损失计算逻辑
+        pred_act = input_dict["output_tensor"]
+        pred_act_aug=input_dict["output_tensor_aug"]
+        img_feat=input_dict["x_img_feat"]
+        img_goal_feat=input_dict["x_img_goal_feat"]
+        img_aug_feat = input_dict["x_img_aug_feat"]
+        img_goal_aug_feat = input_dict["x_img_goal_aug_feat"]
+
+        #act
+        pred_act=pred_act.view(-1,self.seq_length,self.output_dim)
+        target_act=target_act.view(-1,self.seq_length,self.output_dim)
+        loss_tr = torch.mean((pred_act[:,:,0:2] - target_act[:,:,0:2]) ** 2)*self.weight_tr  # mse,平方和/(b*t*n_dim)
+        loss_rot = torch.mean((pred_act[:, :, 2:] - target_act[:, :, 2:]) ** 2)*self.weight_rot
+
+        #tcl
+        pred_act_aug = pred_act_aug.view(-1, self.seq_length, self.output_dim)
+        loss_tcl_act=torch.mean((pred_act - pred_act_aug) ** 2)*self.weight_act
+        loss_tcl_img=torch.mean((img_feat - img_aug_feat) ** 2)*self.weight_img+torch.mean((img_goal_feat - img_goal_aug_feat) ** 2)*self.weight_img
+
+        loss = loss_tr+ loss_rot+loss_tcl_act+loss_tcl_img
+        loss_dict = {
+        "loss": loss,
+        "loss_tr": loss_tr,
+        "loss_rot": loss_rot,
+        "loss_tcl_act": loss_tcl_act,
+        "loss_tcl_img": loss_tcl_img}
+        return loss_dict
 
 
