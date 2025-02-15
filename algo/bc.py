@@ -2,7 +2,7 @@ import torch
 import os
 from torch.utils.tensorboard import SummaryWriter
 from utils import log_utils as LogUtils
-from networks.CenterNet import CenterNet_ResNet18
+from outdated_codes.CenterNet2 import CenterNet_ResNet18
 
 class BehaviorCloning():
     """

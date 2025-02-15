@@ -57,8 +57,8 @@ def get_network_cls(net: str)->(NetworkBase,bool):
     from networks.mlp import MLP
     from networks.transformer import Transformer
     from networks.transformer_single import TransformerSingle
-    from networks.CenterNet import CenterNet_ResNet18
-    from networks.transformer_centernet import TransformerCenternet
+    from outdated_codes.CenterNet2 import CenterNet_ResNet18
+    from outdated_codes.transformer_centernet import TransformerCenternet
     net_dct = {
         "mlp": MLP,
         "transformer": Transformer,

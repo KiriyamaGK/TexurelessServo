@@ -5,14 +5,12 @@ from sim.environment import Environment
 from utils.transform import rotation_matrix_z,rmat2euler_rz_degree
 from utils.perception import CameraIntrinsic
 from utils.input_process import input_dict_preprocess
-from datetime import datetime
-import pybullet as p
 import time
 import cv2
 import torch
 from networks.helpers import get_network_cls
 from utils.input_process import clip_image
-from utils.gaussion_kernal import gaussian_img
+from outdated_codes.gaussion_kernal import gaussian_img
 from utils.transform import project_XYZw_to_uv
 from utils.get_stl_geometry import get_stl_geometry
 import open3d as o3d
@@ -61,7 +59,7 @@ def find_max_pixel(image):
 if __name__ == '__main__':
     trans_vel_norm = 0.001
     rot_vel_norm = 0.5
-    config_dir= "../configs/rollout_centernet.json"
+    config_dir= "rollout_centernet.json"
     gau_img_size=64
     output_size=64
     vis_size=400
