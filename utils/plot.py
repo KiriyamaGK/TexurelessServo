@@ -95,6 +95,33 @@ def plot_trajs(wgT_list, wgT_tar, motion_type, obj_path=None):
     plt.savefig(os.path.join(obj_path, '{}.png'.format({int(time.time())})), dpi=300)
     plt.show()
 
+def plot_vel(vel_tr,vel_rot,use_time,obj_path=None):
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+
+    ax1.plot(vel_rot, label='Rotation Velocity', marker='o', linestyle='-', color='blue')
+    ax1.set_title('Rotation Velocity')
+    ax1.set_xlabel('Time Step')
+    ax1.set_ylabel('°')
+    ax1.grid(True)
+    ax1.legend()
+
+    ax2.plot(vel_tr, label='Translation Velocity', marker='x', linestyle='--', color='red')
+    ax2.set_title('Translation Velocity')
+    ax2.set_xlabel('Time Step')
+    ax2.set_ylabel('mm')
+    ax2.grid(True)
+    ax2.legend()
+
+
+    plt.annotate(f'Use Time: {use_time:.2f}(s)',
+                 xy=(len(vel_tr) - 1, 0),
+                 xytext=(len(vel_tr), 0),
+                 # arrowprops=dict(facecolor='red', shrink=0.05),
+                 color='black')
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(obj_path,'{}.png'.format({int(time.time())})), dpi=300, bbox_inches='tight')
+    plt.show()
 
 # 示例数据
 if __name__ == "__main__":

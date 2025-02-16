@@ -59,7 +59,7 @@ class Environment(object):
         self.init_flag=False
 
         self.close_enough_flag=False
-
+        self.vel_in_threshold_flag=False
 
 
         if isinstance(camera_config, str):
@@ -151,6 +151,7 @@ class Environment(object):
         self.init_flag = True
         self.obj_idx_pointer+=1
         self.task_timer=time.time()
+        self.vel_timer=time.time()
 
     def observation(self,random_light_dir=False):
         if random_light_dir:# 50% percent random_light_dir
@@ -220,36 +221,55 @@ class Environment(object):
 
     def need_reinit(self):
         err_dict = self.compute_error(self.wcT_tar, self.wcT)
-        latest_flag = err_dict["flag"]
-        if latest_flag:
+        if err_dict["close_enough"]:
             return True
         else:
             return False
 
     def need_reinit_eval(self):
-        if self.close_enough_flag==False:
-            err_dict=self.compute_error(self.wcT_tar, self.wcT)
-            latest_flag=err_dict["flag"]
-            if time.time()-self.task_timer>=self.time_up_bound:
-                return {"need_reinit": True,
-                        "dist": err_dict["dist"],
-                        "angle": err_dict["angle"]
-                        }
-            elif latest_flag:
-                self.error_timer=time.time()
-                return {"need_reinit":False,
-                        "dist":err_dict["dist"],
-                        "angle":err_dict["angle"]
-                        }
-            else:
-                return {"need_reinit": False,
-                        "dist": err_dict["dist"],
-                        "angle": err_dict["angle"]
-                        }
+        # if self.close_enough_flag==False:
+        #     err_dict=self.compute_error(self.wcT_tar, self.wcT)
+        #     latest_flag=err_dict["flag"]
+        #     if time.time()-self.task_timer>=self.time_up_bound:
+        #         return {"need_reinit": True,
+        #                 "dist": err_dict["dist"],
+        #                 "angle": err_dict["angle"]
+        #                 }
+        #     elif latest_flag:
+        #         self.error_timer=time.time()
+        #         return {"need_reinit":False,
+        #                 "dist":err_dict["dist"],
+        #                 "angle":err_dict["angle"]
+        #                 }
+        #     else:
+        #         return {"need_reinit": False,
+        #                 "dist": err_dict["dist"],
+        #                 "angle": err_dict["angle"]
+        #                 }
+        # else:
+        #     err_dict = self.compute_error(self.wcT_tar, self.wcT)
+        #     latest_flag = err_dict["flag"]
+        #     if (latest_flag and time.time()-self.error_timer>=self.in_error_range_time) or time.time()-self.task_timer>=self.time_up_bound:
+        #         return {"need_reinit": True,
+        #                 "dist": err_dict["dist"],
+        #                 "angle": err_dict["angle"]
+        #                 }
+        #     else:
+        #         return {"need_reinit": False,
+        #                 "dist": err_dict["dist"],
+        #                 "angle": err_dict["angle"]
+        #                 }
+
+        err_dict=self.compute_error(self.wcT_tar, self.wcT)
+
+        if time.time()-self.task_timer>=self.time_up_bound:
+            return {"need_reinit": True,
+                    "dist": err_dict["dist"],
+                    "angle": err_dict["angle"]
+                    }
+
         else:
-            err_dict = self.compute_error(self.wcT_tar, self.wcT)
-            latest_flag = err_dict["flag"]
-            if (latest_flag and time.time()-self.error_timer>=self.in_error_range_time) or time.time()-self.task_timer>=self.time_up_bound:
+            if time.time()-self.vel_timer>=self.in_threshold_range_time and self.vel_in_threshold_flag:
                 return {"need_reinit": True,
                         "dist": err_dict["dist"],
                         "angle": err_dict["angle"]
@@ -266,16 +286,25 @@ class Environment(object):
         dist = np.linalg.norm(dT[:3, 3])
         self.close_enough_flag=(angle < self.angle_eps) and (dist < self.dist_eps)
         return {
-            "flag":self.close_enough_flag,
+            "close_enough":self.close_enough_flag,
             "dist":dist,
             "angle":angle,
         }
+    def determine_vel_in_threshold(self,vel_tr,vel_rot): #self.vel_in_threshold_flag = True当且仅当速度在误差内
+        if not self.vel_in_threshold_flag:
+            if vel_tr<=self.trans_vel_threshold and vel_rot<=self.rot_vel_threshold:
+                self.vel_in_threshold_flag=True
+                self.vel_timer=time.time()
+
+        else:
+            if vel_tr>self.trans_vel_threshold or vel_rot>self.rot_vel_threshold:
+                self.vel_in_threshold_flag = False
 
     def setup_stop_policy(self,metrics:dict):
-        self.angle_eps=metrics["rot_threshold"]  #deg
-        self.dist_eps=metrics["trans_threshold"] #m
+        self.rot_vel_threshold=metrics["rot_vel_threshold"]  #deg
+        self.trans_vel_threshold=metrics["trans_vel_threshold"] #m
         self.time_up_bound = metrics["use_time_upperbound"] #maximum used time during a rollout
-        self.in_error_range_time = metrics["in_error_range_time"] #maximum time stay in error threshold before entering the next rollout
+        self.in_threshold_range_time = metrics["in_threshold_range_time"] #maximum time stay in error threshold before entering the next rollout
 
     def return_cur_pos_info(self):
         return {

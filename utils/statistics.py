@@ -48,6 +48,52 @@ def calculate_success_rate(data, output_file="success_rate.json"):
     print(f"\nResults have been saved to {output_file}")
 
     return result_dict
+def visualize_final_error(data, output_file="final_error.json"):
+    obj_trans_stats = {}
+    obj_rot_stats = {}
+    for idx in range(len(data)):
+        obj_id = str(data[idx][0])
+        if obj_id not in obj_trans_stats:
+            assert obj_id not in obj_rot_stats
+            obj_trans_stats[obj_id] = []
+            obj_rot_stats[obj_id] = []
+        obj_trans_stats[obj_id].append(data[idx][1])
+        obj_rot_stats[obj_id].append(data[idx][2])
+
+    stats_summary = {}
+    for obj_id in obj_trans_stats:
+        trans_data = obj_trans_stats[obj_id]
+        rot_data = obj_rot_stats[obj_id]
+
+        stats_summary[obj_id] = {
+            "translation": {
+                "mean": sum(trans_data) / len(trans_data),
+                "max": max(trans_data),
+                "min": min(trans_data),
+            },
+            "rotation": {
+                "mean": sum(rot_data) / len(rot_data),
+                "max": max(rot_data),
+                "min": min(rot_data),
+            },
+            "attempts": len(trans_data),
+        }
+    print("Final Error Statistics:")
+    for obj_id, stats in stats_summary.items():
+        print(f"Object ID: {obj_id}")
+        print(f"Attempts: {stats['attempts']}")
+        print(f"  Translation - Mean: {stats['translation']['mean']:.4f}, "
+              f"Max: {stats['translation']['max']:.4f}, "
+              f"Min: {stats['translation']['min']:.4f}")
+        print(f"  Rotation - Mean: {stats['rotation']['mean']:.4f}, "
+              f"Max: {stats['rotation']['max']:.4f}, "
+              f"Min: {stats['rotation']['min']:.4f}")
+
+    with open(output_file, "w") as f:
+        json.dump(stats_summary, f, indent=4)
+
+    print(f"Statistics saved to {output_file}")
+
 
 if __name__ == "__main__":
     # 示例数据

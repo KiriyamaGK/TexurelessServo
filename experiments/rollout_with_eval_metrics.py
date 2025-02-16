@@ -12,15 +12,16 @@ import cv2
 import torch
 from networks.helpers import get_network_cls
 from utils.input_process import clip_image
-from utils.plot import plot_rot_and_trans,plot_trajs
-from utils.success import calculate_success_rate
+from utils.plot import plot_rot_and_trans,plot_trajs,plot_vel
+from utils.statistics import calculate_success_rate,visualize_final_error
 import atexit
 
 
 def cleanup():
+    # print("success list:",success_list)
     if eval_metrics["success_rate"]["utilized"]:
         calculate_success_rate(success_list, os.path.join(save_base_pth, "success_rate.json"))
-
+    visualize_final_error(final_error_list, os.path.join(save_base_pth, "final_error.json"))
 
 # 注册退出时的回调函数
 atexit.register(cleanup)
@@ -31,16 +32,10 @@ def ensure_dir_with_timestamp(base_dir):
     :param base_dir: 基础文件夹路径（例如 'eval_results'）
     :return: 创建的子文件夹的完整路径
     """
-    # 获取当前时间
     current_time = datetime.datetime.now()
-    # 格式化时间戳为字符串，例如 '2025-09-22_14-30-00'
     timestamp = current_time.strftime("%Y-%m-%d_%H-%M-%S")
-
-    # 创建子文件夹路径
     subfolder_name = f"{timestamp}"
     full_path = os.path.join(base_dir, subfolder_name)
-
-    # 确保文件夹存在
     os.makedirs(full_path, exist_ok=True)
 
     print(f"Created directory: {full_path}")
@@ -95,6 +90,8 @@ if __name__ == '__main__':
     # assert rgb_key == ["robot0_eye_in_hand_image", "robot0_eye_in_hand_image_goal"]
 
     save_base_pth=ensure_dir_with_timestamp(os.path.join(ckpt_base,'eval_results'))
+    with open(os.path.join(save_base_pth,"config.json"), "w")as f:
+        json.dump(config, f, indent=4)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = _setup_model(model_config)
@@ -107,13 +104,15 @@ if __name__ == '__main__':
     env=Environment(camera_intrinsic,objs_descriptor=objs_descriptor)
     env.init()
     env.setup_stop_policy(stop_policy)
-
+    success_list = []
+    final_error_list = []
     for idx in range(eval_epoch_num):
         model.buffer=[]
         error_rot_lst=[]
         error_trans_lst=[]
-        success_list=[]
         wgT_list=[]
+        vel_tr_lst=[]
+        vel_rot_lst=[]
 
         init_transform_dict = env.return_cur_pos_info()
         env.act_to_goal()
@@ -128,7 +127,7 @@ if __name__ == '__main__':
             img_goal = cv2.resize(img_goal, (img_w, img_h))
         cv2.imwrite('/media/kiriyamagk/One Touch/AlignAnything/imgs/{}.png'.format(idx+1),img_goal_vis)
         env.act_with_abs_dict(init_transform_dict)
-        print("[INFO] start rollout_ ...".format(idx))
+        print("[INFO] start rollout_{}...".format(idx))
         obj_id=env.obj_idx
         obj_pth=os.path.join(save_base_pth, str(obj_id))
         os.makedirs(obj_pth, exist_ok=True)
@@ -173,12 +172,15 @@ if __name__ == '__main__':
             dT[0:2,3]=vel_tr
             dT[0:3,0:3]=rotation_matrix_z(vel_rot/180*np.pi)
             env.action(dT)
+            env.determine_vel_in_threshold(vel_tr=np.linalg.norm(vel_tr), vel_rot=abs(vel_rot))
             # time.sleep(0.1)
             rtn_dict=env.reinit_eval()
             trans_error=rtn_dict['dist']
             rot_error=rtn_dict['angle']
             error_rot_lst.append(rot_error)          #deg
             error_trans_lst.append(trans_error*1000) #m to mm
+            vel_tr_lst.append(np.linalg.norm(vel_tr)*1000) #mm
+            vel_rot_lst.append(abs(vel_rot))
             wgT_list.append(wgT)
             # print("time:",time.time()-env.task_timer)
             if rtn_dict["need_reinit"]:
@@ -188,6 +190,7 @@ if __name__ == '__main__':
                     plot_rot_and_trans(error_rot_lst=error_rot_lst, error_trans_lst=error_trans_lst, use_time=time.time()-t_0,obj_pth=error_pth)
                     print("last rot error: {}".format(error_rot_lst[-1]))
                     print("last trans error: {}".format(error_trans_lst[-1]))
+
                 if eval_metrics["success_rate"]["utilized"]:
                     success=1 if (error_rot_lst[-1]<=succ_rot and error_trans_lst[-1]<=succ_tr*1000) else 0
                     success_list.append([obj_id,success])
@@ -195,6 +198,11 @@ if __name__ == '__main__':
                     traj_pth=os.path.join(obj_pth, "traj")
                     os.makedirs(traj_pth, exist_ok=True)
                     plot_trajs(wgT_list=wgT_list, wgT_tar=env.wgT_tar, motion_type=expert_motion_type, obj_path=traj_pth)
+                if eval_metrics["velocity"]["utilized"]:
+                    vel_pth = os.path.join(obj_pth, "vel")
+                    os.makedirs(vel_pth, exist_ok=True)
+                    plot_vel(vel_tr=vel_tr_lst,vel_rot=vel_rot_lst,use_time=time.time()-t_0,obj_path=vel_pth)
+                final_error_list.append([obj_id,error_trans_lst[-1],error_rot_lst[-1]])
                 break
         # except KeyboardInterrupt or SystemExit:
         #     pass

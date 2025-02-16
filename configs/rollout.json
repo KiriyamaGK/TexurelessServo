@@ -13,10 +13,10 @@
         "fov": 60
     },
     "cut_to_square": true,
-    "logs_dir":  "/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-02-13_11-47-16/config.json",
-    "ckpts_dir": "/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-02-13_11-47-16/epoch_129_best_validation_loss_0.001063913869438693.pth",
+    "logs_dir":  "/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-02-11_20-30-55/config.json",
+    "ckpts_dir": "/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-02-11_20-30-55/epoch_197_best_validation_loss_0.00042173966503469276.pth",
     "objs_descriptor": [15,16,17,18,19,20],
-    "eval_epoch_num": 1,
+    "eval_epoch_num": 3,
     "bgr2rgb": false,
     "time_threshold": 30,
     "cv2_visualize": true,
@@ -25,20 +25,23 @@
     "eval_metrics": {
         "success_rate": {
             "utilized": true,
-            "trans_threshold": 0.002,
-            "rot_threshold": 1
+            "trans_threshold": 0.003,
+            "rot_threshold": 2
         },
         "error_curve":{
             "utilized": true
         },
         "trajectory": {
+             "utilized": false
+        },
+        "velocity": {
              "utilized": true
         }
     },
     "stop_policy": {
-        "trans_threshold": 0.0007,
-        "rot_threshold": 0.4,
-        "in_error_range_time":5,
+        "trans_vel_threshold": 0.0003,
+        "rot_vel_threshold": 0.05,
+        "in_threshold_range_time":5,
         "use_time_upperbound":20
     }
 }
