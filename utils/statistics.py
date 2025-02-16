@@ -34,7 +34,7 @@ def calculate_success_rate(data, output_file="success_rate.json"):
         "success_rate": total_success / total_attempts if total_attempts > 0 else 0,
     }
 
-    # 打印结果
+    print("==============================")
     print("Success Rate Report:")
     print(f"{'Object ID':<10} {'Success Num':<12} {'Attempts':<9} {'Success Rate':<12}")
     print("-" * 45)
@@ -78,10 +78,11 @@ def visualize_final_error(data, output_file="final_error.json"):
             },
             "attempts": len(trans_data),
         }
+    print("==============================")
     print("Final Error Statistics:")
     for obj_id, stats in stats_summary.items():
         print(f"Object ID: {obj_id}")
-        print(f"Attempts: {stats['attempts']}")
+        print(f"  Attempts: {stats['attempts']}")
         print(f"  Translation - Mean: {stats['translation']['mean']:.4f}, "
               f"Max: {stats['translation']['max']:.4f}, "
               f"Min: {stats['translation']['min']:.4f}")

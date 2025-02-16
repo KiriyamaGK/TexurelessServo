@@ -12,7 +12,7 @@ import cv2
 import torch
 from networks.helpers import get_network_cls
 from utils.input_process import clip_image
-from utils.plot import plot_rot_and_trans,plot_trajs,plot_vel
+from utils.plot import plot_rot_and_trans,plot_trajs,plot_vel,plot_time
 from utils.statistics import calculate_success_rate,visualize_final_error
 import atexit
 
@@ -22,6 +22,7 @@ def cleanup():
     if eval_metrics["success_rate"]["utilized"]:
         calculate_success_rate(success_list, os.path.join(save_base_pth, "success_rate.json"))
     visualize_final_error(final_error_list, os.path.join(save_base_pth, "final_error.json"))
+    plot_time(time_list,save_base_pth)
 
 # 注册退出时的回调函数
 atexit.register(cleanup)
@@ -106,6 +107,7 @@ if __name__ == '__main__':
     env.setup_stop_policy(stop_policy)
     success_list = []
     final_error_list = []
+    time_list = []
     for idx in range(eval_epoch_num):
         model.buffer=[]
         error_rot_lst=[]
@@ -125,8 +127,9 @@ if __name__ == '__main__':
             img_goal = cv2.resize(img_goal, (npy_size, npy_size))
         if npy_size!= img_w or npy_size!= img_h:
             img_goal = cv2.resize(img_goal, (img_w, img_h))
-        cv2.imwrite('/media/kiriyamagk/One Touch/AlignAnything/imgs/{}.png'.format(idx+1),img_goal_vis)
+        # cv2.imwrite('/media/kiriyamagk/One Touch/AlignAnything/imgs/{}.png'.format(idx+1),img_goal_vis)
         env.act_with_abs_dict(init_transform_dict)
+        print("==============================")
         print("[INFO] start rollout_{}...".format(idx))
         obj_id=env.obj_idx
         obj_pth=os.path.join(save_base_pth, str(obj_id))
@@ -184,10 +187,11 @@ if __name__ == '__main__':
             wgT_list.append(wgT)
             # print("time:",time.time()-env.task_timer)
             if rtn_dict["need_reinit"]:
+                use_time=time.time()-t_0
                 if eval_metrics["error_curve"]["utilized"]:
                     error_pth = os.path.join(obj_pth, "error_curve")
                     os.makedirs(error_pth, exist_ok=True)
-                    plot_rot_and_trans(error_rot_lst=error_rot_lst, error_trans_lst=error_trans_lst, use_time=time.time()-t_0,obj_pth=error_pth)
+                    plot_rot_and_trans(error_rot_lst=error_rot_lst, error_trans_lst=error_trans_lst, use_time=use_time,obj_pth=error_pth)
                     print("last rot error: {}".format(error_rot_lst[-1]))
                     print("last trans error: {}".format(error_trans_lst[-1]))
 
@@ -201,8 +205,9 @@ if __name__ == '__main__':
                 if eval_metrics["velocity"]["utilized"]:
                     vel_pth = os.path.join(obj_pth, "vel")
                     os.makedirs(vel_pth, exist_ok=True)
-                    plot_vel(vel_tr=vel_tr_lst,vel_rot=vel_rot_lst,use_time=time.time()-t_0,obj_path=vel_pth)
+                    plot_vel(vel_tr=vel_tr_lst,vel_rot=vel_rot_lst,use_time=use_time,obj_path=vel_pth)
                 final_error_list.append([obj_id,error_trans_lst[-1],error_rot_lst[-1]])
+                time_list.append([obj_id,use_time])
                 break
         # except KeyboardInterrupt or SystemExit:
         #     pass

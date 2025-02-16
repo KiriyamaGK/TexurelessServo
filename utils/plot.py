@@ -123,6 +123,29 @@ def plot_vel(vel_tr,vel_rot,use_time,obj_path=None):
     plt.savefig(os.path.join(obj_path,'{}.png'.format({int(time.time())})), dpi=300, bbox_inches='tight')
     plt.show()
 
+def plot_time(time_list,save_base_pth):
+    # 提取每个 obj_id 的数据
+    obj_time_dict = {}
+    for obj_id, use_time in time_list:
+        if obj_id not in obj_time_dict:
+            obj_time_dict[obj_id] = []
+        obj_time_dict[obj_id].append(use_time)
+
+    for obj_id, times in obj_time_dict.items():
+        # 创建柱状图
+        plt.figure(figsize=(10, 6))
+        plt.bar(range(len(times)), times, color='skyblue', edgecolor='black')
+        plt.xlabel("Attempt Index")
+        plt.ylabel("Use Time(s)")
+        plt.title(f"Use Time for Object ID: {obj_id}")
+        plt.xticks(range(len(times)))  # 设置 x 轴刻度
+
+        save_path = os.path.join(save_base_pth, str(obj_id),"use_time.png")
+        plt.savefig(save_path)
+        plt.close()  # 关闭当前图表，避免内存泄漏
+
+    print(f"All plots saved to {save_base_pth}")
+
 # 示例数据
 if __name__ == "__main__":
     # 示例 wgT_list 和 wgT_tar

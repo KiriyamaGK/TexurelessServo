@@ -82,7 +82,7 @@ if __name__ == '__main__':
             img_goal = cv2.resize(img_goal, (npy_size, npy_size))
         if npy_size!= img_w or npy_size!= img_h:
             img_goal = cv2.resize(img_goal, (img_w, img_h))
-        cv2.imwrite('/media/kiriyamagk/One Touch/AlignAnything/imgs/{}.png'.format(idx+1),img_goal_vis)
+        # cv2.imwrite('/media/kiriyamagk/One Touch/AlignAnything/imgs/{}.png'.format(idx+1),img_goal_vis)
         env.act_with_abs_dict(init_transform_dict)
         print("[INFO] start rollout_{} ...".format(idx))
         while True:
