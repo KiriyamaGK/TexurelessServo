@@ -24,7 +24,7 @@ def insert_images(f, ep_key, dataset_name, trans_id, rot_id, add_num, row_1):
         f[ep_key].move(f'{dataset_name}_temp', dataset_name)
 
 if __name__ == '__main__':
-    date='25.01.23'
+    date='25.01.24'
     fn=os.path.join('/media/kiriyamagk/One Touch/AlignAnything',date,'hdf5/mimic.hdf5')
 
     disturb_abs_rot=True
@@ -137,12 +137,13 @@ if __name__ == '__main__':
                 del f[ep_key]['robot0_eye_in_hand_image']
                 f[ep_key].create_dataset('robot0_eye_in_hand_image', data=wrist_lst)
 
-            if 'robot0_eye_in_hand_image_goal' in f[ep_key]:
-                wrist_img_goal = f['{}/robot0_eye_in_hand_image_goal'.format(ep_key)][-1].copy()
-                wrist_goal_lst = f['{}/robot0_eye_in_hand_image_goal'.format(ep_key)][:]
-                wrist_goal_lst = np.concatenate((wrist_goal_lst, np.repeat(wrist_img_goal[np.newaxis, :], add_num, axis=0)))
-                del f[ep_key]['robot0_eye_in_hand_image_goal']
-                f[ep_key].create_dataset('robot0_eye_in_hand_image_goal', data=wrist_goal_lst)
+            if 'robot0_eye_in_hand_image_light' in f[ep_key]:
+                wrist_img_light = f['{}/robot0_eye_in_hand_image_light'.format(ep_key)][-1].copy()
+                wrist_lst_light = f['{}/robot0_eye_in_hand_image_light'.format(ep_key)][:]
+                wrist_lst_light = np.concatenate((wrist_lst_light, np.repeat(wrist_img_light[np.newaxis, :], add_num, axis=0)))
+                del f[ep_key]['robot0_eye_in_hand_image_light']
+                f[ep_key].create_dataset('robot0_eye_in_hand_image_light', data=wrist_lst_light)
+
 
             if 'gaussian_img_kpt' in f[ep_key]:
                 gauss_kpt = f['{}/gaussian_img_kpt'.format(ep_key)][-1].copy()
@@ -212,23 +213,11 @@ if __name__ == '__main__':
                 f['data/{}/actions'.format(ep)] = act_lst
 
                 ep_key = 'data/{}/obs'.format(ep)
-                if 'robot0_eye_in_hand_image' in f[ep_key]:
-                    # wrist_img = f['{}/robot0_eye_in_hand_image'.format(ep_key)][trans_id+1].copy()
-                    # wrist_lst = f['{}/robot0_eye_in_hand_image'.format(ep_key)][:]
-                    # wrist_lst = np.concatenate((wrist_lst[0:rot_id], np.repeat(wrist_img[np.newaxis, :], add_num, axis=0),wrist_lst[rot_id:]))
-                    # assert wrist_lst.shape[0] == row_1
-                    # del f[ep_key]['robot0_eye_in_hand_image']
-                    # f[ep_key].create_dataset('robot0_eye_in_hand_image', data=wrist_lst)
-                    insert_images(f, ep_key, 'robot0_eye_in_hand_image', trans_id, rot_id, add_num, row_1)
 
-                if 'robot0_eye_in_hand_image_goal' in f[ep_key]:
-                    # wrist_img_goal = f['{}/robot0_eye_in_hand_image_goal'.format(ep_key)][trans_id+1].copy()
-                    # wrist_goal_lst = f['{}/robot0_eye_in_hand_image_goal'.format(ep_key)][:]
-                    # wrist_goal_lst = np.concatenate((wrist_goal_lst[0:rot_id], np.repeat(wrist_img_goal[np.newaxis, :], add_num, axis=0),wrist_goal_lst[rot_id:]))
-                    # assert wrist_goal_lst.shape[0] == row_1
-                    # del f[ep_key]['robot0_eye_in_hand_image_goal']
-                    # f[ep_key].create_dataset('robot0_eye_in_hand_image_goal', data=wrist_goal_lst)
-                    insert_images(f, ep_key, 'robot0_eye_in_hand_image_goal', trans_id, rot_id, add_num, row_1)
+                if 'robot0_eye_in_hand_image' in f[ep_key]:
+                    insert_images(f, ep_key, 'robot0_eye_in_hand_image', trans_id, rot_id, add_num, row_1)
+                if 'robot0_eye_in_hand_image_light' in f[ep_key]:
+                    insert_images(f, ep_key, 'robot0_eye_in_hand_image_light', trans_id, rot_id, add_num, row_1)
                 if 'gaussian_img_kpt' in f[ep_key]:
                     insert_images(f, ep_key, 'gaussian_img_kpt', trans_id, rot_id, add_num, row_1)
                 if 'gaussian_img_ct' in f[ep_key]:

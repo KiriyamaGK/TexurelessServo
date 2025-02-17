@@ -20,19 +20,19 @@
         "encoder": {
           "name": "ResNet18",
           "data_augmentation": true,
-          "task_consistency_loss": false,
+          "task_consistency_loss": true,
           "pretrained_path": "/home/kiriyamagk/桌面/ultralytics/runs/pose/train/weights/best.pt",
           "freeze":false,
           "siamese": false,
           "params": {
             "num_layers": 11,
-            "img_size": 220,
-            "crop_size": 190,
+            "img_size": 100,
+            "crop_size": 90,
             "SpatialSoftmax": {
               "num_kp": 32,
               "in_c": 512,
-              "in_h": 6,
-              "in_w": 6
+              "in_h": 3,
+              "in_w": 3
             }
           }
         }
@@ -46,7 +46,7 @@
     },
       "loss":
       {
-        "name": "CustomLoss",
+        "name": "TCL_Loss",
         "weight":
         {
           "weight_tcl_img": 1,

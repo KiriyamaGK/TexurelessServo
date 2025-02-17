@@ -3,10 +3,3 @@
 200->7
 450->15
 
-pip install  scipy  scikit-image tensorboard pandas  python-dateutil open3d  ipywidgets nbformat flask blinker  click  Jinja2 numpy>=1.22.4
-
-pip install tqdm numpy>=1.22.4 scipy pybullet matplotlib tensorboard scikit-image open3d>=0.12.0 opencv-python
-
-pip uninstall pillow protobuf  scipy  python-dateutil ipywidgets  nbformat
-
-pip install pillow>=10.1 protobuf>=3.19.6  scipy>=1.11.2 sympy==1.13.1           python-dateutil>=2.8.2  ipywidgets>=8.0.4  nbformatt>=5.7.0

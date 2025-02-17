@@ -56,14 +56,14 @@ if __name__ == '__main__':
     gau_size=64
     # current_date = datetime.datetime.now()
     # hdf_date = current_date.strftime('%Y.%m.%d')
-    date='25.01.23'
+    date='25.01.24'
     replace_exist=True
     cut_to_square=True
+    use_data_light=True
     # formatted_date='2024.11.07'
     # npy_date=hdf_date[2:]
     exact_gauss_img=False
     exact_abs_rot_list=True
-    add_goal_image=False
     base='/media/kiriyamagk/One Touch/AlignAnything'
     val_ratio = 0.1
 
@@ -96,6 +96,9 @@ if __name__ == '__main__':
         print('processing {}'.format(dir))
         data=np.load(dir,allow_pickle=True).item()
         data_img=data['img']
+        if use_data_light:
+            data_img_light=data['img_light']
+
         data_act=data['action_list']
         if exact_abs_rot_list:
             data_rot=data['abs_rot']
@@ -113,6 +116,8 @@ if __name__ == '__main__':
             print('processing {}'.format(dir))
             data = np.load(dir, allow_pickle=True).item()
             data_img = data['img']
+            if use_data_light:
+                data_img_light = data['img_light']
             data_act = data['action_list']
             if exact_abs_rot_list:
                 data_rot = data['abs_rot']
@@ -133,23 +138,19 @@ if __name__ == '__main__':
         ori_h,ori_w=data_img[0].shape[0:2]
         if ori_h!=img_size or ori_w!=img_size:
             data_img=trans_imgs_to_square(data_img,img_size,cut_to_square)
+            if use_data_light:
+                data_img_light=trans_imgs_to_square(data_img_light,img_size,cut_to_square)
 
         obs_path = 'data/demo_{}/obs'.format(i)
         action_path = 'data/demo_{}/actions'.format(i)
 
         new_f_out.create_dataset(action_path, data=data_act)
         new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image', data=data_img)
+        if use_data_light:
+            new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image_light', data=data_img_light)
         if exact_gauss_img:
             new_f_out.create_dataset(obs_path + '/gaussian_img_kpt', data=data_gauss_img_kpt)
             new_f_out.create_dataset(obs_path + '/gaussian_img_ct', data=data_gauss_img_ct)
-        if add_goal_image:
-            data_goal=np.array([np.stack(data_img[-1]) for kk in range(row_1)])
-            new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image_goal', data=data_goal)
-            if exact_gauss_img:
-                data_gauss_img_kpt_goal = np.array([np.stack(data_gauss_img_kpt[-1]) for kk in range(row_1)])
-                new_f_out.create_dataset(obs_path + '/gaussian_img_kpt_goal', data=data_gauss_img_kpt_goal)
-                data_gauss_img_ct_goal = np.array([np.stack(data_gauss_img_ct[-1]) for kk in range(row_1)])
-                new_f_out.create_dataset(obs_path + '/gaussian_img_ct_goal', data=data_gauss_img_ct_goal)
         if exact_abs_rot_list:
             new_f_out.create_dataset(obs_path + '/abs_rot', data=data_rot)
 

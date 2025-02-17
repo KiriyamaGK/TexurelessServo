@@ -18,5 +18,7 @@
     "rot_vel": 0.5,
     "trans_and_rot_type": "trans_first",
     "use_max_rot": true,
-    "project_obj_kps": false
+    "project_obj_kps": false,
+    "random_light_dir": true,
+    "use_random_light_img_key": true
 }

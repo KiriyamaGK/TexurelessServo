@@ -34,7 +34,6 @@ if __name__ == '__main__':
     img_h=220
     gau_h=64
     cut_to_square=True
-    random_light_dir=True
     config_dir= "../configs/demo_collection.json"
     current_date = "25.01.24"
 
@@ -46,9 +45,13 @@ if __name__ == '__main__':
     trans_vel_norm=config['trans_vel'] #m
     rot_vel_norm=config['rot_vel']    #deg
     use_max_rot=config['use_max_rot']
+    random_light_dir = config['random_light_dir']
+    use_light_key=["use_random_light_img_key"]
 
     # a=p.connect(p.GUI)
     # print(a)
+    if not random_light_dir:
+        use_light_key=False
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
     env=Environment(camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot)
     env.init()
@@ -61,11 +64,17 @@ if __name__ == '__main__':
         # ensure_dir(image_rgb3_path)
         action_list=[]
         img_lst=[]
+        img_light_list=[]
         rz_list=[]
         gaussian_img_ct_lst=[]
         gaussian_img_kpt_lst = []
         while True:
-            img=env.observation(random_light_dir)
+            if not use_light_key:
+                img=env.observation(random_light_dir=random_light_dir,use_prob=True)
+            else:
+                img=env.observation(random_light_dir=False)
+                img_light=env.observation(random_light_dir=True,use_prob=False)
+
             wgT_tar=env.wgT_tar
             wgT=env.wgT
             rz=rmat2euler_rz_degree(wgT)
@@ -75,19 +84,37 @@ if __name__ == '__main__':
             dT=act_dict["dT"]
             action_list.append(np.concatenate((vel_tr,np.array([vel_rot]))))
             rz_list.append(rz)
+            # cv2.imshow("img",img)
+            # cv2.imshow("img_light",img_light)
+            cv2.waitKey(1)
             if cut_to_square:
                 img=clip_image(img,img_h)
+                if use_light_key:
+                    img_light=clip_image(img_light,img_h)
             else:
                 img=cv2.resize(img,(img_w,img_h))
+                if use_light_key:
+                    img_light=cv2.resize(img_light,(img_w,img_h))
             img_lst.append(img)
+            if use_light_key:
+                img_light_list.append(img_light)
+
             env.action(dT)
             if env.reinit():
                 assert len(img_lst)==len(action_list)
-                episode={
-                    'img': np.asarray(img_lst,dtype=np.uint8),
-                    'action_list': np.asarray(action_list,dtype=np.float32),
-                    'abs_rot': np.asarray(rz_list,dtype=np.float32),
-                }
+                if not use_light_key:
+                    episode={
+                        'img': np.asarray(img_lst,dtype=np.uint8),
+                        'action_list': np.asarray(action_list,dtype=np.float32),
+                        'abs_rot': np.asarray(rz_list,dtype=np.float32),
+                    }
+                else:
+                    episode = {
+                        'img': np.asarray(img_lst, dtype=np.uint8),
+                        'img_light':np.asarray(img_light_list, dtype=np.uint8),
+                        'action_list': np.asarray(action_list, dtype=np.float32),
+                        'abs_rot': np.asarray(rz_list, dtype=np.float32),
+                    }
                 npy_name = 'demo.npy'
                 npy_path = os.path.join(npy_dir, npy_name)
                 np.save(npy_path, episode)

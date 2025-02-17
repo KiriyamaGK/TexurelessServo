@@ -23,8 +23,15 @@ def clip_image(img,img_size):
     img_cropped=cv2.resize(img_cropped,(img_size,img_size))
     return img_cropped
 
-def image_preprocess(img:np.ndarray,bgr2rgb:bool=False):
-    assert img.shape[-1] in [1,3]
+def image_preprocess(img:np.ndarray,bgr2rgb:bool=False,img_size=None):
+    if img_size is not None:
+        if img_size>img.shape[0]:
+            raise RuntimeError("Upsampling from hdf5 when training is forbidden!")
+        elif img_size<img.shape[0]:
+            img=cv2.resize(img,(img_size,img_size))
+            if len(img.shape)!=3:
+                img=img[:,:,np.newaxis]
+    assert len(img.shape)==3 and img.shape[-1] in [1, 3]
     if bgr2rgb:
         img=img[:,:,::-1]
     img=torch.from_numpy(img).type(torch.float32)
@@ -34,17 +41,17 @@ def image_preprocess(img:np.ndarray,bgr2rgb:bool=False):
     return img
 
 
-def input_dict_preprocess(dic:dict,bgr2rgb:bool=False,rollout=False):
+def input_dict_preprocess(dic:dict,bgr2rgb:bool=False,rollout=False,img_size=None):
     for k,v in dic.items():
         if 'img' in k or "image" in k:
             if rollout:
                 assert len(dic[k].shape)==3
-                dic[k] = image_preprocess(v, bgr2rgb=bgr2rgb)
+                dic[k] = image_preprocess(v, bgr2rgb=bgr2rgb,img_size=img_size)
                 dic[k]=dic[k].unsqueeze(0).unsqueeze(0) #[1,1,h,w,c]
             else:
                 assert len(dic[k].shape) == 4
                 t,h,w,c=dic[k].shape[0:4]
-                dic[k] = torch.stack([image_preprocess(dic[k][i],bgr2rgb=bgr2rgb) for i in range(t)])
+                dic[k] = torch.stack([image_preprocess(dic[k][i],bgr2rgb=bgr2rgb,img_size=img_size) for i in range(t)])
         else:
             if rollout:
                 assert len(dic[k].shape) == 1  # [t=1,]

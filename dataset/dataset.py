@@ -27,6 +27,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             pad_seq_length=True,
             get_pad_mask=False,
             hdf5_cache_mode=None,
+            img_size=None,
             hdf5_use_swmr=True,
             filter_by_attribute=None,
             load_next_obs=True,
@@ -110,6 +111,8 @@ class SequenceDataset(torch.utils.data.Dataset):
         # maybe prepare for observation normalization
         self.obs_normalization_stats = None
 
+        self.img_size=img_size
+
         # maybe store dataset in memory for fast access
         if self.hdf5_cache_mode in ["all", "low_dim"]:
             obs_keys_in_memory = self.obs_keys
@@ -157,10 +160,14 @@ class SequenceDataset(torch.utils.data.Dataset):
         if demos is not None:
             self.demos = demos
         elif filter_by_attribute is not None:
-            self.demos = [elem.decode("utf-8") for elem in
-                          np.array(self.hdf5_file["mask/{}".format(filter_by_attribute)][:])]
+            self.demos = [elem.decode("utf-8") for elem in np.array(self.hdf5_file["mask/{}".format(filter_by_attribute)][:])]
         else:
             self.demos = list(self.hdf5_file["data"].keys())
+
+        #get hdf5 img size
+        hdf_shape=self.hdf5_file["data/demo_0/obs/robot0_eye_in_hand_image"].shape
+        assert len(hdf_shape) == 4 and hdf_shape[1]==hdf_shape[2]
+        self.hdf_img_size=hdf_shape[1]
 
         # sort demo keys
         inds = np.argsort([int(elem[5:]) for elem in self.demos])
@@ -363,7 +370,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             seq_length=self.seq_length,
             prefix="obs"
         )
-        meta["obs"]=input_dict_preprocess(meta["obs"],bgr2rgb=self.bgr2rgb)
+        meta["obs"]=input_dict_preprocess(meta["obs"],bgr2rgb=self.bgr2rgb,img_size=self.img_size)
         if self.load_next_obs:
             meta["next_obs"] = self.get_obs_sequence_from_demo(
                 demo_id,
@@ -373,7 +380,7 @@ class SequenceDataset(torch.utils.data.Dataset):
                 seq_length=self.seq_length,
                 prefix="next_obs"
             )
-            meta["next_obs"] = input_dict_preprocess(meta["next_obs"], bgr2rgb=self.bgr2rgb)
+            meta["next_obs"] = input_dict_preprocess(meta["next_obs"], bgr2rgb=self.bgr2rgb,img_size=self.img_size)
 
 
         return meta
@@ -487,7 +494,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         return data
 
 
-def dataset_factory(config, filter_by_attribute=None):
+def dataset_factory(config, img_size=None,filter_by_attribute=None):
     """
     Create a SequenceDataset instance to pass to a torch DataLoader.
 
@@ -521,6 +528,7 @@ def dataset_factory(config, filter_by_attribute=None):
         hdf5_cache_mode=config["hdf5_cache_mode"],
         hdf5_use_swmr=config["hdf5_use_swmr"],
         filter_by_attribute=filter_by_attribute,
+        img_size=img_size,
         bgr2rgb=config["bgr2rgb"],
     )
     dataset = SequenceDataset(**ds_kwargs)

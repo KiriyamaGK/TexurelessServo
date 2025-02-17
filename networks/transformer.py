@@ -572,7 +572,7 @@ class Transformer(NetworkBase):
             x_img_grid_shifted = self.random_crop_grid(x_img, self.grid_source)
             x_img = F.grid_sample(x_img, x_img_grid_shifted, align_corners=True)
         if self.use_tcl_loss:
-            x_img_aug=x_img.clone()
+            x_img_aug=x['robot0_eye_in_hand_image_light'].to(self.device)
             for idx in range(x_img.shape[0]):
                 x = random.randint(0, min(self.img_size,self.crop_size) - 1)
                 y = random.randint(0, min(self.img_size,self.crop_size) - 1)
@@ -604,7 +604,7 @@ class Transformer(NetworkBase):
             x_img_goal_grid_shifted = self.random_crop_grid(x_img_goal, self.grid_source)
             x_img_goal = F.grid_sample(x_img_goal, x_img_goal_grid_shifted, align_corners=True)
         if self.use_tcl_loss:
-            x_img_goal_aug = x_img_goal.clone()
+            x_img_goal_aug = x['robot0_eye_in_hand_image_light_goal'].to(self.device)
             for idx in range(x_img_goal.shape[0]):
                 x = random.randint(0, min(self.img_size,self.crop_size) - 1)
                 y = random.randint(0, min(self.img_size,self.crop_size) - 1)

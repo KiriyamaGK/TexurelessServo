@@ -153,11 +153,16 @@ class Environment(object):
         self.task_timer=time.time()
         self.vel_timer=time.time()
 
-    def observation(self,random_light_dir=False):
+    def observation(self,random_light_dir=False,use_prob=False):
         if random_light_dir:# 50% percent random_light_dir
-            rand=random.uniform(0,1)
-            if rand<0.5:
+            if use_prob:
+                rand=random.uniform(0,1)
+                if rand<0.5:
+                    p.configureDebugVisualizer(lightPosition=random_light_direction())
+            else:
                 p.configureDebugVisualizer(lightPosition=random_light_direction())
+        else:
+            p.configureDebugVisualizer(lightPosition=[0,0,1])
         frame = self.camera.render(self.cwT, self.client)
         rgb = frame.color_image()
         return rgb

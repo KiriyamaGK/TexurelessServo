@@ -54,6 +54,8 @@ if __name__ == '__main__':
     cv2_visualize=config['cv2_visualize']
     rgb_key = [n for n in model_config["dataset"]['specific_obs_keys'] if ('image' in n or "img" in n)]
     low_dim_key = [n for n in model_config["dataset"]['specific_obs_keys'] if n not in rgb_key]
+    if 'hdf5_img_size' in model_config["dataset"]:
+        hdf5_img_size = model_config["dataset"]["hdf5_img_size"]
 
     assert low_dim_key == ['abs_rot']
     # assert rgb_key == ["robot0_eye_in_hand_image", "robot0_eye_in_hand_image_goal"]
@@ -80,8 +82,15 @@ if __name__ == '__main__':
             img_goal = clip_image(img_goal, npy_size)
         else:
             img_goal = cv2.resize(img_goal, (npy_size, npy_size))
-        if npy_size!= img_w or npy_size!= img_h:
-            img_goal = cv2.resize(img_goal, (img_w, img_h))
+
+        if 'hdf5_img_size' in model_config["dataset"]:
+            if npy_size != hdf5_img_size:
+                img_goal = cv2.resize(img_goal, (hdf5_img_size, hdf5_img_size))
+            if hdf5_img_size != img_w or hdf5_img_size != img_h:
+                img_goal = cv2.resize(img_goal, (img_w, img_h))
+        else:
+            if npy_size!= img_w or npy_size!= img_h:
+                img_goal = cv2.resize(img_goal, (img_w, img_h))
         # cv2.imwrite('/media/kiriyamagk/One Touch/AlignAnything/imgs/{}.png'.format(idx+1),img_goal_vis)
         env.act_with_abs_dict(init_transform_dict)
         print("[INFO] start rollout_{} ...".format(idx))
@@ -102,13 +111,19 @@ if __name__ == '__main__':
                 img=clip_image(img,npy_size)
             else:
                 img=cv2.resize(img, (npy_size, npy_size))
-            if npy_size!= img_w or npy_size!= img_h:
-                img=cv2.resize(img,(img_w,img_h))
+            if 'hdf5_img_size' in model_config["dataset"]:
+                if npy_size != hdf5_img_size:
+                    img = cv2.resize(img, (hdf5_img_size, hdf5_img_size))
+                if hdf5_img_size != img_w or hdf5_img_size != img_h:
+                    img = cv2.resize(img, (img_w, img_h))
+            else:
+                if npy_size != img_w or npy_size != img_h:
+                    img = cv2.resize(img, (img_w, img_h))
             obs_dict={
                 "robot0_eye_in_hand_image": img,
                 "robot0_eye_in_hand_image_goal": img_goal,
-                'gaussian_img_kpt': np.zeros((img_w//4, img_h//4,1)),
-                'gaussian_img_kpt_goal': np.zeros((img_w // 4, img_h // 4, 1)),
+                'robot0_eye_in_hand_image_light': np.zeros((img_w, img_h,3)),
+                'robot0_eye_in_hand_image_light_goal': np.zeros((img_w, img_h, 3)),
                 "abs_rot": np.array([rz]),
             }
             obs_dict=input_dict_preprocess(obs_dict,rollout=True)
