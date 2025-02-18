@@ -1,0 +1,24 @@
+{
+    "intrinsic": {
+        "width": 640,
+        "height": 480,
+        "build_with_K": "True",
+        "K": [
+            606.502 ,      0.0, 320.373 ,
+                 0.0, 606.239, 253.444,
+                 0.0,      0.0,      1.0
+        ],
+        "near": 0.02,
+        "far": 1,
+        "fov": 60
+    },
+    "cut_to_square": true,
+    "logs_dir":  "/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-02-07_20-12-51/config.json",
+    "ckpts_dir": "/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-02-07_20-12-51/epoch_13_best_validation_loss_1.9241718077659606.pth",
+    "objs_descriptor": 20,
+    "eval_epoch_num": 200,
+    "bgr2rgb": false,
+    "time_threshold": 30,
+    "cv2_visualize": true,
+    "npy_img_size": 256
+}
