@@ -26,13 +26,13 @@
           "siamese": false,
           "params": {
             "num_layers": 11,
-            "img_size": 100,
-            "crop_size": 90,
+            "img_size": 120,
+            "crop_size": 120,
             "SpatialSoftmax": {
               "num_kp": 32,
               "in_c": 512,
-              "in_h": 3,
-              "in_w": 3
+              "in_h": 4,
+              "in_w": 4
             }
           }
         }
@@ -67,10 +67,12 @@
     "num_data_workers": 2
   },
   "dataset": {
-    "hdf5_path": "One Touch/AlignAnything/25.01.23/hdf5/mimic.hdf5",
+    "hdf5_path": "One Touch/AlignAnything/25.01.24/hdf5/mimic.hdf5",
     "specific_obs_keys": [
       "robot0_eye_in_hand_image",
       "robot0_eye_in_hand_image_goal",
+      "robot0_eye_in_hand_image_light",
+      "robot0_eye_in_hand_image_light_goal",
       "abs_rot"
     ],
     "num_demos": 5000,
