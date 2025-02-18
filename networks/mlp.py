@@ -195,9 +195,13 @@ class MLP(NetworkBase):
         if self.crop_size < self.img_size:
             x_img_grid_shifted = self.random_crop_grid(x_img, self.grid_source)
             x_img = F.grid_sample(x_img, x_img_grid_shifted, align_corners=True)
+
         if self.use_tcl_loss:
             x_img_aug = x['robot0_eye_in_hand_image_light'].to(self.device)
             x_img_aug = x_img_aug.view(b * seq, 3, self.img_size, self.img_size)
+            if self.crop_size < self.img_size:
+                x_img_aug_grid_shifted = self.random_crop_grid(x_img_aug, self.grid_source)
+                x_img_aug = F.grid_sample(x_img_aug, x_img_aug_grid_shifted, align_corners=True)
             for idx in range(x_img.shape[0]):
                 x0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
                 y0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
@@ -233,11 +237,16 @@ class MLP(NetworkBase):
         if self.use_tcl_loss:
             x_img_goal_aug = x['robot0_eye_in_hand_image_light_goal'].to(self.device)
             x_img_goal_aug = x_img_goal_aug.view(b * seq, 3, self.img_size, self.img_size)
+            if self.crop_size < self.img_size:
+                x_img_goal_aug_grid_shifted = self.random_crop_grid(x_img_goal_aug, self.grid_source)
+                x_img_goal_aug = F.grid_sample(x_img_goal_aug, x_img_goal_aug_grid_shifted, align_corners=True)
+
             for idx in range(x_img_goal.shape[0]):
                 x0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
                 y0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
                 x_img_goal_aug[idx] = add_gaussian_spot_to_image(x_img_goal_aug[idx], size=50, sigma=10,
                                                                  position=(x0, y0), to_device=True)
+
         else:
             if self.use_data_augmentation:
                 for idx in range(x_img.shape[0]):

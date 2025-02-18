@@ -574,6 +574,9 @@ class Transformer(NetworkBase):
         if self.use_tcl_loss:
             x_img_aug=x['robot0_eye_in_hand_image_light'].to(self.device)
             x_img_aug = x_img_aug.view(b * seq, 3, self.img_size, self.img_size)
+            if self.crop_size < self.img_size:
+                x_img_aug_grid_shifted = self.random_crop_grid(x_img_aug, self.grid_source)
+                x_img_aug = F.grid_sample(x_img_aug, x_img_aug_grid_shifted, align_corners=True)
             for idx in range(x_img.shape[0]):
                 x0 = random.randint(0, min(self.img_size,self.crop_size) - 1)
                 y0 = random.randint(0, min(self.img_size,self.crop_size) - 1)
@@ -607,6 +610,9 @@ class Transformer(NetworkBase):
         if self.use_tcl_loss:
             x_img_goal_aug = x['robot0_eye_in_hand_image_light_goal'].to(self.device)
             x_img_goal_aug = x_img_goal_aug.view(b * seq, 3, self.img_size, self.img_size)
+            if self.crop_size < self.img_size:
+                x_img_goal_aug_grid_shifted = self.random_crop_grid(x_img_goal_aug, self.grid_source)
+                x_img_goal_aug = F.grid_sample(x_img_goal_aug, x_img_goal_aug_grid_shifted, align_corners=True)
             for idx in range(x_img_goal.shape[0]):
                 x0 = random.randint(0, min(self.img_size,self.crop_size) - 1)
                 y0 = random.randint(0, min(self.img_size,self.crop_size) - 1)

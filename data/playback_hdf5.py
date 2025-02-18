@@ -12,7 +12,7 @@ if __name__ == '__main__':
     fps=30
     vis_h,vis_w=480,480
     only_rot_caption=False
-    img_wrist_vis=True
+    img_wrist_vis=False
     img_wrist_light_vis=True
 
     hdf = h5py.File(hdf_pth, 'r')
