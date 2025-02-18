@@ -3,6 +3,8 @@ import numpy as np
 import os
 import random
 from utils.hdf5 import split_train_val_from_hdf5
+from utils.paths import return_disc_route
+
 
 def insert_images(f, ep_key, dataset_name, trans_id, rot_id, add_num, row_1):
     if dataset_name in f[ep_key]:
@@ -25,7 +27,7 @@ def insert_images(f, ep_key, dataset_name, trans_id, rot_id, add_num, row_1):
 
 if __name__ == '__main__':
     date='25.01.24'
-    fn=os.path.join('/media/kiriyamagk/One Touch/AlignAnything',date,'hdf5/mimic.hdf5')
+    fn=os.path.join(return_disc_route('One Touch/AlignAnything'),date,'hdf5/mimic.hdf5')
 
     disturb_abs_rot=True
 

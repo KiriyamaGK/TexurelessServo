@@ -24,7 +24,7 @@
           "name": "ResNet18",
           "data_augmentation": true,
           "task_consistency_loss": false,
-          "pretrained_path": "/home/kiriyamagk/桌面/ultralytics/runs/pose/train/weights/best.pt",
+          "pretrained_path": "ultralytics/runs/pose/train/weights/best.pt",
           "freeze":false,
           "siamese": false,
           "params": {
@@ -60,8 +60,8 @@
       }
   },
   "training": {
-    "finetune": true,
-    "ckpts_dict":"/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-02-13_10-39-04/epoch_72_validation_loss:0.0024029991473071277.pth",
+    "finetune": false,
+    "ckpts_dict":"trained_models/trial/2025-02-13_10-39-04/epoch_72_validation_loss:0.0024029991473071277.pth",
     "num_epochs": 2000,
     "num_epochs_logging_and_valid": 1,
     "num_train_steps_per_epoch": 100,
@@ -73,7 +73,7 @@
 
 
   "dataset": {
-    "hdf5_path": "/media/kiriyamagk/One Touch/AlignAnything/25.01.23/hdf5/mimic.hdf5",
+    "hdf5_path": "One Touch/AlignAnything/25.01.23/hdf5/mimic.hdf5",
     "specific_obs_keys": [
       "robot0_eye_in_hand_image",
       "robot0_eye_in_hand_image_goal",

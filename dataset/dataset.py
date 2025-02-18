@@ -13,6 +13,7 @@ import utils.tensor_utils as TensorUtils
 
 import utils.log_utils as LogUtils
 from utils.input_process import input_dict_preprocess
+from utils.paths import return_disc_route
 
 
 class SequenceDataset(torch.utils.data.Dataset):
@@ -81,7 +82,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             load_next_obs (bool): whether to load next_obs from the dataset
         """
 
-        self.hdf5_path = os.path.expanduser(hdf5_path)
+        self.hdf5_path = return_disc_route(hdf5_path)
         self.hdf5_use_swmr = hdf5_use_swmr
         self._hdf5_file = None
 

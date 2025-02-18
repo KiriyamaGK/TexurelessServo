@@ -5,6 +5,7 @@ import cv2
 import json
 import datetime
 from utils.hdf5 import split_train_val_from_hdf5
+from utils.paths import return_disc_route
 
 def return_folders(dir):
     num_list = []
@@ -64,7 +65,7 @@ if __name__ == '__main__':
     # npy_date=hdf_date[2:]
     exact_gauss_img=False
     exact_abs_rot_list=True
-    base='/media/kiriyamagk/One Touch/AlignAnything'
+    base=return_disc_route('One Touch/AlignAnything')
     val_ratio = 0.1
 
 

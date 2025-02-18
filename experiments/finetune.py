@@ -155,13 +155,14 @@ class BehaviorCloningExperiment():
         Set up the algorithm.
         """
         assert self._config["algorithm"]["name"] == "BC", "Wrong algorithm name in configs file."
-        with open(os.path.join(os.path.dirname(self._config["training"]["ckpts_dict"]),"config.json"), "r") as f:
+        with open(os.path.join(os.path.dirname(path_completion(self._config["training"]["ckpts_dict"],PROJECT_ROOT_DIR)),"config.json"), "r") as f:
             pretrained_cfg=json.load(f)
         assert pretrained_cfg["algorithm"]["policy"]==self._config["algorithm"]["policy"]
         # Set up the model
         model = self._setup_model(self._config)
         assert self._config["training"]["finetune"]==True and self._config["training"]["ckpts_dict"] is not None
-        state_dict = torch.load(self._config["training"]["ckpts_dict"], weights_only=False)
+
+        state_dict = torch.load(path_completion(self._config["training"]["ckpts_dict"],PROJECT_ROOT_DIR), weights_only=False)
         model.load_state_dict(state_dict)
         optimizer = self._setup_optimizer(self._config["algorithm"]["optimizer"], model)
         criterion = self._setup_criterion(self._config["algorithm"]["loss"],self._config["dataset"]["seq_length"],self._config["dataset"]["output_dim"])

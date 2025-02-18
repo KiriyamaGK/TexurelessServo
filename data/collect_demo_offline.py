@@ -2,6 +2,7 @@ import os
 import numpy as np
 import json
 from sim.environment import Environment
+from utils.paths import return_disc_route
 from utils.transform import rotation_matrix_z,rmat2euler_rz_degree
 from utils.perception import CameraIntrinsic
 from datetime import datetime
@@ -55,7 +56,7 @@ if __name__ == '__main__':
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
     env=Environment(camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot)
     env.init()
-    base_dir = "/media/kiriyamagk/One Touch"
+    base_dir = return_disc_route("One Touch")
     for idx in range(demo_total_num):
         print("[INFO] start collecting demo_{} ...".format(idx))
         npy_dir = os.path.join(base_dir, 'AlignAnything', current_date, f'npys/{int(time.time())}')

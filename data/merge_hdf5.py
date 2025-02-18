@@ -2,13 +2,13 @@ from utils.hdf5 import split_train_val_from_hdf5,copy_attributes
 import h5py
 import os
 import numpy as np
-
+from utils.paths import return_disc_route
 
 
 if __name__ == "__main__":
-    folder_path_1 = '/media/kiriyamagk/One Touch/AlignAnything/25.01.18/hdf5/mimic.hdf5'
-    folder_path_2 = '/media/kiriyamagk/One Touch/AlignAnything/25.01.19/hdf5/mimic.hdf5'
-    merged_path='/media/kiriyamagk/One Touch/AlignAnything/25.01.19/hdf5/merged.hdf5'
+    folder_path_1 = return_disc_route('One Touch/AlignAnything/25.01.18/hdf5/mimic.hdf5')
+    folder_path_2 = return_disc_route('One Touch/AlignAnything/25.01.19/hdf5/mimic.hdf5')
+    merged_path= return_disc_route('One Touch/AlignAnything/25.01.19/hdf5/merged.hdf5')
     val_ratio = 0.1
 
     # List all hdf5 files in the directory

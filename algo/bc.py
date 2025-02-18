@@ -2,7 +2,7 @@ import torch
 import os
 from torch.utils.tensorboard import SummaryWriter
 from utils import log_utils as LogUtils
-from outdated_codes.CenterNet2 import CenterNet_ResNet18
+# from outdated_codes.CenterNet2 import CenterNet_ResNet18
 
 class BehaviorCloning():
     """
@@ -161,15 +161,15 @@ class BehaviorCloning():
     def train_on_batch(self, batch) -> dict:
         self.model.train()
         self.optimizer.zero_grad()
-        if isinstance(self.model, CenterNet_ResNet18):
-            pred,label= self.model(batch["obs"])
-            loss_1 = self.criterion(pred,label)
-            # loss_2 = self.criterion(gau2, x4)
-            # loss = loss_1 + loss_2
-            loss_dict = {'loss': loss_1}
-        else:
-            predictions = self.model(batch["obs"])
-            loss_dict = self.criterion(predictions, batch["actions"])
+        # if isinstance(self.model, CenterNet_ResNet18):
+        #     pred,label= self.model(batch["obs"])
+        #     loss_1 = self.criterion(pred,label)
+        #     # loss_2 = self.criterion(gau2, x4)
+        #     # loss = loss_1 + loss_2
+        #     loss_dict = {'loss': loss_1}
+        # else:
+        predictions = self.model(batch["obs"])
+        loss_dict = self.criterion(predictions, batch["actions"])
         loss=loss_dict['loss']
         loss.backward()
         self.optimizer.step()
@@ -179,15 +179,15 @@ class BehaviorCloning():
 
     def eval_on_batch(self, batch) -> dict:
         self.model.eval()
-        if isinstance(self.model, CenterNet_ResNet18):
-            pred, label = self.model(batch["obs"])
-            loss_1 = self.criterion(pred, label)
-            # loss_2 = self.criterion(gau2, x4)
-            # loss = loss_1 + loss_2
-            loss_dict = {'loss': loss_1}
-        else:
-            predictions = self.model(batch["obs"])
-            loss_dict = self.criterion(predictions, batch["actions"])
+        # if isinstance(self.model, CenterNet_ResNet18):
+        #     pred, label = self.model(batch["obs"])
+        #     loss_1 = self.criterion(pred, label)
+        #     # loss_2 = self.criterion(gau2, x4)
+        #     # loss = loss_1 + loss_2
+        #     loss_dict = {'loss': loss_1}
+        # else:
+        predictions = self.model(batch["obs"])
+        loss_dict = self.criterion(predictions, batch["actions"])
         for k, v in loss_dict.items():
             loss_dict[k] = v.item()
         return loss_dict

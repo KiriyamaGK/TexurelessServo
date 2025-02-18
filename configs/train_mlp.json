@@ -21,7 +21,7 @@
           "name": "ResNet18",
           "data_augmentation": true,
           "task_consistency_loss": true,
-          "pretrained_path": "/home/kiriyamagk/桌面/ultralytics/runs/pose/train/weights/best.pt",
+          "pretrained_path": "ultralytics/runs/pose/train/weights/best.pt",
           "freeze":false,
           "siamese": false,
           "params": {
@@ -67,7 +67,7 @@
     "num_data_workers": 2
   },
   "dataset": {
-    "hdf5_path": "/media/kiriyamagk/One Touch/AlignAnything/25.01.23/hdf5/mimic.hdf5",
+    "hdf5_path": "One Touch/AlignAnything/25.01.23/hdf5/mimic.hdf5",
     "specific_obs_keys": [
       "robot0_eye_in_hand_image",
       "robot0_eye_in_hand_image_goal",

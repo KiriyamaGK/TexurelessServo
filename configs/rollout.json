@@ -13,8 +13,8 @@
         "fov": 60
     },
     "cut_to_square": true,
-    "logs_dir":  "/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-02-12_16-03-45/config.json",
-    "ckpts_dir": "/home/kiriyamagk/桌面/AlignAnything/trained_models/trial/2025-02-12_16-03-45/epoch_459_validation_loss_0.0011990067294391337.pth",
+    "logs_dir":  "trained_models/trial/2025-02-12_16-03-45/config.json",
+    "ckpts_dir": "trained_models/trial/2025-02-12_16-03-45/epoch_459_validation_loss_0.0011990067294391337.pth",
     "objs_descriptor": [15,16,17,18,19,20],
     "eval_epoch_num": 240,
     "bgr2rgb": false,

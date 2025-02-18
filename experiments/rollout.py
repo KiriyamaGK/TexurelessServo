@@ -12,6 +12,7 @@ import cv2
 import torch
 from networks.helpers import get_network_cls
 from utils.input_process import clip_image
+from utils.paths import path_completion,PROJECT_ROOT_DIR
 
 
 def ensure_dir(directory):
@@ -39,14 +40,16 @@ if __name__ == '__main__':
 
     with open(config_dir, "r") as j:
         config = json.load(j)
-    model_config_dir = config["logs_dir"]
+    model_config_dir=path_completion( config["logs_dir"],PROJECT_ROOT_DIR)
     with open(model_config_dir, "r") as j:
         model_config = json.load(j)
 
     img_w=model_config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"]
     img_h=img_w
     cut_to_square=config["cut_to_square"]
-    ckpts_dir=config["ckpts_dir"]
+
+    ckpts_dir=path_completion(config["ckpts_dir"],PROJECT_ROOT_DIR)
+
     objs_descriptor=config['objs_descriptor']
     npy_size=config['npy_img_size']
     eval_epoch_num=config['eval_epoch_num']

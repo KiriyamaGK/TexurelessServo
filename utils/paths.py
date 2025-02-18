@@ -1,6 +1,9 @@
 import os
 
-PROJECT_ROOT_DIR = '/home/kiriyamagk/桌面/AlignAnything'
+current_file_path=os.path.abspath(__file__)
+ROOT=os.path.dirname(current_file_path)
+PROJECT_ROOT_DIR = os.path.dirname(ROOT)
+print(PROJECT_ROOT_DIR)
 TRAINED_MODELS_DIR = os.path.join(PROJECT_ROOT_DIR, "trained_models")
 LOG_DIR = os.path.join(PROJECT_ROOT_DIR, "logs")
 
@@ -25,3 +28,11 @@ def path_completion(asset_path: str, root: str = None) -> str:
         full_path = os.path.join(root, asset_path)
     return full_path
 
+def return_disc_route(pth:str):
+    if pth[0]=='/':
+        return pth
+    elif pth.startswith("One Touch"):
+        user_home = os.path.expanduser('~')  # 获取用户主目录
+        return os.path.join('/media', os.path.basename(user_home), pth)
+    else:
+        raise ValueError("路径必须以 '/' 或 'One Touch' 开头")
