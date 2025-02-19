@@ -32,7 +32,6 @@ class BehaviorCloningExperiment():
         self._config, self.config_path = self._load_config(config_path)
         self._setup_seed()
         self._setup_device()
-        self._setup_paths()
         self._setup_dataset()
         self._setup_paths()
 
@@ -140,6 +139,7 @@ class BehaviorCloningExperiment():
             num_workers=1,
             drop_last=True
         )
+        self.hdf_img_size=train_set.hdf_img_size
 
     def _setup_logging(self):
         """
