@@ -34,6 +34,7 @@ class BehaviorCloningExperiment():
         self._setup_device()
         self._setup_paths()
         self._setup_dataset()
+        self._setup_paths()
 
         self.alg = self._setup_algorithm()
 
@@ -98,6 +99,12 @@ class BehaviorCloningExperiment():
         os.makedirs(self._model_out_dir, exist_ok=False)
         os.makedirs(self._log_dir, exist_ok=False)
         shutil.copy(self.config_path, os.path.join(self._model_out_dir, "config.json"))
+        with open(os.path.join(self._model_out_dir, "config.json"), 'r+') as f:
+            data = json.load(f)
+            data['dataset']['hdf5_img_size'] = self.hdf_img_size
+            f.seek(0)    # 将文件指针移动到文件开头
+            json.dump(data, f, indent=4)
+            f.truncate()  #确保文件末尾没有多余的内容
 
     def _setup_dataset(self):
         """
@@ -116,8 +123,8 @@ class BehaviorCloningExperiment():
         #
         # self._train_loader = DataLoader(training, batch_size=self._config["training"]["batch_size"], shuffle=True)
         # self._eval_loader = DataLoader(evaluation, batch_size=self._config["training"]["batch_size"], shuffle=True)
-        train_set  = dataset_factory(self._config["dataset"],  filter_by_attribute='train') # TODO: remember to convert
-        valid_set  = dataset_factory(self._config["dataset"],  filter_by_attribute='valid')
+        train_set  = dataset_factory(self._config["dataset"],  img_size=self._config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"],filter_by_attribute='train') # TODO: remember to convert
+        valid_set  = dataset_factory(self._config["dataset"],  img_size=self._config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"],filter_by_attribute='valid')
 
         self._train_loader = DataLoader(
             dataset=train_set,
@@ -173,7 +180,7 @@ class BehaviorCloningExperiment():
         """
         Set up the model.
         """
-        model, need_init_params = get_network_cls(model_config["algorithm"]["policy"]["name"])
+        model,need_init_params = get_network_cls(model_config["algorithm"]["policy"]["name"])
         if need_init_params:
             return model(
                 input_low_dim=model_config["dataset"]["input_low_dim"],
