@@ -526,12 +526,17 @@ class Transformer(NetworkBase):
     def random_crop_grid(self, x, grid):
         delta = x.size(2) - grid.size(1)
         grid = grid.repeat(x.size(0), 1, 1, 1).cuda()
-        # Add random shifts by x
-        grid[:, :, :, 0] = grid[:, :, :, 0] + torch.FloatTensor(x.size(0)).cuda().random_(0, delta).unsqueeze(
-            -1).unsqueeze(-1).expand(-1, grid.size(1), grid.size(2)) / x.size(2)
-        # Add random shifts by y
-        grid[:, :, :, 1] = grid[:, :, :, 1] + torch.FloatTensor(x.size(0)).cuda().random_(0, delta).unsqueeze(
-            -1).unsqueeze(-1).expand(-1, grid.size(1), grid.size(2)) / x.size(2)
+        if self.training:
+            # Add random shifts by x
+            grid[:, :, :, 0] = grid[:, :, :, 0] + torch.FloatTensor(x.size(0)).cuda().random_(0, delta).unsqueeze(
+                -1).unsqueeze(-1).expand(-1, grid.size(1), grid.size(2)) / x.size(2)
+            # Add random shifts by y
+            grid[:, :, :, 1] = grid[:, :, :, 1] + torch.FloatTensor(x.size(0)).cuda().random_(0, delta).unsqueeze(
+                -1).unsqueeze(-1).expand(-1, grid.size(1), grid.size(2)) / x.size(2)
+        else:
+            center_offset = delta // 2
+            grid[:, :, :, 0] = grid[:, :, :, 0] + center_offset / x.size(2)
+            grid[:, :, :, 1] = grid[:, :, :, 1] + center_offset / x.size(2)
         return grid
 
     def build_grid(self, source_size, target_size):

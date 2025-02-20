@@ -151,12 +151,17 @@ class MLP(NetworkBase):
     def random_crop_grid(self, x, grid):
         delta = x.size(2) - grid.size(1)
         grid = grid.repeat(x.size(0), 1, 1, 1).cuda()
-        # Add random shifts by x
-        grid[:, :, :, 0] = grid[:, :, :, 0] + torch.FloatTensor(x.size(0)).cuda().random_(0, delta).unsqueeze(
-            -1).unsqueeze(-1).expand(-1, grid.size(1), grid.size(2)) / x.size(2)
-        # Add random shifts by y
-        grid[:, :, :, 1] = grid[:, :, :, 1] + torch.FloatTensor(x.size(0)).cuda().random_(0, delta).unsqueeze(
-            -1).unsqueeze(-1).expand(-1, grid.size(1), grid.size(2)) / x.size(2)
+        if self.training:
+            # Add random shifts by x
+            grid[:, :, :, 0] = grid[:, :, :, 0] + torch.FloatTensor(x.size(0)).cuda().random_(0, delta).unsqueeze(
+                -1).unsqueeze(-1).expand(-1, grid.size(1), grid.size(2)) / x.size(2)
+            # Add random shifts by y
+            grid[:, :, :, 1] = grid[:, :, :, 1] + torch.FloatTensor(x.size(0)).cuda().random_(0, delta).unsqueeze(
+                -1).unsqueeze(-1).expand(-1, grid.size(1), grid.size(2)) / x.size(2)
+        else:
+            center_offset = delta // 2
+            grid[:, :, :, 0] = grid[:, :, :, 0] + center_offset / x.size(2)
+            grid[:, :, :, 1] = grid[:, :, :, 1] + center_offset / x.size(2)
         return grid
 
     def build_grid(self, source_size, target_size):
@@ -247,8 +252,8 @@ class MLP(NetworkBase):
                 y0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
                 x_img_goal_aug[idx] = add_gaussian_spot_to_image(x_img_goal_aug[idx], size=20, sigma=5,
                                                                  position=(x0, y0), to_device=True)
-            cv2.imshow("x_img_goal", x_img_goal_aug[idx][0].clone().detach().cpu().numpy())
-            cv2.waitKey(0)
+            # cv2.imshow("x_img_goal", x_img_goal_aug[idx][0].clone().detach().cpu().numpy())
+            # cv2.waitKey(0)
         else:
             if self.use_data_augmentation:
                 for idx in range(x_img.shape[0]):
