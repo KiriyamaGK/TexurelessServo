@@ -72,6 +72,8 @@ if __name__ == '__main__':
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
     cv2.namedWindow('Images', cv2.WINDOW_NORMAL)
     env=Environment(camera_intrinsic,objs_descriptor=objs_descriptor)
+    # env.init_rot=40
+    # env.use_max_rot=True
     env.init()
 
     for idx in range(eval_epoch_num):
@@ -136,7 +138,7 @@ if __name__ == '__main__':
             else:
                 predictions=pred
             predictions=predictions.detach().cpu().numpy().reshape(-1,)
-            print("pred:",predictions)
+            print("pred vel and rot:",[np.linalg.norm(predictions[0:2]),predictions[2]])
             # predictions/=4
             vel_tr=predictions[0:2]
             vel_rot=predictions[-1]

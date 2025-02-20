@@ -12,7 +12,7 @@ import cv2
 import torch
 from networks.helpers import get_network_cls
 from utils.input_process import clip_image
-from utils.plot import plot_rot_and_trans,plot_trajs,plot_vel,plot_time
+from utils.plot import plot_rot_and_trans,plot_trajs,plot_vel,plot_time,plot_img_diff
 from utils.statistics import calculate_success_rate,visualize_final_error
 import atexit
 from utils.paths import path_completion,PROJECT_ROOT_DIR
@@ -44,7 +44,7 @@ def ensure_dir_with_timestamp(base_dir):
     return full_path
 
 
-def _setup_model(model_config: dict):
+def _setup_model(model_config: dict,return_dual_feat:bool=False):
     """
     Set up the model.
     """
@@ -56,11 +56,13 @@ def _setup_model(model_config: dict):
         batch_size=1,
         seq_length=1,
         training=False,
+        return_dual_features=return_dual_feat,
         **model_config["algorithm"]["policy"]["params"]
     )#**动态传参，字典中的键与函数参数名完全匹配
 
 if __name__ == '__main__':
     config_dir= "../configs/rollout.json"
+    return_dual_feat=False
 
     with open(config_dir, "r") as j:
         config = json.load(j)
@@ -98,7 +100,7 @@ if __name__ == '__main__':
         json.dump(config, f, indent=4)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = _setup_model(model_config)
+    model = _setup_model(model_config,return_dual_feat)
     state_dict = torch.load(ckpts_dir, weights_only=False)
     model.load_state_dict(state_dict)
     model.to(device).eval()
@@ -118,6 +120,8 @@ if __name__ == '__main__':
         wgT_list=[]
         vel_tr_lst=[]
         vel_rot_lst=[]
+        diff_list=[]
+
 
         init_transform_dict = env.return_cur_pos_info()
         env.act_to_goal()
@@ -171,6 +175,11 @@ if __name__ == '__main__':
             else:
                 predictions=pred
             predictions=predictions.detach().cpu().numpy().reshape(-1,)
+            if return_dual_feat:
+                img_feat=pred['x_img_feat'].detach().cpu().numpy().reshape(-1,)
+                img_goal_dual_feat=pred["x_img_goal_dual_feat"].detach().cpu().numpy().reshape(-1,)
+                diff=abs(np.mean(img_feat-img_goal_dual_feat))
+                diff_list.append(diff)
             # print("pred:",predictions)
             # predictions/=4
             vel_tr=predictions[0:2]
@@ -209,6 +218,10 @@ if __name__ == '__main__':
                     vel_pth = os.path.join(obj_pth, "vel")
                     os.makedirs(vel_pth, exist_ok=True)
                     plot_vel(vel_tr=vel_tr_lst,vel_rot=vel_rot_lst,use_time=use_time,obj_path=vel_pth)
+                if return_dual_feat:
+                    dual_feat_pth = os.path.join(obj_pth, "img_diff")
+                    os.makedirs(dual_feat_pth, exist_ok=True)
+                    plot_img_diff(diff_list=diff_list,use_time=use_time,obj_path=dual_feat_pth)
                 final_error_list.append([obj_id,error_trans_lst[-1],error_rot_lst[-1]])
                 time_list.append([obj_id,use_time])
                 break

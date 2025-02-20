@@ -26,13 +26,13 @@
           "siamese": false,
           "params": {
             "num_layers": 11,
-            "img_size": 120,
-            "crop_size": 120,
+            "img_size": 170,
+            "crop_size": 170,
             "SpatialSoftmax": {
               "num_kp": 32,
               "in_c": 512,
-              "in_h": 4,
-              "in_w": 4
+              "in_h": 6,
+              "in_w": 6
             }
           }
         }

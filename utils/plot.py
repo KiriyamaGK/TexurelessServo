@@ -123,6 +123,54 @@ def plot_vel(vel_tr,vel_rot,use_time,obj_path=None):
     plt.savefig(os.path.join(obj_path,'{}.png'.format({int(time.time())})), dpi=300, bbox_inches='tight')
     plt.show()
 
+def plot_img_diff(diff_list,use_time,obj_path=None):
+    plt.figure(figsize=(10, 8))
+    plt.plot(diff_list, label='Difference', marker='o', linestyle='-')
+    plt.xlabel('Index')
+    plt.ylabel('Difference')
+    plt.title('Image Difference Plot')
+    plt.legend()
+
+    # 获取最小的十个点的索引和值
+    sorted_indices = sorted(range(len(diff_list)), key=lambda i: diff_list[i])[:10]
+    min_points = [(idx, diff_list[idx]) for idx in sorted_indices]
+
+    # 准备表格数据
+    table_data = [['Index', 'Difference']]
+    table_data.extend(min_points)  # 添加最小的十个点的横纵坐标
+
+    # 创建表格
+    table = plt.table(cellText=table_data,
+                      colLabels=None,
+                      cellLoc='center',
+                      loc='bottom',
+                      bbox=[0.0, -0.8, 1.0, 0.6])  # 调整表格的位置和大小
+
+    # 设置表格字体大小
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)  # 设置表格字体大小
+    table.scale(1.2, 1.2)  # 调整表格的缩放比例
+
+    # 将最小的三个点的行标为红色
+    for i in range(1, 4):  # 从第1行开始（第0行是标题行）
+        cell = table[(i, 0)]  # 第i行，第0列
+        cell.set_text_props(color='red')
+        cell = table[(i, 1)]  # 第i行，第1列
+        cell.set_text_props(color='red')
+
+    # 添加执行时间的注释
+    plt.annotate(f'Use Time: {use_time:.2f}(s)',
+                 xy=(len(diff_list) - 1, 0),
+                 xytext=(len(diff_list), 0),
+                 color='black')
+
+    # 调整布局，确保表格不会被裁剪
+    plt.subplots_adjust(bottom=0.4)  # 为表格留出更多空间
+
+    # plt.tight_layout()
+    plt.savefig(os.path.join(obj_path,'{}.png'.format({int(time.time())})), dpi=300, bbox_inches='tight')
+    plt.show()
+
 def plot_time(time_list,save_base_pth):
     # 提取每个 obj_id 的数据
     obj_time_dict = {}

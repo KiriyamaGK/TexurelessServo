@@ -1,6 +1,7 @@
 import collections
 import random
 
+import cv2
 import torch
 import math
 import numpy as np
@@ -20,9 +21,10 @@ from utils.input_process import add_gaussian_spot_to_image
 
 class MLP(NetworkBase):
     def __init__(self, input_low_dim, output_dim,obs_keys,batch_size,seq_length,training,low_dim_hidden_sizes=None,hidden_sizes=None, activation="relu", output_activation=None,use_gmm=False,
-                 encoder=None):
+                 encoder=None,return_dual_features=False):
         super().__init__(input_low_dim, output_dim)
 
+        self.return_dual_features = return_dual_features
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.freeze_encoder=encoder['freeze']
         #img
@@ -205,18 +207,18 @@ class MLP(NetworkBase):
             for idx in range(x_img.shape[0]):
                 x0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
                 y0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
-                x_img_aug[idx] = add_gaussian_spot_to_image(x_img_aug[idx], size=50, sigma=10, position=(x0, y0),
+                x_img_aug[idx] = add_gaussian_spot_to_image(x_img_aug[idx], size=20, sigma=5, position=(x0, y0),
                                                             to_device=True)
         else:
             if self.use_data_augmentation:
                 for idx in range(x_img.shape[0]):
                     x0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
                     y0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
-                    x_img[idx] = add_gaussian_spot_to_image(x_img[idx], size=50, sigma=10, position=(x0, y0),
+                    x_img[idx] = add_gaussian_spot_to_image(x_img[idx], size=20, sigma=5, position=(x0, y0),
                                                             to_device=True)
 
         x_img = self.img_enc(x_img)
-        if self.use_tcl_loss:
+        if self.use_tcl_loss or self.return_dual_features:
             x_img_feat = x_img.clone()
         x_img = self.spatial_softmax(x_img)
         x_img = self.ee_ln(x_img)
@@ -224,8 +226,7 @@ class MLP(NetworkBase):
 
         if self.use_tcl_loss:
             x_img_aug = self.img_enc(x_img_aug)
-            if self.use_tcl_loss:
-                x_img_aug_feat = x_img_aug.clone()
+            x_img_aug_feat = x_img_aug.clone()
             x_img_aug = self.spatial_softmax(x_img_aug)
             x_img_aug = self.ee_ln(x_img_aug)
             x_img_aug = x_img_aug.view(b * seq, -1).contiguous()
@@ -244,17 +245,20 @@ class MLP(NetworkBase):
             for idx in range(x_img_goal.shape[0]):
                 x0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
                 y0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
-                x_img_goal_aug[idx] = add_gaussian_spot_to_image(x_img_goal_aug[idx], size=50, sigma=10,
+                x_img_goal_aug[idx] = add_gaussian_spot_to_image(x_img_goal_aug[idx], size=20, sigma=5,
                                                                  position=(x0, y0), to_device=True)
-
+            cv2.imshow("x_img_goal", x_img_goal_aug[idx][0].clone().detach().cpu().numpy())
+            cv2.waitKey(0)
         else:
             if self.use_data_augmentation:
                 for idx in range(x_img.shape[0]):
                     x0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
                     y0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
-                    x_img_goal[idx] = add_gaussian_spot_to_image(x_img_goal[idx], size=50, sigma=10, position=(x0, y0),
+                    x_img_goal[idx] = add_gaussian_spot_to_image(x_img_goal[idx], size=20, sigma=5, position=(x0, y0),
                                                                  to_device=True)
 
+        if self.return_dual_features:
+            x_img_goal_dual_feat=self.img_enc(x_img_goal.clone())
         if not self.use_siamese:
             x_img_goal = self.img_enc_goal(x_img_goal)
             if self.use_tcl_loss:
@@ -358,7 +362,10 @@ class MLP(NetworkBase):
                 output_aug = dists_aug.mean
 
         if not self.use_tcl_loss:
-            return output
+            if not self.return_dual_features:
+                return output
+            else:
+                return {"pred_act":output,"x_img_feat": x_img_feat,"x_img_goal_dual_feat": x_img_goal_dual_feat}
         else:
             return {"output_tensor": output, "output_tensor_aug": output_aug, "x_img_feat": x_img_feat,
                     "x_img_goal_feat": x_img_goal_feat, "x_img_aug_feat": x_img_aug_feat,

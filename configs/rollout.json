@@ -13,8 +13,8 @@
         "fov": 60
     },
     "cut_to_square": true,
-    "logs_dir":  "trained_models/trial/2025-02-18_13-16-38/config.json",
-    "ckpts_dir": "trained_models/trial/2025-02-18_20-19-01/epoch_233_best_validation_loss_0.009111858205869794.pth",
+    "logs_dir":  "trained_models/trial/2025-02-19_22-27-18/config.json",
+    "ckpts_dir": "trained_models/trial/2025-02-19_22-27-18/epoch_207_validation_loss_0.0009992901983423507.pth",
     "objs_descriptor": [15,16,17,18,19,20],
     "eval_epoch_num": 240,
     "bgr2rgb": false,
