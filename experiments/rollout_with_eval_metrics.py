@@ -64,6 +64,10 @@ if __name__ == '__main__':
     config_dir= "../configs/rollout.json"
     return_dual_feat=False
 
+    fps = 30
+    vis_h, vis_w = 480, 1280
+    mp4 = cv2.VideoWriter_fourcc(*'mp4v')
+
     with open(config_dir, "r") as j:
         config = json.load(j)
     model_config_dir=path_completion( config["logs_dir"],PROJECT_ROOT_DIR)
@@ -88,6 +92,8 @@ if __name__ == '__main__':
     succ_rot = eval_metrics['success_rate']['rot_threshold']
 
     expert_motion_type=config['expert_motion_type']
+    record_video=config['record_video']
+    random_light=config['random_light']
 
     rgb_key = [n for n in model_config["dataset"]['specific_obs_keys'] if ('image' in n or "img" in n)]
     low_dim_key = [n for n in model_config["dataset"]['specific_obs_keys'] if n not in rgb_key]
@@ -121,7 +127,7 @@ if __name__ == '__main__':
         vel_tr_lst=[]
         vel_rot_lst=[]
         diff_list=[]
-
+        video_flag = False
 
         init_transform_dict = env.return_cur_pos_info()
         env.act_to_goal()
@@ -141,17 +147,27 @@ if __name__ == '__main__':
         obj_id=env.obj_idx
         obj_pth=os.path.join(save_base_pth, str(obj_id))
         os.makedirs(obj_pth, exist_ok=True)
+
+        video_path=os.path.join(obj_pth,str(obj_id)+'.mp4')
+        if not os.path.exists(video_path):
+            out = cv2.VideoWriter(video_path, mp4, fps, (vis_w, vis_h))
+            video_flag=True
         t_0 = time.time()
         # try:
         while True:
             wgT = env.wgT
             rz = rmat2euler_rz_degree(wgT)
             dT=np.eye(4)
-            img=env.observation()
+            if not random_light:
+                img=env.observation()
+            else:
+                img=env.observation(random_light_dir=True)
             if cv2_visualize:
                 img_vis = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
                 combined_img = np.hstack((img_vis, img_goal_vis))
                 cv2.imshow('Images', combined_img)
+                if record_video and video_flag:
+                    out.write(combined_img)
                 if cv2.waitKey(1) & 0xFF == ord('q'):     #1ms
                     env.init()
                     break
@@ -224,6 +240,8 @@ if __name__ == '__main__':
                     plot_img_diff(diff_list=diff_list,use_time=use_time,obj_path=dual_feat_pth)
                 final_error_list.append([obj_id,error_trans_lst[-1],error_rot_lst[-1]])
                 time_list.append([obj_id,use_time])
+                if video_flag:
+                    out.release()
                 break
         # except KeyboardInterrupt or SystemExit:
         #     pass

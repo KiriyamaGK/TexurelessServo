@@ -394,8 +394,9 @@ class GPT(nn.Module):
 
 class Transformer(NetworkBase):
     def __init__(self, input_low_dim, output_dim, obs_keys,batch_size,seq_length,training,embedding_size=656,n_layer=4,n_head=4,block_size=10,low_dim_hidden_sizes=None,output_head_sizes=None,activation="relu", output_activation=None,use_gmm=False,
-                 encoder=None):
+                 encoder=None,return_dual_features=False):
         super().__init__(input_low_dim, output_dim)
+        self.return_dual_features = return_dual_features
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.freeze_encoder=encoder['freeze']
         #img

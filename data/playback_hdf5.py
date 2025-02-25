@@ -14,6 +14,7 @@ if __name__ == '__main__':
     only_rot_caption=False
     img_wrist_vis=False
     img_wrist_light_vis=True
+    bgr2rgb=True
 
     hdf = h5py.File(hdf_pth, 'r')
     mp4=cv2.VideoWriter_fourcc(*'mp4v')
@@ -27,12 +28,15 @@ if __name__ == '__main__':
             # os.makedirs(os.path.join(temp_dir,demo_caption), exist_ok=True)
             for j in range(len(hdf['data/demo_{}/actions'.format(i)])):
                 image=hdf['data/demo_{}/obs/robot0_eye_in_hand_image'.format(i)][j]
+                if bgr2rgb:
+                    image=image[:,:,::-1]
                 raw_size=image.shape[0]
                 image=image.astype('uint8')
                 image=cv2.resize(image, (vis_w, vis_h))
                 # cv2.imshow('image', image)
                 # cv2.waitKey(0)
-                # cv2.imwrite(os.path.join(temp_dir,demo_caption,demo_caption +'_{}'.format(j)+ '.jpg'), image)
+                if i==0:
+                    cv2.imwrite(os.path.join(hdf_base, str(j).zfill(5)+'_wrist.jpg'), image)
                 if only_rot_caption:
                     action=hdf['data/demo_{}/actions'.format(i)][j,2]
                 else:
@@ -60,12 +64,16 @@ if __name__ == '__main__':
             # os.makedirs(os.path.join(temp_dir,demo_caption), exist_ok=True)
             for j in range(len(hdf['data/demo_{}/actions'.format(i)])):
                 image=hdf['data/demo_{}/obs/robot0_eye_in_hand_image_light'.format(i)][j]
+                if bgr2rgb:
+                    image=image[:,:,::-1]
                 raw_size=image.shape[0]
                 image=image.astype('uint8')
                 image=cv2.resize(image, (vis_w, vis_h))
                 # cv2.imshow('image', image)
                 # cv2.waitKey(0)
                 # cv2.imwrite(os.path.join(temp_dir,demo_caption,demo_caption +'_{}'.format(j)+ '.jpg'), image)
+                if i == 0:
+                    cv2.imwrite(os.path.join(hdf_base, str(j).zfill(5) + '_light.jpg'), image)
                 if only_rot_caption:
                     action=hdf['data/demo_{}/actions'.format(i)][j,2]
                 else:

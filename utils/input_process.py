@@ -1,7 +1,8 @@
 import numpy as np
 import torch
 import cv2
-
+import torchvision.transforms
+from triton.language import dtype
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -103,3 +104,20 @@ def add_gaussian_spot_to_image(img: torch.Tensor, size:int,sigma:int, position,t
     # 裁剪结果，确保值在 [0, 1] 范围内
     img = torch.clamp(img, 0, 1)
     return img
+
+if __name__ == '__main__':
+    img1=cv2.imread('/media/kiriyamagk/One Touch/AlignAnything/25.01.24/hdf5/00171_light.jpg')
+    img2 = cv2.imread('/media/kiriyamagk/One Touch/AlignAnything/25.01.24/hdf5/00171_wrist.jpg')
+    img1=torchvision.transforms.ToTensor()(img1)
+    img2 = torchvision.transforms.ToTensor()(img2)
+    img1=add_gaussian_spot_to_image(img1, size=40, sigma=10, position=(80, 100))
+    img2 = add_gaussian_spot_to_image(img2, size=40, sigma=10, position=(80, 100))
+    img1=img1.permute(1,2,0).detach().cpu().numpy()*255
+    img1=img1.astype(np.uint8)
+    img2 = img2.permute(1,2,0).detach().cpu().numpy() * 255
+    img2 = img2.astype(np.uint8)
+    # cv2.imshow('img1', img1)
+    # cv2.imshow('img2', img2)
+    # cv2.waitKey(0)
+    cv2.imwrite('/media/kiriyamagk/One Touch/AlignAnything/25.01.24/hdf5/00171_light_gauss.jpg',img1)
+    cv2.imwrite('/media/kiriyamagk/One Touch/AlignAnything/25.01.24/hdf5/00171_wrist_gauss.jpg',img2)

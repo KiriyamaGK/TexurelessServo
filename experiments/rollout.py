@@ -55,6 +55,9 @@ if __name__ == '__main__':
     eval_epoch_num=config['eval_epoch_num']
     time_threshold=config['time_threshold']
     cv2_visualize=config['cv2_visualize']
+
+    random_light = config['random_light']
+
     rgb_key = [n for n in model_config["dataset"]['specific_obs_keys'] if ('image' in n or "img" in n)]
     low_dim_key = [n for n in model_config["dataset"]['specific_obs_keys'] if n not in rgb_key]
     if 'hdf5_img_size' in model_config["dataset"]:
@@ -104,7 +107,10 @@ if __name__ == '__main__':
             wgT = env.wgT
             rz = rmat2euler_rz_degree(wgT)
             dT=np.eye(4)
-            img=env.observation()
+            if not random_light:
+                img = env.observation()
+            else:
+                img = env.observation(random_light_dir=True)
             if cv2_visualize:
                 img_vis = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
                 combined_img = np.hstack((img_vis, img_goal_vis))
