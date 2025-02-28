@@ -212,14 +212,14 @@ class MLP(NetworkBase):
             for idx in range(x_img.shape[0]):
                 x0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
                 y0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
-                x_img_aug[idx] = add_gaussian_spot_to_image(x_img_aug[idx], size=20, sigma=5, position=(x0, y0),
+                x_img_aug[idx] = add_gaussian_spot_to_image(x_img_aug[idx], size=50, sigma=10, position=(x0, y0),
                                                             to_device=True)
         else:
             if self.use_data_augmentation:
                 for idx in range(x_img.shape[0]):
                     x0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
                     y0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
-                    x_img[idx] = add_gaussian_spot_to_image(x_img[idx], size=20, sigma=5, position=(x0, y0),
+                    x_img[idx] = add_gaussian_spot_to_image(x_img[idx], size=50, sigma=10, position=(x0, y0),
                                                             to_device=True)
 
         x_img = self.img_enc(x_img)
@@ -250,7 +250,7 @@ class MLP(NetworkBase):
             for idx in range(x_img_goal.shape[0]):
                 x0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
                 y0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
-                x_img_goal_aug[idx] = add_gaussian_spot_to_image(x_img_goal_aug[idx], size=20, sigma=5,
+                x_img_goal_aug[idx] = add_gaussian_spot_to_image(x_img_goal_aug[idx], size=50, sigma=10,
                                                                  position=(x0, y0), to_device=True)
             # cv2.imshow("x_img_goal", x_img_goal_aug[idx][0].clone().detach().cpu().numpy())
             # cv2.waitKey(0)
@@ -259,7 +259,7 @@ class MLP(NetworkBase):
                 for idx in range(x_img.shape[0]):
                     x0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
                     y0 = random.randint(0, min(self.img_size, self.crop_size) - 1)
-                    x_img_goal[idx] = add_gaussian_spot_to_image(x_img_goal[idx], size=20, sigma=5, position=(x0, y0),
+                    x_img_goal[idx] = add_gaussian_spot_to_image(x_img_goal[idx], size=50, sigma=10, position=(x0, y0),
                                                                  to_device=True)
 
         if self.return_dual_features:

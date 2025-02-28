@@ -5,7 +5,7 @@ import numpy as np
 from utils.transform import rmat2euler_rz_degree
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
-def plot_rot_and_trans(error_rot_lst,error_trans_lst,use_time=10,obj_pth=None):
+def plot_rot_and_trans(error_rot_lst,error_trans_lst,use_time=10,obj_pth=None,show=False):
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
 
     ax1.plot(error_rot_lst, label='Rotation Error', marker='o', linestyle='-', color='blue')
@@ -44,10 +44,12 @@ def plot_rot_and_trans(error_rot_lst,error_trans_lst,use_time=10,obj_pth=None):
 
     plt.tight_layout()
     plt.savefig(os.path.join(obj_pth,'{}.png'.format({int(time.time())})), dpi=300, bbox_inches='tight')
-    plt.show()
+    if show:
+        plt.show()
+    plt.close()
 
 
-def plot_trajs(wgT_list, wgT_tar, motion_type, obj_path=None):
+def plot_trajs(wgT_list, wgT_tar, motion_type, obj_path=None,show=False):
     wgT_list = np.array(wgT_list)
     assert len(wgT_list.shape) == 3, "wgT_list must be a 3D array"
 
@@ -93,9 +95,11 @@ def plot_trajs(wgT_list, wgT_tar, motion_type, obj_path=None):
     ax.legend()
 
     plt.savefig(os.path.join(obj_path, '{}.png'.format({int(time.time())})), dpi=300)
-    plt.show()
+    if show:
+        plt.show()
+    plt.close()
 
-def plot_vel(vel_tr,vel_rot,use_time,obj_path=None):
+def plot_vel(vel_tr,vel_rot,use_time,obj_path=None,show=False):
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
 
     ax1.plot(vel_rot, label='Rotation Velocity', marker='o', linestyle='-', color='blue')
@@ -121,9 +125,11 @@ def plot_vel(vel_tr,vel_rot,use_time,obj_path=None):
 
     plt.tight_layout()
     plt.savefig(os.path.join(obj_path,'{}.png'.format({int(time.time())})), dpi=300, bbox_inches='tight')
-    plt.show()
+    if show:
+        plt.show()
+    plt.close()
 
-def plot_img_diff(diff_list,use_time,obj_path=None):
+def plot_img_diff(diff_list,use_time,obj_path=None,show=False):
     plt.figure(figsize=(10, 8))
     plt.plot(diff_list, label='Difference', marker='o', linestyle='-')
     plt.xlabel('Index')
@@ -169,9 +175,11 @@ def plot_img_diff(diff_list,use_time,obj_path=None):
 
     # plt.tight_layout()
     plt.savefig(os.path.join(obj_path,'{}.png'.format({int(time.time())})), dpi=300, bbox_inches='tight')
-    plt.show()
+    if show:
+        plt.show()
+    plt.close()
 
-def plot_time(time_list,save_base_pth):
+def plot_time(time_list,save_base_pth,show=False):
     # 提取每个 obj_id 的数据
     obj_time_dict = {}
     for obj_id, use_time in time_list:
@@ -190,7 +198,9 @@ def plot_time(time_list,save_base_pth):
 
         save_path = os.path.join(save_base_pth, str(obj_id),"use_time.png")
         plt.savefig(save_path)
-        plt.close()  # 关闭当前图表，避免内存泄漏
+        if show:
+            plt.show()
+        plt.close()
 
     print(f"All plots saved to {save_base_pth}")
 
