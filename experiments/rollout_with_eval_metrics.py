@@ -99,9 +99,13 @@ if __name__ == '__main__':
     if isinstance(config['objs_descriptor'],list):
         if eval_epoch_num<len(config['objs_descriptor']):
             objs_descriptor=config['objs_descriptor'][:eval_epoch_num]
+        else:
+            objs_descriptor=config['objs_descriptor']
     elif isinstance(config['objs_descriptor'],int):
         if eval_epoch_num<20:
             objs_descriptor=eval_epoch_num
+        else:
+            objs_descriptor=config['objs_descriptor']
     else:
         raise RuntimeError("objs_descriptor must be an int or list")
 
