@@ -19,8 +19,8 @@
         "use_gmm": true,
         "encoder": {
           "name": "ResNet18",
-          "data_augmentation": false,
-          "task_consistency_loss": false,
+          "data_augmentation": true,
+          "task_consistency_loss": true,
           "pretrained_path": "ultralytics/runs/pose/train/weights/best.pt",
           "freeze":false,
           "siamese": false,
@@ -46,7 +46,7 @@
     },
       "loss":
       {
-        "name": "CustomLoss",
+        "name": "TCL_Loss",
         "weight":
         {
           "weight_tcl_img": 1,
@@ -67,7 +67,7 @@
     "num_data_workers": 2
   },
   "dataset": {
-    "hdf5_path": "One Touch/AlignAnything/25.01.23/hdf5/mimic.hdf5",
+    "hdf5_path": "One Touch/AlignAnything/25.01.24/hdf5/mimic.hdf5",
     "specific_obs_keys": [
       "robot0_eye_in_hand_image",
       "robot0_eye_in_hand_image_goal",

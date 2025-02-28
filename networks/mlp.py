@@ -15,7 +15,7 @@ import torch.distributions as D
 import functools
 import operator
 from ultralytics import YOLO
-
+import warnings
 from utils.input_process import add_gaussian_spot_to_image
 
 
@@ -173,7 +173,10 @@ class MLP(NetworkBase):
     def forward(self, x):
         x_img = x['robot0_eye_in_hand_image'].to(self.device)
         x_img_goal = x['robot0_eye_in_hand_image_goal'].to(self.device)
-
+        if self.use_tcl_loss and 'robot0_eye_in_hand_image_light' not in x.keys():
+            warnings.warn("robot0_eye_in_hand_image_light not in dataset, adding...", UserWarning)
+            x["robot0_eye_in_hand_image_light"]=x["robot0_eye_in_hand_image"].clone()
+            x['robot0_eye_in_hand_image_light_goal']=x['robot0_eye_in_hand_image_goal'].clone()
         # assert x_img.shape[-3:] == (3, self.img_size, self.img_size) #元组而不是列表
         if not x_img.shape[-3:] == (3, self.img_size, self.img_size):
             print(x_img.shape)
