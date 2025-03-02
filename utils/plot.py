@@ -43,7 +43,7 @@ def plot_rot_and_trans(error_rot_lst,error_trans_lst,use_time=10,obj_pth=None,sh
                  color='black')
 
     plt.tight_layout()
-    plt.savefig(os.path.join(obj_pth,'{}.png'.format({int(time.time())})), dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(obj_pth,'{}.png'.format({int(time.time())})), dpi=100, bbox_inches='tight')
     if show:
         plt.show()
     plt.close()
@@ -94,7 +94,7 @@ def plot_trajs(wgT_list, wgT_tar, motion_type, obj_path=None,show=False):
     ax.set_title('Trajectories')
     ax.legend()
 
-    plt.savefig(os.path.join(obj_path, '{}.png'.format({int(time.time())})), dpi=300)
+    plt.savefig(os.path.join(obj_path, '{}.png'.format({int(time.time())})), dpi=100)
     if show:
         plt.show()
     plt.close()
@@ -124,7 +124,7 @@ def plot_vel(vel_tr,vel_rot,use_time,obj_path=None,show=False):
                  color='black')
 
     plt.tight_layout()
-    plt.savefig(os.path.join(obj_path,'{}.png'.format({int(time.time())})), dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(obj_path,'{}.png'.format({int(time.time())})), dpi=100, bbox_inches='tight')
     if show:
         plt.show()
     plt.close()
@@ -174,7 +174,7 @@ def plot_img_diff(diff_list,use_time,obj_path=None,show=False):
     plt.subplots_adjust(bottom=0.4)  # 为表格留出更多空间
 
     # plt.tight_layout()
-    plt.savefig(os.path.join(obj_path,'{}.png'.format({int(time.time())})), dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(obj_path,'{}.png'.format({int(time.time())})), dpi=100, bbox_inches='tight')
     if show:
         plt.show()
     plt.close()
