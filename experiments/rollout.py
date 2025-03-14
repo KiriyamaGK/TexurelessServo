@@ -3,10 +3,8 @@ import numpy as np
 import json
 from sim.environment import Environment
 from utils.transform import rotation_matrix_z,rmat2euler_rz_degree
-from utils.perception import CameraIntrinsic
+from sim.perception import CameraIntrinsic
 from utils.input_process import input_dict_preprocess
-from datetime import datetime
-import pybullet as p
 import time
 import cv2
 import torch

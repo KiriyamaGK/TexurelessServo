@@ -3,17 +3,11 @@ import numpy as np
 import json
 from sim.environment import Environment
 from utils.paths import return_disc_route
-from utils.transform import rotation_matrix_z,rmat2euler_rz_degree
-from utils.perception import CameraIntrinsic
-from datetime import datetime
-import pybullet as p
+from utils.transform import rmat2euler_rz_degree
+from sim.perception import CameraIntrinsic
 import time
 import cv2
-from math import asin
 from utils.input_process import clip_image
-from utils.get_stl_geometry import get_stl_geometry
-from utils.transform import project_XYZw_to_uv
-import open3d as o3d
 from utils.policy import get_expert_policy
 
 

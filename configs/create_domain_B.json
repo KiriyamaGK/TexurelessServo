@@ -1,0 +1,15 @@
+{
+      "overall_setting": {
+          "part_name": "part_2",
+          "date_name": "25.03.11",
+          "img_size": 220,
+          "use_joystick": true
+      },
+      "motion":{
+        "motion_type": "auto",
+        "motion_radius_thres": 45,
+        "max_tr_vel": 0,
+        "rot_vel": 1,
+        "rz_range": [120,180]
+      }
+}

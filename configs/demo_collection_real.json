@@ -1,0 +1,44 @@
+{
+      "hardware":{
+          "robot_address": "192.168.58.2",
+          "camera": {
+              "w": 640,
+              "h": 480,
+              "fps": 30,
+              "cam_devices": {
+                 "wrist":"215222073421"
+              },
+              "use_devices_type": ["wrist"]
+             }
+      },
+      "overall_setting":{
+          "file_name": "25.03.11",
+          "cir_num":40,
+          "desire_pt_change_cycle":130,
+          "replace_existed_hdf5": false,
+          "delete_last_demo": false
+      },
+      "demo_collection":{
+          "freq": 7,
+          "ac_dim": 3,
+          "absolute_cmd": false,
+          "img": {
+            "save_type": "rgb",
+            "size": 220
+          },
+          "distances": {
+              "trans_thres":60,
+              "rot_thres":  60 ,
+              "down_dis":45
+          },
+          "velocity": {
+              "vel_tr_norm":0.4,
+              "vel_rot_norm":0.1
+          },
+          "stop_collection":{
+                "trans_dis_thres":0.5,
+                "rot_dis_thres":0.3
+          }
+      },
+      "dataset_type": "hdf5"
+}

@@ -1,4 +1,4 @@
-from math import sin,cos,sqrt,atan2
+from math import sin,cos,sqrt,atan2,pi
 import numpy as np
 
 def is_number(var):
@@ -69,6 +69,22 @@ def rmat2quat(rotation_matrix: np.ndarray, eps: float = 1.0e-8) -> np.ndarray:
     quaternion = np.where(trace > 0.0, trace_positive_cond(), where_1)
     return quaternion
 
+def rotation_matrix_x(theta):
+    """生成绕x轴旋转theta弧度的旋转矩阵"""
+    return np.array([
+        [1, 0, 0],
+        [0, cos(theta), -sin(theta)],
+        [0, sin(theta), cos(theta)]
+    ])
+
+def rotation_matrix_y(theta):
+    """生成绕y轴旋转theta弧度的旋转矩阵"""
+    return np.array([
+        [cos(theta), 0, sin(theta)],
+        [0, 1, 0],
+        [-sin(theta), 0, cos(theta)]
+    ])
+
 def rotation_matrix_z(theta):
     """生成绕z轴旋转theta弧度的旋转矩阵,弧度"""
     return np.array([
@@ -76,6 +92,18 @@ def rotation_matrix_z(theta):
         [sin(theta), cos(theta), 0],
         [0, 0, 1]
     ])
+def from_mov_vel2rots(mov_vel):
+    "微小旋转量变成旋转矩阵"
+    pi = np.pi
+    Rx = rotation_matrix_x(mov_vel[0] * pi / 180)
+    Ry = rotation_matrix_y(mov_vel[1] * pi / 180)
+    Rz = rotation_matrix_z(mov_vel[2] * pi / 180)
+    return Rx, Ry, Rz
+
+def get_rot_matrix_from_delta(pose,Rx, Ry, Rz):
+    mat = euler2rot([pose[3] * pi / 180, pose[4] * pi / 180, pose[5] * pi / 180])
+    return Rz @ Ry @ Rx @ mat
+
 def euler2rot(rpy):
     '''欧拉角转换为旋转矩阵
     输入为依次绕定轴x,y,z旋转
@@ -94,6 +122,20 @@ def euler2rot(rpy):
         [r11, r12, r13],
         [r21, r22, r23],
         [r31, r32, r33]])
+
+def euler2Matrix(Euler):
+    "末端位姿，欧拉角转齐次变换矩阵，输入mm，角度,输出m"
+    Matrix = np.zeros((4, 4))
+    Matrix[0, 3] = Euler[0] / 1000
+    Matrix[1, 3] = Euler[1] / 1000
+    Matrix[2, 3] = Euler[2] / 1000
+    Matrix[3, 0] = 0
+    Matrix[3, 1] = 0
+    Matrix[3, 2] = 0
+    Matrix[3, 3] = 1
+    Matrix[0:3, 0:3] = euler2rot(np.array([Euler[3] / 180 * np.pi, Euler[4] / 180 * np.pi, Euler[5] / 180 * np.pi]))
+    return Matrix
+
 def rmat2euler_degree(Matrix: np.array):
     '''旋转矩阵转欧拉角
     依次绕定轴x,y,z旋转
@@ -151,6 +193,25 @@ def rmat2euler_rz_degree(Matrix: np.array):
         Euler[2] += pi*2
     Euler[2] = Euler[2] / pi * 180
     return Euler[2]
+
+def get_inverse(mat):
+    '''
+    求四维旋转矩阵的逆
+    '''
+    R = mat[0:3, 0:3]  # 提取旋转矩阵
+    t = mat[0:3, 3]  # 提取平移向量
+
+    R_t = R.T  # 旋转矩阵的转置
+    new_mat = np.eye(4, 4)  # 创建一个 4x4 的单位矩阵
+
+    new_mat[0:3, 0:3] = R_t  # 将旋转矩阵的转置赋值给新矩阵的前 3x3 部分
+
+    # 计算 -R_t @ t，并将结果赋值给新矩阵的第 4 行的前 3 个元素
+    new_mat[0:3, 3] = -R_t @ t.flatten()
+
+    return new_mat
+
+
 def project_XYZw_to_uv(intr: np.array,cwT:np.array,XYZw:np.array):
     assert XYZw.shape == (3,)
     intr=np.concatenate((intr,np.array([[0],[0],[0]])),axis=1)

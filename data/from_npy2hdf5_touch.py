@@ -4,7 +4,7 @@ import os
 import cv2
 import json
 import datetime
-from utils.hdf5 import split_train_val_from_hdf5
+from utils.hdf5 import split_train_val_from_hdf5,add_env_meta,compute_num_samples
 from utils.paths import return_disc_route
 
 def return_folders(dir):
@@ -155,87 +155,8 @@ if __name__ == '__main__':
         if exact_abs_rot_list:
             new_f_out.create_dataset(obs_path + '/abs_rot', data=data_rot)
 
-    env_meta = {
-                "env_name": "Libero_Kitchen_Tabletop_Manipulation",
-                "env_version": "1.4.1",
-                "type": 1,
-                "env_kwargs": {
-                    "robots": [
-                        "Panda"
-                    ],
-                    "controller_configs": {
-                        "type": "OSC_POSE",
-                        "input_max": 1,
-                        "input_min": -1,
-                        "output_max": [
-                            0.05,
-                            0.05,
-                            0.05,
-                            0.5,
-                            0.5,
-                            0.5
-                        ],
-                        "output_min": [
-                            -0.05,
-                            -0.05,
-                            -0.05,
-                            -0.5,
-                            -0.5,
-                            -0.5
-                        ],
-                        "kp": 150,
-                        "damping_ratio": 1,
-                        "impedance_mode": "fixed",
-                        "kp_limits": [
-                            0,
-                            300
-                        ],
-                        "damping_ratio_limits": [
-                            0,
-                            10
-                        ],
-                        "position_limits": None,
-                        "orientation_limits": None,
-                        "uncouple_pos_ori": True,
-                        "control_delta": True,
-                        "interpolation": None,
-                        "ramp_ratio": 0.2
-                    },
-                    "bddl_file_name": None,
-                    "reward_shaping": False,
-                    "camera_names": [
-                        "agentview",
-                        "robot0_eye_in_hand"
-                    ],
-                    "camera_heights": 84,
-                    "camera_widths": 84,
-                    "has_renderer": False,
-                    "has_offscreen_renderer": True,
-                    "ignore_done": True,
-                    "use_object_obs": True,
-                    "use_camera_obs": True,
-                    "camera_depths": False,
-                    "render_gpu_device_id": 0
-                }
-            }
-
-    dat = new_f_out['data']
-    dat.attrs['env_args'] = json.dumps(env_meta, indent=4)  # data增加属性
+    add_env_meta(new_f_out)
     new_f_out.close()
 
-    total_samples = 0
-    f = h5py.File(hdf5_path, "a")  # edit mode
-    for ep in f["data"]:
-        # add "num_samples" into per-episode metadata
-        if "num_samples" in f["data/{}".format(ep)].attrs:
-            del f["data/{}".format(ep)].attrs["num_samples"]
-        n_sample = f["data/{}/actions".format(ep)].shape[0] - 1
-        f["data/{}".format(ep)].attrs["num_samples"] = n_sample
-        total_samples += n_sample
-
-        # print("num_samples:",n_sample)
-    # add total samples to global metadata
-    if "total" in f["data"].attrs:
-        del f["data"].attrs["total"]
-    f["data"].attrs["total"] = total_samples
+    compute_num_samples(hdf5_path)
     split_train_val_from_hdf5(hdf5_path,val_ratio)

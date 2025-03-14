@@ -3,7 +3,7 @@ import numpy as np
 import json
 from sim.environment import Environment
 from utils.transform import rmat2euler_rz_degree
-from utils.perception import CameraIntrinsic
+from sim.perception import CameraIntrinsic
 import time
 import cv2
 from utils.input_process import clip_image

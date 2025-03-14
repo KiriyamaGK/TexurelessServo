@@ -1,17 +1,13 @@
 import os
-import cv2
-import glob
 import json
 import time
 import numpy as np
-import matplotlib.pyplot as plt
 import pybullet as p
 import pybullet_data
 import random
 from scipy.spatial.transform import Rotation as R
-from collections import namedtuple
-from typing import List, Union, Optional
-from utils.perception import Camera, CameraIntrinsic
+from typing import Union, Optional
+from sim.perception import Camera, CameraIntrinsic
 from utils.transform import rmat2quat
 from math import cos,sin
 

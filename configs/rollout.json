@@ -13,10 +13,10 @@
         "fov": 60
     },
     "cut_to_square": true,
-    "logs_dir":  "trained_models/trial/2025-02-26_09-40-36/config.json",
+    "logs_dir":  "trained_models/trial/2025-03-01_12-30-24/config.json",
     "ckpts_dir": "all",
     "objs_descriptor": [15,16,17,18,19,20],
-    "eval_epoch_num": 2,
+    "eval_epoch_num": 300,
     "bgr2rgb": false,
     "time_threshold": 30,
     "cv2_visualize": true,
