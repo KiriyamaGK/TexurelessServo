@@ -4,6 +4,13 @@ import os
 import random
 import json
 
+def delete_hdf5_keys(new_f_out:h5py.File,key,demo_id):
+    if key =="actions":
+        del new_f_out['data/{}/actions'.format(demo_id)]
+    else:
+        assert key in new_f_out['data/{}/obs/'.format(demo_id)]
+        del new_f_out['data/{}/obs/'.format(demo_id)+key]
+
 def copy_attributes(source, target):
     """Copy attributes from source to target"""
     for key, value in source.attrs.items():

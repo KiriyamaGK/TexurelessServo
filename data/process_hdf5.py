@@ -17,17 +17,17 @@ def insert_images(f, ep_key, dataset_name, trans_id, rot_id, add_num, row_1):
         new_dset = f[ep_key].create_dataset(f'{dataset_name}_temp', shape=(row_1, *shape[1:]), dtype=dtype)
 
         # 将原数据集的数据复制到新数据集的相应位置
-        new_dset[:rot_id] = dset[:rot_id]
-        new_dset[rot_id:rot_id+add_num] = np.repeat(dset[trans_id+1][np.newaxis, :], add_num, axis=0)
-        new_dset[rot_id+add_num:] = dset[rot_id:row_1-add_num]
+        new_dset[:rot_id] = dset[:rot_id].copy()
+        new_dset[rot_id:rot_id+add_num] = np.repeat(dset[trans_id+1][np.newaxis, :].copy(), add_num, axis=0)
+        new_dset[rot_id+add_num:] = dset[rot_id:row_1-add_num].copy()
 
         # 删除原数据集并重命名新数据集
         del f[ep_key][dataset_name]
         f[ep_key].move(f'{dataset_name}_temp', dataset_name)
 
 if __name__ == '__main__':
-    date='25.01.24'
-    fn=os.path.join(return_disc_route('One Touch/AlignAnything'),date,'hdf5/mimic.hdf5')
+    date='25.03.11'
+    fn=os.path.join(return_disc_route('One Touch/AlignAnything_real'),date,'hdf5/mimic.hdf5')
 
     disturb_abs_rot=True
 
@@ -135,14 +135,14 @@ if __name__ == '__main__':
             if 'robot0_eye_in_hand_image' in f[ep_key]:
                 wrist_img = f['{}/robot0_eye_in_hand_image'.format(ep_key)][-1].copy()
                 wrist_lst = f['{}/robot0_eye_in_hand_image'.format(ep_key)][:]
-                wrist_lst = np.concatenate((wrist_lst, np.repeat(wrist_img[np.newaxis, :], add_num, axis=0)))
+                wrist_lst = np.concatenate((wrist_lst.copy(), np.repeat(wrist_img[np.newaxis, :].copy(), add_num, axis=0)))
                 del f[ep_key]['robot0_eye_in_hand_image']
                 f[ep_key].create_dataset('robot0_eye_in_hand_image', data=wrist_lst)
 
             if 'robot0_eye_in_hand_image_light' in f[ep_key]:
                 wrist_img_light = f['{}/robot0_eye_in_hand_image_light'.format(ep_key)][-1].copy()
                 wrist_lst_light = f['{}/robot0_eye_in_hand_image_light'.format(ep_key)][:]
-                wrist_lst_light = np.concatenate((wrist_lst_light, np.repeat(wrist_img_light[np.newaxis, :], add_num, axis=0)))
+                wrist_lst_light = np.concatenate((wrist_lst_light.copy(), np.repeat(wrist_img_light[np.newaxis, :].copy(), add_num, axis=0)))
                 del f[ep_key]['robot0_eye_in_hand_image_light']
                 f[ep_key].create_dataset('robot0_eye_in_hand_image_light', data=wrist_lst_light)
 
@@ -150,14 +150,14 @@ if __name__ == '__main__':
             if 'gaussian_img_kpt' in f[ep_key]:
                 gauss_kpt = f['{}/gaussian_img_kpt'.format(ep_key)][-1].copy()
                 gauss_kpt_lst = f['{}/gaussian_img_kpt'.format(ep_key)][:]
-                gauss_kpt_lst = np.concatenate((gauss_kpt_lst, np.repeat(gauss_kpt[np.newaxis, :], add_num, axis=0)))
+                gauss_kpt_lst = np.concatenate((gauss_kpt_lst.copy(), np.repeat(gauss_kpt[np.newaxis, :].copy(), add_num, axis=0)))
                 del f[ep_key]['gaussian_img_kpt']
                 f[ep_key].create_dataset('gaussian_img_kpt', data=gauss_kpt_lst)
 
             if 'gaussian_img_ct' in f[ep_key]:
                 gauss_ct = f['{}/gaussian_img_ct'.format(ep_key)][-1].copy()
                 gauss_ct_lst = f['{}/gaussian_img_ct'.format(ep_key)][:]
-                gauss_ct_lst = np.concatenate((gauss_ct_lst, np.repeat(gauss_ct[np.newaxis, :], add_num, axis=0)))
+                gauss_ct_lst = np.concatenate((gauss_ct_lst.copy(), np.repeat(gauss_ct[np.newaxis, :].copy(), add_num, axis=0)))
                 del f[ep_key]['gaussian_img_ct']
                 f[ep_key].create_dataset('gaussian_img_ct', data=gauss_ct_lst)
         f.close()
@@ -200,7 +200,7 @@ if __name__ == '__main__':
                     abs_rot = f['data/{}/obs/abs_rot'.format(ep)][trans_id+1].copy()
                     abs_rot=np.array([abs_rot])
                     abs_rot_list = f['data/{}/obs/abs_rot'.format(ep)][:]
-                    abs_rot_list=np.concatenate((abs_rot_list[0:rot_id], np.repeat(abs_rot, add_num, axis=0),abs_rot_list[rot_id:]))
+                    abs_rot_list=np.concatenate((abs_rot_list[0:rot_id].copy(), np.repeat(abs_rot.copy(), add_num, axis=0),abs_rot_list[rot_id:].copy()))
                     assert abs_rot_list.shape[0] == row_1
                     del f['data/{}/obs/abs_rot'.format(ep)]
                     f['data/{}/obs/abs_rot'.format(ep)] = abs_rot_list
@@ -209,7 +209,7 @@ if __name__ == '__main__':
                 act_lst = f['data/{}/actions'.format(ep)][:]
                 act = np.array([trans[0], trans[1], rot])
                 act_lst = np.concatenate(
-                    (act_lst[0:rot_id], np.repeat(act[np.newaxis, :], add_num, axis=0), act_lst[rot_id:]))
+                    (act_lst[0:rot_id].copy(), np.repeat(act[np.newaxis, :].copy(), add_num, axis=0), act_lst[rot_id:].copy()))
                 assert act_lst.shape[0] == row_1
                 del f['data/{}/actions'.format(ep)]
                 f['data/{}/actions'.format(ep)] = act_lst
