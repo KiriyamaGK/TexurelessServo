@@ -55,3 +55,7 @@ class FR_Robot:
                 return [0,0,0,0,0,0]
         else:
             raise RuntimeError('point cannot arrive finally when rotating')
+if __name__ == '__main__':
+    fr_robot = FR_Robot()
+    pos=fr_robot.get_gripper_TCP_pose()
+    print(pos)

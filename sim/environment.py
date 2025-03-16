@@ -228,39 +228,6 @@ class Environment(object):
             return False
 
     def need_reinit_eval(self):
-        # if self.close_enough_flag==False:
-        #     err_dict=self.compute_error(self.wcT_tar, self.wcT)
-        #     latest_flag=err_dict["flag"]
-        #     if time.time()-self.task_timer>=self.time_up_bound:
-        #         return {"need_reinit": True,
-        #                 "dist": err_dict["dist"],
-        #                 "angle": err_dict["angle"]
-        #                 }
-        #     elif latest_flag:
-        #         self.error_timer=time.time()
-        #         return {"need_reinit":False,
-        #                 "dist":err_dict["dist"],
-        #                 "angle":err_dict["angle"]
-        #                 }
-        #     else:
-        #         return {"need_reinit": False,
-        #                 "dist": err_dict["dist"],
-        #                 "angle": err_dict["angle"]
-        #                 }
-        # else:
-        #     err_dict = self.compute_error(self.wcT_tar, self.wcT)
-        #     latest_flag = err_dict["flag"]
-        #     if (latest_flag and time.time()-self.error_timer>=self.in_error_range_time) or time.time()-self.task_timer>=self.time_up_bound:
-        #         return {"need_reinit": True,
-        #                 "dist": err_dict["dist"],
-        #                 "angle": err_dict["angle"]
-        #                 }
-        #     else:
-        #         return {"need_reinit": False,
-        #                 "dist": err_dict["dist"],
-        #                 "angle": err_dict["angle"]
-        #                 }
-
         err_dict=self.compute_error(self.wcT_tar, self.wcT)
 
         if time.time()-self.task_timer>=self.time_up_bound:

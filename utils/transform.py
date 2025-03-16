@@ -223,3 +223,30 @@ def project_XYZw_to_uv(intr: np.array,cwT:np.array,XYZw:np.array):
     uv[0]=int(uv[0])
     uv[1]=int(uv[1])
     return uv
+
+def make_an_angle_in_180(ang,max_attempts_num=10):
+    attempts_num=0
+    while True:
+        if attempts_num >= max_attempts_num:
+            raise RuntimeError("Too many attempts")
+        if abs(ang) >180:
+            if ang>0:
+                ang -= 360
+            else:
+                ang += 360
+        if abs(ang) <=180:
+            return ang
+        attempts_num+=1
+
+def rot_angle_normalization(ang,max_attempts_num=10): #轉換到0-360之間，-180和180之間有間斷點，不方便學習
+    attempts_num = 0
+    while True:
+        if attempts_num >= max_attempts_num:
+            raise RuntimeError("Too many attempts")
+        if ang>=360:
+            ang-=360
+        if ang<0:
+            ang+=360
+        if ang>=0 and ang <360:
+            return ang
+        attempts_num += 1

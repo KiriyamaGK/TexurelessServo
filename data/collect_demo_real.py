@@ -15,6 +15,8 @@ from utils.transform import euler2rot,rmat2quat
 from utils.hdf5 import add_useless_things, split_train_val_from_hdf5, add_env_meta, compute_num_samples, add_config
 import h5py
 from utils.input_process import clip_image
+from real.environment import Environment
+from utils.transform import make_an_angle_in_180,rot_angle_normalization
 
 
 def unit_transform(pose):
@@ -50,133 +52,8 @@ def unit_ang(ang):
         ang[i] = ang[i] * pi / 180
     return ang
 
-def rot_angle_normalization(ang,max_attempts_num=10):
-    attempts_num = 0
-    while True:
-        if attempts_num >= max_attempts_num:
-            raise RuntimeError("Too many attempts")
-        if ang>=360:
-            ang-=360
-        if ang<0:
-            ang+=360
-        if ang>=0 and ang <360:
-            return ang
-        attempts_num += 1
-
-def make_an_angle_in_180(ang,max_attempts_num=10):
-    attempts_num=0
-    while True:
-        if attempts_num >= max_attempts_num:
-            raise RuntimeError("Too many attempts")
-        if abs(ang) >180:
-            if ang>0:
-                ang -= 360
-            else:
-                ang += 360
-        if abs(ang) <=180:
-            return ang
-        attempts_num+=1
 
 
-class Environment:
-    def __init__(self,robot_address,w,h,fps,cam_devices,use_devices_type,trans_thres,rot_thres,down_dis):
-
-        self.robot_ins=FR_Robot(robot_address)
-        self.camera=Camera(devices=cam_devices,use_devices_type=use_devices_type,width=w, height=h, fps=fps)
-        self.gripper=Gripper()
-
-        self.corner_1 = [-405.3097229003906, 199.8372497558593]  # 工作区域左上角点
-        self.corner_2 = [-707.1678466796875, -249.3986206054687]  # 工作区域右下角点
-
-        self.x_max = max(self.corner_1[0], self.corner_2[0])
-        self.x_min = min(self.corner_1[0], self.corner_2[0])
-        self.y_max = max(self.corner_1[1], self.corner_2[1])
-        self.y_min = min(self.corner_1[1], self.corner_2[1])
-
-        self.trans_thres = trans_thres #最大平移距离，mm
-        self.rot_thres = rot_thres  #最大rz，°
-        self.down_dis = down_dis    #夹爪下移距离，mm
-        print("environment initialized")
-
-
-
-    def place(self,p_0):
-        '''
-        在工作空间内随机选取一点p_1,机器人从初始位置p_0抓取零件放置到p_1
-        :param p_0: 初始位置
-        :param down_dis: 预抓取时夹爪下移距离
-        :return: p_1:放置零件的新位置，p_1与p_0仅在x,y,rz上有差异
-        '''
-
-        #开始下去，抓零件
-        pose = p_0.copy()
-        pose[2] -= self.down_dis
-        self.gripper.move_gripper(0,60,60)
-        time.sleep(2)
-        self.robot_ins.move_l(pose, tool=1, user=0, vel=10)
-        self.gripper.move_gripper(3000, 60, 60)
-        time.sleep(2)
-
-        #开始上来
-        self.robot_ins.move_l(p_0, tool=1, user=0, vel=30)
-
-        # 开始平移到新位置
-        p_1=[0,0,0,0,0,0]
-        p_1[0]=random.uniform(self.x_min,self.x_max)
-        p_1[1]=random.uniform(self.y_min,self.y_max)
-        p_1[2]=p_0[2]
-        p_1[3]=p_0[3]
-        p_1[4]=p_0[4]
-        p_1[5]=random.randint(130, 175)*(random.randint(0, 1) - 0.5) * 2
-        self.robot_ins.move_l(p_1, tool=1, user=0, vel=30)
-
-        #开始下去
-        pose = p_1.copy()
-        pose[2] -= (self.down_dis*0.9)
-        self.robot_ins.move_l(pose, tool=1, user=0, vel=10)
-        self.gripper.move_gripper(0,60,60)
-        time.sleep(1)
-
-        self.robot_ins.move_l(p_1, tool=1, user=0, vel=10)
-        return p_1
-
-    def generate_motion_paras(self,desire_pt):
-        '''
-        给定目标位置生成运动参数，包括theta（xy方位），alpha（rz）,生成的起始点start_pt.要确保目标位姿的rz的绝对值在120°-180°，否则可能位姿无法到达
-        :param desire_pt: 目标位姿
-        :param rot_thres: 最大rz旋转角（°）
-        :param trans_thres: 最大平移量(mm)
-        :return: start_pt,alpha（°）,theta(rad)
-        '''
-        for i in range(100):
-            theta = random.uniform(-2 * pi, 2 * pi)
-            alpha = random.uniform(10, self.rot_thres) * (random.randint(0, 1) - 0.5) * 2
-            assert self.rot_thres < 85
-            if alpha > 0:  # 逆时针转
-                if desire_pt[5] > 0:  # 腕部相机在desire_pt向left_cam偏
-                    assert desire_pt[5] > 120 and desire_pt[5] <= 180
-                if desire_pt[5] < 0:  # 腕部相机在desire_pt向right_cam偏
-                    assert desire_pt[5] < -120 and desire_pt[5] >= -180
-                    alpha = min(alpha, -120 - desire_pt[5])
-            elif alpha < 0:  # 顺时针转
-                if desire_pt[5] > 0:  # 腕部相机在desire_pt向left_cam偏
-                    assert desire_pt[5] > 120 and desire_pt[5] <= 180
-                    alpha = -1 * min(-alpha, desire_pt[5] - 120)
-                if desire_pt[5] < 0:  # 腕部相机在desire_pt向right_cam偏
-                    assert desire_pt[5] < -120 and desire_pt[5] >= -180
-
-            delta = [self.trans_thres * cos(theta), self.trans_thres * sin(theta)]
-            start_pt = np.array(desire_pt.copy()) + np.array([delta[0], delta[1], 0, 0, 0, alpha])
-            start_pt[5]=make_an_angle_in_180(start_pt[5])
-            print("start_pt", start_pt[5])
-            print('desire_pt', desire_pt[5])
-            print("alpha", alpha)
-            assert abs(start_pt[5]) >= 120 and abs(start_pt[5]) <= 180
-            ret = self.robot_ins.robot.GetInverseKin(0, start_pt, config=-1)
-            if isinstance(ret, tuple) and ret[0] == 0: #如果能求出逆解
-                return theta, alpha, start_pt
-            else:
-                continue
 if __name__=='__main__':
     current_pt_desire=True
 

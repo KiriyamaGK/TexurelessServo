@@ -25,6 +25,7 @@
     "record_video": true,
     "random_light": false,
     "eval_metrics": {
+        "utilized": true,
         "success_rate": {
             "utilized": true,
             "trans_threshold": 0.003,

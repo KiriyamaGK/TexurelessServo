@@ -1,0 +1,53 @@
+{
+    "hardware": {
+        "robot_address": "192.168.58.2",
+        "camera": {
+            "w": 640,
+            "h": 480,
+            "fps": 30,
+            "cam_devices": {
+                "wrist": "215222073421"
+            },
+            "use_devices_type": [
+                "wrist"
+            ]
+        }
+    },
+    "distances": {
+        "trans_thres":40,
+        "rot_thres":  60 ,
+        "down_dis":45
+    },
+    "obj_id": 1,
+    "cut_to_square": true,
+    "logs_dir": "trained_models/trial/2025-03-16_01-41-23/config.json",
+    "ckpts_dir": [283],
+    "eval_epoch_num": 10,
+    "bgr2rgb": false,
+    "cv2_visualize": true,
+    "npy_img_size": 220,
+    "record_video": true,
+    "eval_metrics": {
+        "utilized": true,
+        "success_rate": {
+            "utilized": true,
+            "trans_threshold": 3,
+            "rot_threshold": 2
+        },
+        "error_curve": {
+            "utilized": true
+        },
+        "trajectory": {
+            "utilized": false
+        },
+        "velocity": {
+            "utilized": true
+        }
+    },
+    "stop_policy": {
+        "trans_vel_threshold": 0.04,
+        "rot_vel_threshold": 0.01,
+        "in_threshold_range_time": 1,
+        "use_time_upperbound": 20
+    }
+}

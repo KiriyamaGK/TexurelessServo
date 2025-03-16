@@ -1,20 +1,20 @@
 import os
 import numpy as np
 import json
-from sim.environment import Environment
 from utils.transform import rotation_matrix_z,rmat2euler_rz_degree
-from sim.perception import CameraIntrinsic
 from utils.input_process import input_dict_preprocess
 import datetime
 import time
 import cv2
 import torch
+from real.environment import Environment
 from networks.helpers import get_network_cls
 from utils.input_process import clip_image
 from utils.plot import plot_rot_and_trans,plot_trajs,plot_vel,plot_time,plot_img_diff
 from utils.statistics import calculate_success_rate,visualize_final_error
 import atexit
 from utils.paths import path_completion,PROJECT_ROOT_DIR,determine_ckpt_dirs
+from utils.transform import rot_angle_normalization
 
 
 def cleanup():
@@ -70,16 +70,29 @@ def _setup_model(model_config: dict,return_dual_feat:bool=False):
     )#**动态传参，字典中的键与函数参数名完全匹配
 
 if __name__ == '__main__':
-    config_dir= "../configs/rollout.json"
+    config_dir= "../configs/rollout_real.json"
     return_dual_feat=False
+    current_pt_desire = False
+
+    with open(config_dir, "r") as j:
+        config = json.load(j)
+
+    env = Environment(robot_address=config["hardware"]["robot_address"], **config["distances"],
+                      **config["hardware"]["camera"])
+    cam = env.camera
+    robot_ins = env.robot_ins
+
+    desire_pt = robot_ins.get_gripper_TCP_pose()
+    desire_pt[3] = -180
+    desire_pt[4] = 0
+    if not current_pt_desire:
+        desire_pt=[-663.347412109375, -49.298927307128906, 114.417236328125, -180,0, -153.80250549316406]
 
     fps = 30
     vis_h, vis_w = 480, 1280
     mp4 = cv2.VideoWriter_fourcc(*'mp4v')
 
-    with open(config_dir, "r") as j:
-        config = json.load(j)
-    model_config_dir=path_completion( config["logs_dir"],PROJECT_ROOT_DIR)
+    model_config_dir=path_completion(config["logs_dir"],PROJECT_ROOT_DIR)
     with open(model_config_dir, "r") as j:
         model_config = json.load(j)
 
@@ -92,18 +105,6 @@ if __name__ == '__main__':
     ckpts_dirs=determine_ckpt_dirs(config["ckpts_dir"],ckpt_base)
 
     eval_epoch_num = config['eval_epoch_num']
-    if isinstance(config['objs_descriptor'],list):
-        if eval_epoch_num<len(config['objs_descriptor']):
-            objs_descriptor=config['objs_descriptor'][:eval_epoch_num]
-        else:
-            objs_descriptor=config['objs_descriptor']
-    elif isinstance(config['objs_descriptor'],int):
-        if eval_epoch_num<20:
-            objs_descriptor=eval_epoch_num
-        else:
-            objs_descriptor=config['objs_descriptor']
-    else:
-        raise RuntimeError("objs_descriptor must be an int or list")
 
     npy_size=config['npy_img_size']
     cv2_visualize=config['cv2_visualize']
@@ -113,10 +114,10 @@ if __name__ == '__main__':
     use_eval_metrics=eval_metrics["utilized"]
     succ_tr=eval_metrics['success_rate']['trans_threshold']
     succ_rot = eval_metrics['success_rate']['rot_threshold']
-
-    expert_motion_type=config['expert_motion_type']
     record_video=config['record_video']
-    random_light=config['random_light']
+
+    obj_id=config['obj_id']
+
 
     rgb_key = [n for n in model_config["dataset"]['specific_obs_keys'] if ('image' in n or "img" in n)]
     low_dim_key = [n for n in model_config["dataset"]['specific_obs_keys'] if n not in rgb_key]
@@ -128,10 +129,10 @@ if __name__ == '__main__':
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = _setup_model(model_config,return_dual_feat)
-    camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env = Environment(camera_intrinsic, objs_descriptor=objs_descriptor)
-    env.init()
+
     env.setup_stop_policy(stop_policy)
+    env.setup_desire_pt(desire_pt)
+    env.init()
 
     ckpts_idx=0
     for ckpts_dir in ckpts_dirs:
@@ -157,9 +158,12 @@ if __name__ == '__main__':
             diff_list=[]
             video_flag = False
 
-            init_transform_dict = env.return_cur_pos_info()
-            env.act_to_goal()
-            img_goal = env.observation()
+            # init_transform_dict = env.return_cur_pos_info()
+            # env.act_to_goal()
+            # img_goal = env.observation()
+            robot_ins.move_cart(desire_pt, tool=1, user=0, vel=40)
+            img_goal=cam.get_frame()["wrist"][:,:,::-1]
+
             if cv2_visualize:
                 img_goal_vis = cv2.cvtColor(img_goal.copy(), cv2.COLOR_BGR2RGB)
             if cut_to_square:
@@ -174,11 +178,14 @@ if __name__ == '__main__':
             else:
                 if npy_size != img_w or npy_size != img_h:
                     img_goal = cv2.resize(img_goal, (img_w, img_h))
-            # cv2.imwrite('/media/kiriyamagk/One Touch/AlignAnything/imgs/{}.png'.format(idx+1),img_goal_vis)
-            env.act_with_abs_dict(init_transform_dict)
+
+            # env.act_with_abs_dict(init_transform_dict)
+            theta, alpha, start_pt = env.generate_motion_paras(desire_pt)
+            robot_ins.move_cart(start_pt, tool=1, user=0, vel=40)
+
             print("==============================")
             print("[INFO] start rollout_{}...".format(idx))
-            obj_id=env.obj_idx
+
             obj_pth=os.path.join(save_base_pth, str(obj_id))
             os.makedirs(obj_pth, exist_ok=True)
 
@@ -189,13 +196,10 @@ if __name__ == '__main__':
             t_0 = time.time()
             # try:
             while True:
-                wgT = env.wgT
-                rz = rmat2euler_rz_degree(wgT)
-                dT=np.eye(4)
-                if not random_light:
-                    img=env.observation()
-                else:
-                    img=env.observation(random_light_dir=True)
+                tcp = robot_ins.get_gripper_TCP_pose()
+                rz=rot_angle_normalization(tcp[5])  # 轉換到0-360之間，-180和180之間有間斷點，不方便學習
+                img=cam.get_frame()["wrist"][:,:,::-1]
+
                 if cv2_visualize:
                     img_vis = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
                     combined_img = np.hstack((img_vis, img_goal_vis))
@@ -240,20 +244,18 @@ if __name__ == '__main__':
                 # predictions/=4
                 vel_tr=predictions[0:2]
                 vel_rot=predictions[-1]
-                dT[0:2,3]=vel_tr
-                dT[0:3,0:3]=rotation_matrix_z(vel_rot/180*np.pi)
-                env.action(dT)
+
                 env.determine_vel_in_threshold(vel_tr=np.linalg.norm(vel_tr), vel_rot=abs(vel_rot))
+                robot_ins.servo_cart(desc_pos=[vel_tr[0],vel_tr[1],0,0,0,vel_rot], mode=1, vel=10.0)
                 # time.sleep(0.1)
                 rtn_dict=env.reinit_eval()
                 trans_error=rtn_dict['dist']
                 rot_error=rtn_dict['angle']
-                error_rot_lst.append(rot_error)          #deg
-                error_trans_lst.append(trans_error*1000) #m to mm
-                vel_tr_lst.append(np.linalg.norm(vel_tr)*1000) #mm
+                error_rot_lst.append(rot_error)             #deg
+                error_trans_lst.append(trans_error)         # mm
+                vel_tr_lst.append(np.linalg.norm(vel_tr))   #mm
                 vel_rot_lst.append(abs(vel_rot))
-                wgT_list.append(wgT)
-                # print("time:",time.time()-env.task_timer)
+
                 if rtn_dict["need_reinit"]:
                     use_time=time.time()-t_0
                     if eval_metrics["error_curve"]["utilized"] and use_eval_metrics:
@@ -263,12 +265,8 @@ if __name__ == '__main__':
                         print("last rot error: {}".format(error_rot_lst[-1]))
                         print("last trans error: {}".format(error_trans_lst[-1]))
                     if eval_metrics["success_rate"]["utilized"] and use_eval_metrics:
-                        success=1 if (error_rot_lst[-1]<=succ_rot and error_trans_lst[-1]<=succ_tr*1000) else 0
+                        success=1 if (error_rot_lst[-1]<=succ_rot and error_trans_lst[-1]<=succ_tr) else 0
                         success_list.append([obj_id,success])
-                    if eval_metrics["trajectory"]["utilized"] and use_eval_metrics:
-                        traj_pth=os.path.join(obj_pth, "traj")
-                        os.makedirs(traj_pth, exist_ok=True)
-                        plot_trajs(wgT_list=wgT_list, wgT_tar=env.wgT_tar, motion_type=expert_motion_type, obj_path=traj_pth,show=False)
                     if eval_metrics["velocity"]["utilized"] and use_eval_metrics:
                         vel_pth = os.path.join(obj_pth, "vel")
                         os.makedirs(vel_pth, exist_ok=True)
@@ -281,12 +279,9 @@ if __name__ == '__main__':
                     time_list.append([obj_id,use_time])
                     if video_flag:
                         out.release()
+                    cv2.imwrite(os.path.join(obj_pth, "goal_img.png"),img_goal_vis)
                     break
-            # except KeyboardInterrupt or SystemExit:
-            #     pass
-            #     # if eval_metrics["success_rate"]["utilized"]:
-            #     #     calculate_success_rate(success_list,os.path.join(save_base_pth,"success_rate.json"))
-            #     cleanup()
+
         if ckpts_idx<len(ckpts_dirs)-1:
             cleanup()
         ckpts_idx+=1
