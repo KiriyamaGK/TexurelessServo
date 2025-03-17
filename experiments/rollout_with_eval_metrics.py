@@ -220,8 +220,8 @@ if __name__ == '__main__':
                 obs_dict={
                     "robot0_eye_in_hand_image": img,
                     "robot0_eye_in_hand_image_goal": img_goal,
-                    'gaussian_img_kpt': np.zeros((img_w//4, img_h//4,1)),
-                    'gaussian_img_kpt_goal': np.zeros((img_w // 4, img_h // 4, 1)),
+                    # 'gaussian_img_kpt': np.zeros((img_w//4, img_h//4,1)),
+                    # 'gaussian_img_kpt_goal': np.zeros((img_w // 4, img_h // 4, 1)),
                     "abs_rot": np.array([rz]),
                 }
                 obs_dict=input_dict_preprocess(obs_dict,rollout=True)

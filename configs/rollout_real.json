@@ -15,14 +15,14 @@
     },
     "distances": {
         "trans_thres":40,
-        "rot_thres":  60 ,
+        "rot_thres":30 ,
         "down_dis":45
     },
     "obj_id": 1,
     "cut_to_square": true,
     "logs_dir": "trained_models/trial/2025-03-16_01-41-23/config.json",
-    "ckpts_dir": [283],
-    "eval_epoch_num": 10,
+    "ckpts_dir": [162,170,201,207,245,263,283,327,351,381,411,438],
+    "eval_epoch_num": 20,
     "bgr2rgb": false,
     "cv2_visualize": true,
     "npy_img_size": 220,
