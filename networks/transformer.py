@@ -395,7 +395,7 @@ class GPT(nn.Module):
 
 class Transformer(NetworkBase):
     def __init__(self, input_low_dim, output_dim, obs_keys,batch_size,seq_length,training,embedding_size=656,n_layer=4,n_head=4,block_size=10,low_dim_hidden_sizes=None,output_head_sizes=None,activation="relu", output_activation=None,use_gmm=False,
-                 encoder=None,return_dual_features=False):
+                 encoder=None,return_dual_features=False,create_mixed_light_dataset=False):
         super().__init__(input_low_dim, output_dim)
         self.return_dual_features = return_dual_features
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -449,11 +449,14 @@ class Transformer(NetworkBase):
         self.is_training = training
 
         if self.is_training:
-            self.use_data_augmentation=encoder['data_augmentation']
-            self.use_tcl_loss=encoder['task_consistency_loss']
+            self.use_data_augmentation = encoder['data_augmentation']
+            self.use_tcl_loss = encoder['task_consistency_loss']
+            self.create_mixed_light_dataset = create_mixed_light_dataset
         else:
-            self.use_data_augmentation=False
-            self.use_tcl_loss=False
+            self.use_data_augmentation = False
+            self.use_tcl_loss = False
+            self.create_mixed_light_dataset = False
+
         if self.use_tcl_loss:
             assert self.use_data_augmentation
 
@@ -549,14 +552,10 @@ class Transformer(NetworkBase):
     def forward(self, x):
         x_img = x['robot0_eye_in_hand_image'].to(self.device)
         x_img_goal = x['robot0_eye_in_hand_image_goal'].to(self.device)
-        if self.use_tcl_loss and 'robot0_eye_in_hand_image_light' not in x.keys():
-            warnings.warn("robot0_eye_in_hand_image_light not in dataset, adding...", UserWarning)
-            x["robot0_eye_in_hand_image_light"]=x["robot0_eye_in_hand_image"].clone()
-            x['robot0_eye_in_hand_image_light_goal']=x['robot0_eye_in_hand_image_goal'].clone()
 
-        # assert x_img.shape[-3:] == (3, self.img_size, self.img_size) #元组而不是列表
-        if not  x_img.shape[-3:] == (3, self.img_size, self.img_size):
-            print(x_img.shape)
+        # determine b,seq
+        if not x_img.shape[-3:] == (3, self.img_size, self.img_size):
+            raise RuntimeError()
         if len(x_img.shape) == 3:
             b, seq = 1, 1
             x_img = x_img.view(1, 3, self.img_size, self.img_size)  # [b,c,h,w]
@@ -570,6 +569,39 @@ class Transformer(NetworkBase):
         else:
             raise RuntimeError('x_img.shape should between 3 and 5')
 
+        # change dimension
+        for itms in x.keys():
+            if "image" in itms or "img" in itms:
+                x[itms] = x[itms].view(-1, 3, self.img_size, self.img_size)
+        x_img = x_img.view(-1, 3, self.img_size, self.img_size)
+        x_img_goal = x_img_goal.view(-1, 3, self.img_size, self.img_size)
+
+        # create mixed light
+        if self.create_mixed_light_dataset:
+            assert "robot0_eye_in_hand_image_light" in x.keys() and "robot0_eye_in_hand_image_light_goal" in x.keys()
+            if self.use_tcl_loss:  # tcl_raw
+                for idx in range(x["robot0_eye_in_hand_image"].shape[0]):
+                    if random.randint(0, 1) > 0:
+                        x["robot0_eye_in_hand_image_light"][idx] = x["robot0_eye_in_hand_image"][idx].clone()
+                    else:
+                        x["robot0_eye_in_hand_image"][idx] = x["robot0_eye_in_hand_image_light"][idx].clone()
+                    if random.randint(0, 1) > 0:
+                        x["robot0_eye_in_hand_image_light_goal"][idx] = x["robot0_eye_in_hand_image_goal"][idx].clone()
+                    else:
+                        x["robot0_eye_in_hand_image_goal"][idx] = x["robot0_eye_in_hand_image_light_goal"][idx].clone()
+            else:
+                for idx in range(x["robot0_eye_in_hand_image"].shape[0]):
+                    if random.randint(0, 1) > 0:
+                        x["robot0_eye_in_hand_image"][idx] = x["robot0_eye_in_hand_image_light"][idx].clone()
+                    if random.randint(0, 1) > 0:
+                        x["robot0_eye_in_hand_image_goal"][idx] = x["robot0_eye_in_hand_image_light_goal"][idx].clone()
+                del x["robot0_eye_in_hand_image_light"]
+
+        if self.use_tcl_loss and 'robot0_eye_in_hand_image_light' not in x.keys(): #tcl_raw
+            warnings.warn("robot0_eye_in_hand_image_light not in dataset, adding...", UserWarning)
+            x["robot0_eye_in_hand_image_light"]=x["robot0_eye_in_hand_image"].clone()
+            x['robot0_eye_in_hand_image_light_goal']=x['robot0_eye_in_hand_image_goal'].clone()
+
         x_low_dim = torch.tensor([])
         assert len(self.low_dim_keys)==1
         for k in x:
@@ -578,13 +610,11 @@ class Transformer(NetworkBase):
         x_low_dim = x_low_dim / 360
         x_low_dim=x_low_dim.to(self.device)
 
-        x_img = x_img.view(b * seq, 3, self.img_size, self.img_size)
         if self.crop_size < self.img_size:
             x_img_grid_shifted = self.random_crop_grid(x_img, self.grid_source)
             x_img = F.grid_sample(x_img, x_img_grid_shifted, align_corners=True)
         if self.use_tcl_loss:
             x_img_aug=x['robot0_eye_in_hand_image_light'].to(self.device)
-            x_img_aug = x_img_aug.view(b * seq, 3, self.img_size, self.img_size)
             if self.crop_size < self.img_size:
                 x_img_aug_grid_shifted = self.random_crop_grid(x_img_aug, self.grid_source)
                 x_img_aug = F.grid_sample(x_img_aug, x_img_aug_grid_shifted, align_corners=True)
@@ -607,20 +637,17 @@ class Transformer(NetworkBase):
         x_img = x_img.view(b * seq, -1).contiguous()
 
         if self.use_tcl_loss:
-            x_img_aug=self.img_enc(x_img_aug)
-            if self.use_tcl_loss:
-                x_img_aug_feat = x_img_aug.clone()
+            x_img_aug = self.img_enc(x_img_aug)
+            x_img_aug_feat = x_img_aug.clone()
             x_img_aug = self.spatial_softmax(x_img_aug)
             x_img_aug = self.ee_ln(x_img_aug)
             x_img_aug = x_img_aug.view(b * seq, -1).contiguous()
 
-        x_img_goal = x_img_goal.view(b * seq, 3, self.img_size, self.img_size)
         if self.crop_size < self.img_size:
             x_img_goal_grid_shifted = self.random_crop_grid(x_img_goal, self.grid_source)
             x_img_goal = F.grid_sample(x_img_goal, x_img_goal_grid_shifted, align_corners=True)
         if self.use_tcl_loss:
             x_img_goal_aug = x['robot0_eye_in_hand_image_light_goal'].to(self.device)
-            x_img_goal_aug = x_img_goal_aug.view(b * seq, 3, self.img_size, self.img_size)
             if self.crop_size < self.img_size:
                 x_img_goal_aug_grid_shifted = self.random_crop_grid(x_img_goal_aug, self.grid_source)
                 x_img_goal_aug = F.grid_sample(x_img_goal_aug, x_img_goal_aug_grid_shifted, align_corners=True)
@@ -644,8 +671,7 @@ class Transformer(NetworkBase):
             x_img_goal = x_img_goal.view(b * seq, -1).contiguous()
             if self.use_tcl_loss:
                 x_img_goal_aug = self.img_enc_goal(x_img_goal_aug)
-                if self.use_tcl_loss:
-                    x_img_goal_aug_feat = x_img_goal_aug.clone()
+                x_img_goal_aug_feat = x_img_goal_aug.clone()
                 x_img_goal_aug = self.spatial_softmax_goal(x_img_goal_aug)
                 x_img_goal_aug = self.ee_ln_goal(x_img_goal_aug)
                 x_img_goal_aug = x_img_goal_aug.view(b * seq, -1).contiguous()
@@ -658,8 +684,7 @@ class Transformer(NetworkBase):
             x_img_goal = x_img_goal.view(b * seq, -1).contiguous()
             if self.use_tcl_loss:
                 x_img_goal_aug = self.img_enc(x_img_goal_aug)
-                if self.use_tcl_loss:
-                    x_img_goal_aug_feat = x_img_goal_aug.clone()
+                x_img_goal_aug_feat = x_img_goal_aug.clone()
                 x_img_goal_aug = self.spatial_softmax(x_img_goal_aug)
                 x_img_goal_aug = self.ee_ln(x_img_goal_aug)
                 x_img_goal_aug = x_img_goal_aug.view(b * seq, -1).contiguous()

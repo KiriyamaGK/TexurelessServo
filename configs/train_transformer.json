@@ -24,6 +24,7 @@
           "name": "ResNet18",
           "data_augmentation": true,
           "task_consistency_loss": false,
+          "mixed_light_dataset":false,
           "pretrained_path": "ultralytics/runs/pose/train/weights/best.pt",
           "freeze":false,
           "siamese": false,
