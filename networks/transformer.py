@@ -596,6 +596,7 @@ class Transformer(NetworkBase):
                     if random.randint(0, 1) > 0:
                         x["robot0_eye_in_hand_image_goal"][idx] = x["robot0_eye_in_hand_image_light_goal"][idx].clone()
                 del x["robot0_eye_in_hand_image_light"]
+                del x["robot0_eye_in_hand_image_light_goal"]
 
         if self.use_tcl_loss and 'robot0_eye_in_hand_image_light' not in x.keys(): #tcl_raw
             warnings.warn("robot0_eye_in_hand_image_light not in dataset, adding...", UserWarning)
