@@ -83,10 +83,10 @@ if __name__ == '__main__':
     robot_ins = env.robot_ins
 
     desire_pt = robot_ins.get_gripper_TCP_pose()
+    if not current_pt_desire:
+        desire_pt=[-608.7213745117188, 27.79848289489746, 112.65238952636719, 179.99996948242188, 0.0002154672984033823, 159.90806579589844]
     desire_pt[3] = -180
     desire_pt[4] = 0
-    if not current_pt_desire:
-        desire_pt=[-663.347412109375, -49.298927307128906, 114.417236328125, -180,0, -153.80250549316406]
 
     fps = 30
     vis_h, vis_w = 480, 1280
@@ -106,7 +106,6 @@ if __name__ == '__main__':
 
     eval_epoch_num = config['eval_epoch_num']
 
-    npy_size=config['npy_img_size']
     cv2_visualize=config['cv2_visualize']
 
     stop_policy = config['stop_policy']
@@ -118,6 +117,7 @@ if __name__ == '__main__':
 
     obj_id=config['obj_id']
 
+    motion_scalar=config['motion_scalar']
 
     rgb_key = [n for n in model_config["dataset"]['specific_obs_keys'] if ('image' in n or "img" in n)]
     low_dim_key = [n for n in model_config["dataset"]['specific_obs_keys'] if n not in rgb_key]
@@ -167,24 +167,17 @@ if __name__ == '__main__':
             if cv2_visualize:
                 img_goal_vis = cv2.cvtColor(img_goal.copy(), cv2.COLOR_BGR2RGB)
             if cut_to_square:
-                img_goal = clip_image(img_goal, npy_size)
+                img_goal = clip_image(img_goal, hdf5_img_size)
             else:
-                img_goal = cv2.resize(img_goal, (npy_size, npy_size))
-            if 'hdf5_img_size' in model_config["dataset"]:
-                if npy_size != hdf5_img_size:
-                    img_goal = cv2.resize(img_goal, (hdf5_img_size, hdf5_img_size))
-                if hdf5_img_size != img_w or hdf5_img_size != img_h:
-                    img_goal = cv2.resize(img_goal, (img_w, img_h))
-            else:
-                if npy_size != img_w or npy_size != img_h:
-                    img_goal = cv2.resize(img_goal, (img_w, img_h))
-
-            # env.act_with_abs_dict(init_transform_dict)
-            theta, alpha, start_pt = env.generate_motion_paras(desire_pt)
-            robot_ins.move_cart(start_pt, tool=1, user=0, vel=40)
+                img_goal = cv2.resize(img_goal, (hdf5_img_size, hdf5_img_size))
+            assert 'hdf5_img_size' in model_config["dataset"]
+            if hdf5_img_size != img_w or hdf5_img_size != img_h:
+                img_goal = cv2.resize(img_goal, (img_w, img_h))
 
             print("==============================")
             print("[INFO] start rollout_{}...".format(idx))
+            theta, alpha, start_pt = env.generate_motion_paras(desire_pt)
+            robot_ins.move_cart(start_pt, tool=1, user=0, vel=40)
 
             obj_pth=os.path.join(save_base_pth, str(obj_id))
             os.makedirs(obj_pth, exist_ok=True)
@@ -209,18 +202,15 @@ if __name__ == '__main__':
                     if cv2.waitKey(1) & 0xFF == ord('q'):     #1ms
                         env.init()
                         break
+
                 if cut_to_square:
-                    img=clip_image(img,npy_size)
+                    img=clip_image(img,hdf5_img_size)
                 else:
-                    img=cv2.resize(img, (npy_size, npy_size))
-                if 'hdf5_img_size' in model_config["dataset"]:
-                    if npy_size != hdf5_img_size:
-                        img = cv2.resize(img, (hdf5_img_size, hdf5_img_size))
-                    if hdf5_img_size != img_w or hdf5_img_size != img_h:
-                        img = cv2.resize(img, (img_w, img_h))
-                else:
-                    if npy_size != img_w or npy_size != img_h:
-                        img = cv2.resize(img, (img_w, img_h))
+                    img=cv2.resize(img, (hdf5_img_size, hdf5_img_size))
+                assert 'hdf5_img_size' in model_config["dataset"]
+                if hdf5_img_size != img_w or hdf5_img_size != img_h:
+                    img = cv2.resize(img, (img_w, img_h))
+
                 obs_dict={
                     "robot0_eye_in_hand_image": img,
                     "robot0_eye_in_hand_image_goal": img_goal,
@@ -246,7 +236,7 @@ if __name__ == '__main__':
                 vel_rot=predictions[-1]
 
                 env.determine_vel_in_threshold(vel_tr=np.linalg.norm(vel_tr), vel_rot=abs(vel_rot))
-                robot_ins.servo_cart(desc_pos=[vel_tr[0],vel_tr[1],0,0,0,vel_rot], mode=1, vel=10.0)
+                robot_ins.servo_cart(desc_pos=[vel_tr[0]*motion_scalar,vel_tr[1]*motion_scalar,0,0,0,vel_rot*motion_scalar], mode=1, vel=10.0)
                 # time.sleep(0.1)
                 rtn_dict=env.reinit_eval()
                 trans_error=rtn_dict['dist']

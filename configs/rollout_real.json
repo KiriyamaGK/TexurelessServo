@@ -18,21 +18,21 @@
         "rot_thres":30 ,
         "down_dis":45
     },
-    "obj_id": 1,
     "cut_to_square": true,
     "logs_dir": "trained_models/trial/2025-03-16_01-41-23/config.json",
-    "ckpts_dir": [162,170,201,207,245,263,283,327,351,381,411,438],
+    "ckpts_dir": [201],
     "eval_epoch_num": 20,
     "bgr2rgb": false,
     "cv2_visualize": true,
-    "npy_img_size": 220,
     "record_video": true,
+    "motion_scalar": 1,
+    "obj_id": 2,
     "eval_metrics": {
         "utilized": true,
         "success_rate": {
             "utilized": true,
-            "trans_threshold": 3,
-            "rot_threshold": 2
+            "trans_threshold": 5,
+            "rot_threshold": 3
         },
         "error_curve": {
             "utilized": true
