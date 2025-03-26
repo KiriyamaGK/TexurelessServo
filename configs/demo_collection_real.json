@@ -39,6 +39,5 @@
                 "trans_dis_thres":0.5,
                 "rot_dis_thres":0.3
           }
-      },
-      "dataset_type": "hdf5"
+      }
 }

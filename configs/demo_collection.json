@@ -4,21 +4,36 @@
         "height": 480,
         "build_with_K": "True",
         "K": [
-            606.502 ,      0.0, 320.373 ,
-                 0.0, 606.239, 253.444,
-                 0.0,      0.0,      1.0
+            606.502,
+            0.0,
+            320.373,
+            0.0,
+            606.239,
+            253.444,
+            0.0,
+            0.0,
+            1.0
         ],
         "near": 0.02,
         "far": 1,
         "fov": 60
     },
-    "objs_descriptor": 14,
-    "demo_total_num": 1000,
-    "trans_vel": 0.001,
-    "rot_vel": 0.5,
-    "trans_and_rot_type": "trans_first",
-    "use_max_rot": true,
-    "project_obj_kps": false,
-    "random_light_dir": true,
-    "use_random_light_img_key": true
+    "overall_setting": {
+        "file_name": "25.03.111",
+        "demo_total_num": 10,
+        "objs_descriptor": 14,
+        "replace_existed_hdf5": true
+    },
+    "demo_collection": {
+        "dof": 6,
+        "init_horizon_trans": 0.02,
+        "init_vertical_trans": 0.02,
+        "init_rot": [10,10,60],
+        "use_max_rot": true,
+        "trans_vel": 0.001,
+        "rot_vel": 0.5,
+        "trans_and_rot_type": "simultaneously",
+        "random_light_dir": true,
+        "use_random_light_img_key": true
+    }
 }

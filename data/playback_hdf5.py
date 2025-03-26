@@ -5,8 +5,8 @@ import os
 from utils.paths import return_disc_route
 
 if __name__ == '__main__':
-    hdf_pth=return_disc_route('One Touch/AlignAnything_real/25.03.11/hdf5/mimic.hdf5')
-
+    # hdf_pth=return_disc_route('One Touch/AlignAnything_real/25.03.11/hdf5/mimic.hdf5')
+    hdf_pth = return_disc_route('One Touch/AlignAnything/25.03.111/hdf5/mimic.hdf5')
     # temp_dir='/media/kiriyamagk/One Touch/AlignAnything/25.01.17/hdf5/temp'
     hdf_base=os.path.dirname(hdf_pth)
     fps=30
@@ -15,8 +15,8 @@ if __name__ == '__main__':
     color_channel_inverse = False
 
     img_wrist_vis=False
-    img_wrist_light_vis=False
-    goal_image=True
+    img_wrist_light_vis=True
+    goal_image=False
 
     hdf = h5py.File(hdf_pth, 'r')
     mp4=cv2.VideoWriter_fourcc(*'mp4v')

@@ -57,5 +57,6 @@ class FR_Robot:
             raise RuntimeError('point cannot arrive finally when rotating')
 if __name__ == '__main__':
     fr_robot = FR_Robot()
+    fr_robot.move_cart([-580.7462158203125, -91.12007141113281, 106.64298248291016, 179.99981689453125, -0.00024279687204398215, 171.9166717529297],tool=1,user=0,vel=40)
     pos=fr_robot.get_gripper_TCP_pose()
     print(pos)

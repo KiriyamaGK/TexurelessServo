@@ -223,8 +223,8 @@ if __name__ == "__main__":
     robot_address="192.168.58.2"
     trans_coeff=2
     rot_coeff=1
-    use_rxry=False
-    stay_vertical=True
+    use_rxry=True
+    stay_vertical=False
     use_z=True
     use_camera=True
 

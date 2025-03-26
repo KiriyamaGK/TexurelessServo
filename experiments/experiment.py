@@ -110,18 +110,6 @@ class BehaviorCloningExperiment():
         Set up the dataset.
         """
         print("start preparing dataset...")
-        # self._dataset = HDF5Dataset(
-        #     self._config["dataset"]["hdf5_path"],
-        #     seq_length=self._config["dataset"]["seq_length"],
-        #     specific_obs_keys=self._config["dataset"]["specific_obs_keys"],
-        #     bgr2rgb=self._config["dataset"]["bgr2rgb"],
-        #     num_demos=self._config["dataset"]["num_demos"]
-        # )
-        # training, evaluation = self._dataset.get_splits(self._config["dataset"]["split_ratio"])
-        # print("dataset successfully prepared")
-        #
-        # self._train_loader = DataLoader(training, batch_size=self._config["training"]["batch_size"], shuffle=True)
-        # self._eval_loader = DataLoader(evaluation, batch_size=self._config["training"]["batch_size"], shuffle=True)
         train_set  = dataset_factory(self._config["dataset"],  img_size=self._config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"],filter_by_attribute='train') # TODO: remember to convert
         valid_set  = dataset_factory(self._config["dataset"],  img_size=self._config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"],filter_by_attribute='valid')
 
@@ -212,6 +200,7 @@ class BehaviorCloningExperiment():
 
 
 if __name__ == "__main__":
-    exp = BehaviorCloningExperiment(config_path="train_mlp.json")
+    # exp = BehaviorCloningExperiment(config_path="train_mlp.json")
+    exp = BehaviorCloningExperiment(config_path="train_transformer.json")
     # exp = BehaviorCloningExperiment(config_path="train_transformer_single.json")
     exp.run()

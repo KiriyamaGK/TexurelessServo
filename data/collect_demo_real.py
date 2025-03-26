@@ -97,23 +97,20 @@ if __name__=='__main__':
     replace_existed_hdf5=config["overall_setting"]["replace_existed_hdf5"]
     delete_last_demo=config["overall_setting"]["delete_last_demo"]
 
-    dataset_type=config["dataset_type"]
-    assert dataset_type in ["hdf5","npy"]
-    assert dataset_type =="hdf5"          #TODO:记得修改
-
     base_dir = return_disc_route("One Touch")
-    if dataset_type=="hdf5":
-        database_dir = os.path.join(base_dir, 'AlignAnything_real', file_name, 'hdf5')
-        ensure_dir(database_dir)
-        dataset_dir=os.path.join(database_dir, 'mimic.hdf5')
 
-        if replace_existed_hdf5:
-            new_f_out = h5py.File(dataset_dir, "w")
+    database_dir = os.path.join(base_dir, 'AlignAnything_real', file_name, 'hdf5')
+    ensure_dir(database_dir)
+    dataset_dir=os.path.join(database_dir, 'mimic.hdf5')
+
+    if replace_existed_hdf5:
+        new_f_out = h5py.File(dataset_dir, "w")
+    else:
+        if os.path.exists(dataset_dir):
+            new_f_out = h5py.File(dataset_dir, "r+")
         else:
-            if os.path.exists(dataset_dir):
-                new_f_out = h5py.File(dataset_dir, "r+")
-            else:
-                new_f_out = h5py.File(dataset_dir, "w")
+            new_f_out = h5py.File(dataset_dir, "w")
+
     existed_demo_num=0
     for uu in range(cir_num):
         print("=====================collecting demo_{}=====================".format(uu))

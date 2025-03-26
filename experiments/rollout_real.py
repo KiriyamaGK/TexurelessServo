@@ -84,7 +84,8 @@ if __name__ == '__main__':
 
     desire_pt = robot_ins.get_gripper_TCP_pose()
     if not current_pt_desire:
-        desire_pt=[-608.7213745117188, 27.79848289489746, 112.65238952636719, 179.99996948242188, 0.0002154672984033823, 159.90806579589844]
+        desire_pt=[-580.7462158203125, -91.12007141113281, 106.64298248291016, 179.99981689453125, -0.00024279687204398215, 171.9166717529297]
+
     desire_pt[3] = -180
     desire_pt[4] = 0
 
@@ -121,8 +122,8 @@ if __name__ == '__main__':
 
     rgb_key = [n for n in model_config["dataset"]['specific_obs_keys'] if ('image' in n or "img" in n)]
     low_dim_key = [n for n in model_config["dataset"]['specific_obs_keys'] if n not in rgb_key]
-    if 'hdf5_img_size' in model_config["dataset"]:
-        hdf5_img_size = model_config["dataset"]["hdf5_img_size"]
+    assert 'hdf5_img_size' in model_config["dataset"]
+    hdf5_img_size = model_config["dataset"]["hdf5_img_size"]
 
     assert low_dim_key == ['abs_rot']
     # assert rgb_key == ["robot0_eye_in_hand_image", "robot0_eye_in_hand_image_goal"]
@@ -170,7 +171,6 @@ if __name__ == '__main__':
                 img_goal = clip_image(img_goal, hdf5_img_size)
             else:
                 img_goal = cv2.resize(img_goal, (hdf5_img_size, hdf5_img_size))
-            assert 'hdf5_img_size' in model_config["dataset"]
             if hdf5_img_size != img_w or hdf5_img_size != img_h:
                 img_goal = cv2.resize(img_goal, (img_w, img_h))
 
@@ -199,15 +199,12 @@ if __name__ == '__main__':
                     cv2.imshow('Images', combined_img)
                     if record_video and video_flag:
                         out.write(combined_img)
-                    if cv2.waitKey(1) & 0xFF == ord('q'):     #1ms
-                        env.init()
-                        break
+                    key=cv2.waitKey(1)
 
                 if cut_to_square:
                     img=clip_image(img,hdf5_img_size)
                 else:
                     img=cv2.resize(img, (hdf5_img_size, hdf5_img_size))
-                assert 'hdf5_img_size' in model_config["dataset"]
                 if hdf5_img_size != img_w or hdf5_img_size != img_h:
                     img = cv2.resize(img, (img_w, img_h))
 
@@ -246,7 +243,7 @@ if __name__ == '__main__':
                 vel_tr_lst.append(np.linalg.norm(vel_tr))   #mm
                 vel_rot_lst.append(abs(vel_rot))
 
-                if rtn_dict["need_reinit"]:
+                if rtn_dict["need_reinit"] or key & 0xFF == ord('q'):
                     use_time=time.time()-t_0
                     if eval_metrics["error_curve"]["utilized"] and use_eval_metrics:
                         error_pth = os.path.join(obj_pth, "error_curve")
@@ -270,6 +267,8 @@ if __name__ == '__main__':
                     if video_flag:
                         out.release()
                     cv2.imwrite(os.path.join(obj_pth, "goal_img.png"),img_goal_vis)
+                    if key & 0xFF == ord('q') and not rtn_dict["need_reinit"]:
+                        env.init()
                     break
 
         if ckpts_idx<len(ckpts_dirs)-1:

@@ -20,10 +20,15 @@
     "bgr2rgb": false,
     "time_threshold": 30,
     "cv2_visualize": true,
-    "npy_img_size": 220,
     "expert_motion_type": "trans_first",
     "record_video": true,
     "random_light": false,
+
+    "init_horizon_trans": 0.05,
+    "init_vertical_trans": 0.05,
+    "init_rot": 60,
+    "use_max_rot": true,
+
     "eval_metrics": {
         "utilized": true,
         "success_rate": {

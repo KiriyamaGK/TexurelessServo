@@ -16,20 +16,47 @@ class Environment(object):
         self,
         camera_config: Optional[Union[str, CameraIntrinsic]],
         objs_descriptor=20,
-        use_max_rot=False
+        init_horizon_trans=0.05,
+        init_vertical_trans=0.05,
+        init_rot=60,
+        use_max_rot=False,
+        dof=3
     ):
-        cwT = np.array([[-1, 0, 0, 0],  # 外参，左上角c右下角w，前三列是c系在w系中的表示,按列排列，最后一列是从c的原点指向w的原点并在c系中表示
-                        [0, 1, 0, -0.02],
+        #cam1
+        cwT = np.array([[-1, 0, 0, 0],  # 左上角c右下角w，前三列是c系在w系中的表示,按列排列，最后一列是从c的原点指向w的原点并在c系中表示
+                        [0, 1, 0, -0.09],
                         [0, 0, -1, 2.1],
                         [0, 0, 0, 1]])
         wcT = np.linalg.inv(cwT)
         dTx = np.eye(4)
-        dTx[0:3, 0:3] = R.from_rotvec(np.array([1, 0, 0]) * 4 / 180 * np.pi).as_matrix()
+        dTx[0:3, 0:3] = R.from_rotvec(np.array([1, 0, 0]) * 30 / 180 * np.pi).as_matrix()
+
+        #cam2
+        c2wT = np.array([[1, 0, 0, 0],  # 左上角c右下角w，前三列是c系在w系中的表示,按列排列，最后一列是从c的原点指向w的原点并在c系中表示
+                        [0, -1, 0, -0.08],
+                        [0, 0, -1, 2.1],
+                        [0, 0, 0, 1]])
+        wc2T = np.linalg.inv(c2wT)
+        dT2x = np.eye(4)
+        dT2x[0:3, 0:3] = R.from_rotvec(np.array([1, 0, 0]) * 30 / 180 * np.pi).as_matrix()
+
+        self.dof = dof
+        assert self.dof in [3,6] #TODO:converted
 
         self.angle_eps = 0.4  # degree
         self.dist_eps = 0.0007  # m
-        self.init_trans=0.05    # m
-        self.init_rot=60       # degree
+
+        self.init_horizon_trans = init_horizon_trans # m
+        self.init_vertical_trans=init_vertical_trans if self.dof==6 else 0   # m
+
+        if self.dof == 3:
+            assert isinstance(init_rot,(int, float))
+            self.init_rot = np.array([0,0,init_rot]) # degree
+        else:
+            assert isinstance(init_rot, list) and len(init_rot) == 3
+            self.init_rot = np.array(init_rot)  # degree
+
+
         self.use_max_rot=use_max_rot
 
         self.obj_idx = 0
@@ -40,23 +67,28 @@ class Environment(object):
         self.table_scale_factor = 3
         self.objStartPos = [0, 0, 1.88]
         self.objStartOrientation = p.getQuaternionFromEuler([0, 0, 0])
-        self.world_ori_axis=np.array([0, 0.2, 1.9])
+        self.world_ori_axis=np.array([0, 0.2, 1.9]) #世界坐标系设置在原点，但显示的时候按照[0, 0.2, 1.9]平移
 
         self.gripStartPos = [0, 0, 2.25]
         self.gripStartOrientation = p.getQuaternionFromEuler([np.pi, 0, 0])
 
-        self.wcT_tar=wcT @ dTx
-        self.cwT_tar=np.linalg.inv(self.wcT_tar)
         self.gwT_tar=np.eye(4)
         self.gwT_tar[0:3,0:3]=R.from_rotvec(np.array([np.pi, 0, 0])).as_matrix()
         self.gwT_tar[0:3,3]=np.array(self.gripStartPos)#绕世界系先旋转再平移的结果
+
+        self.wcT_tar = wcT @ dTx
+        self.cwT_tar = np.linalg.inv(self.wcT_tar)
         self.cgT=self.cwT_tar @ np.linalg.inv(self.gwT_tar)
         self.wgT_tar = self.wcT_tar @ self.cgT
-        self.init_flag=False
 
+        if self.dof == 6:   #TODO:converted
+            self.wc2T_tar = wc2T @ dT2x
+            self.c2wT_tar = np.linalg.inv(self.wc2T_tar)
+            self.c2gT = self.c2wT_tar @ np.linalg.inv(self.gwT_tar)
+
+        self.init_flag=False
         self.close_enough_flag=False
         self.vel_in_threshold_flag=False
-
 
         if isinstance(camera_config, str):
             with open(camera_config, "r") as j:
@@ -74,6 +106,8 @@ class Environment(object):
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
 
         self.axes_cam = DebugAxesCam(self.client)
+        if self.dof==6:      #TODO:converted
+            self.axes_cam2 = DebugAxesCam2(self.client)
         self.axes_gripper = DebugAxesGripper(self.client)
 
         self.determine_obj_idxes()
@@ -117,6 +151,8 @@ class Environment(object):
 
         self.axes_gripper.update(self.wgT)
         self.axes_cam.update(self.wcT)
+        if self.dof==6:
+            self.axes_cam2.update(self.wc2T)
 
         p.setGravity(0, 0, -10, physicsClientId=self.client)
         for _ in range(50):
@@ -124,25 +160,32 @@ class Environment(object):
 
     def sample_init_pos(self):
         if not self.use_max_rot:
-            ang = random.uniform(0, self.init_rot) * (random.randint(0, 1) - 0.5) * 2
+            ang = np.array([random.uniform(0, self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
         else:
-            ang=self.init_rot*(random.randint(0, 1) - 0.5) * 2
+            ang =np.array([self.init_rot[i]* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
         ori = random.uniform(0, np.pi*2)
 
         dT=np.eye(4)
-        dT[0:3,0:3]=R.from_rotvec(np.array([0, 0, ang * np.pi / 180])).as_matrix()
-        dT[0:2,3]=np.array([cos(ori)*self.init_trans, sin(ori)*self.init_trans])  #绕世界系先旋转再平移的结果
-        # dT[0:2, 3] = np.array([0,0])  # 绕世界系先旋转再平移的结果
-        self.wgT=dT@self.wgT_tar
+        dT[0:3,0:3]=R.from_rotvec(ang * np.pi / 180).as_matrix()
+        dT[0:3,3]=np.array([cos(ori)*self.init_horizon_trans, sin(ori)*self.init_horizon_trans,self.init_vertical_trans])
+
+        self.wgT=self.wgT_tar@dT #绕夹爪系
         self.gwT=np.linalg.inv(self.wgT)
         self.cwT=self.cgT@self.gwT
-        self.wcT=dT@self.wcT_tar
+        self.wcT=np.linalg.inv(self.cwT)
+        if self.dof==6:
+            self.c2wT = self.c2gT @ self.gwT
+            self.wc2T = dT @ self.wc2T_tar
+
 
     def init(self):
         if self.obj_idx_pointer>=len(self.obj_idxs):
             self.obj_idx_pointer=0
         self.obj_idx=self.obj_idxs[self.obj_idx_pointer]
         self.sample_init_pos()
+        # print("init_wgT_tar:", self.wgT_tar)
+        # print("init_wgT:", self.wgT)
+        # print("init_error(mm):", np.linalg.norm(self.wgT_tar[0:3, 3] - self.wgT[0:3, 3]) * 1000)
         self.gen_scene()
         self.init_flag = True
         self.obj_idx_pointer+=1
@@ -161,7 +204,13 @@ class Environment(object):
             p.configureDebugVisualizer(lightPosition=[0,0,1])
         frame = self.camera.render(self.cwT, self.client)
         rgb = frame.color_image()
-        return rgb
+
+        if self.dof==6:
+            frame2 = self.camera.render(self.c2wT, self.client)
+            rgb2 = frame2.color_image()
+            return {"img_1":rgb, "img_2":rgb2}
+        else:
+            return {"img_1":rgb}     #TODO:converted,rollout结构需要大改
 
     def act_to_goal(self):
         self.wgT = self.wgT_tar
@@ -172,6 +221,11 @@ class Environment(object):
         p.resetBasePositionAndOrientation(self.gripId[0], self.wgT_tar[0:3, 3], rmat2quat(self.gwT_tar[0:3, 0:3]))
         self.axes_gripper.update(self.wgT_tar)
         self.axes_cam.update(self.wcT_tar)
+
+        if self.dof==6:
+            self.c2wT = self.c2wT_tar
+            self.wc2T = self.wc2T_tar
+            self.axes_cam2.update(self.wc2T_tar)
 
     def act_with_abs_dict(self,pos:dict):
         # 更新矩阵,dT是对于世界坐标系下的变化量
@@ -185,20 +239,33 @@ class Environment(object):
         self.axes_gripper.update(self.wgT)
         # 更新相机坐标轴
         self.axes_cam.update(self.wcT)
+        if self.dof==6:
+            self.c2wT = pos["c2wT"]
+            self.wc2T = pos["wc2T"]
+            self.axes_cam2.update(self.wc2T)
 
     def action(self, dT):
-        #更新矩阵,dT是对于世界坐标系下的变化量
-        self.wgT = dT @ self.wgT
+        if self.dof==3:
+            self.wgT = dT @ self.wgT
+        else:
+            self.wgT =  self.wgT @ dT
+
         self.gwT = np.linalg.inv(self.wgT)
+
         self.cwT = self.cgT @ self.gwT
-        self.wcT = dT @ self.wcT
+        self.wcT = np.linalg.inv(self.cwT)
+
+        # 更新夹爪坐标轴
+        self.axes_gripper.update(self.wgT)
+        # 更新相机坐标轴
+        self.axes_cam.update(self.wcT)
+        if self.dof == 6:
+            self.c2wT = self.c2gT @ self.gwT
+            self.wc2T = np.linalg.inv(self.c2wT)
+            self.axes_cam2.update(self.wc2T)
 
         #更新夹爪位置
-        p.resetBasePositionAndOrientation(self.gripId[0], self.wgT[0:3,3], rmat2quat(self.gwT[0:3,0:3]))
-        #更新夹爪坐标轴
-        self.axes_gripper.update(self.wgT)
-        #更新相机坐标轴
-        self.axes_cam.update(self.wcT)
+        p.resetBasePositionAndOrientation(self.gripId[0], self.wgT[0:3,3], rmat2quat(self.gwT[0:3,0:3].T))
 
     def reinit(self):
         if  self.need_reinit():
@@ -218,6 +285,8 @@ class Environment(object):
 
     def clear_axes(self):
         self.axes_cam.clear()
+        if self.dof==6:
+            self.axes_cam2.clear()
         self.axes_gripper.clear()
 
     def need_reinit(self):
@@ -275,25 +344,60 @@ class Environment(object):
         self.in_threshold_range_time = metrics["in_threshold_range_time"] #maximum time stay in error threshold before entering the next rollout
 
     def return_cur_pos_info(self):
-        return {
-        'wgT':self.wgT,
-        'gwT':self.gwT,
-        'wcT':self.wcT,
-        'cwT':self.cwT,
-        }
+        rtn_dict={
+            'wgT':self.wgT,
+            'gwT':self.gwT,
+            'wcT':self.wcT,
+            'cwT':self.cwT,
+            }
+        if self.dof==6:
+            rtn_dict['c2wT']=self.c2wT
+            rtn_dict['wc2T'] = self.wc2T
+        return rtn_dict
+
     def return_hand_eye_info(self):
-        return {
-        'cgT':self.cgT,
-        }
+        rtn_dict={'cgT':self.cgT}
+        if self.dof==6:
+            rtn_dict['c2gT']=self.c2gT
+        return rtn_dict
+
     def return_tar_pos_info(self):
-        return {
+        rtn_dict ={
         'wgT_tar':self.wgT_tar,
         'gwT_tar':self.gwT_tar,
         'wcT_tar':self.wcT_tar,
         'cwT_tar':self.cwT_tar,
         }
+        if self.dof==6:
+            rtn_dict['c2wT_tar']=self.c2wT_tar
+            rtn_dict['wc2T_tar'] = self.wc2T_tar
+        return rtn_dict
 
 class DebugAxesCam(object):
+    """Visualize axes, red for x axis, green for y axis, blue for z axis"""
+
+    def __init__(self, client=0):
+        self.uids = [-1, -1, -1]
+        self.client = client
+
+    def update(self, pose):  # 根据位姿显示相机坐标轴
+        pos = pose[:3, 3]
+        rot3x3 = pose[:3, :3]
+        axis_x, axis_y, axis_z = rot3x3.T
+        self.uids[0] = p.addUserDebugLine(pos, pos + axis_x * 0.05, [1, 0, 0],  # p.addUserDebugLine:添加调试线
+                                          replaceItemUniqueId=self.uids[0], physicsClientId=self.client)
+        self.uids[1] = p.addUserDebugLine(pos, pos + axis_y * 0.05, [0, 1, 0],
+                                          replaceItemUniqueId=self.uids[1], physicsClientId=self.client)
+        self.uids[2] = p.addUserDebugLine(pos, pos + axis_z * 0.05, [0, 0, 1],
+                                          replaceItemUniqueId=self.uids[2], physicsClientId=self.client)
+
+    def clear(self):
+        p.removeUserDebugItem(self.uids[0], physicsClientId=self.client)
+        p.removeUserDebugItem(self.uids[1], physicsClientId=self.client)
+        p.removeUserDebugItem(self.uids[2], physicsClientId=self.client)
+        self.uids = [-1, -1, -1]
+
+class DebugAxesCam2(object):
     """Visualize axes, red for x axis, green for y axis, blue for z axis"""
 
     def __init__(self, client=0):

@@ -1,4 +1,6 @@
 import os
+from utils.hdf5 import add_useless_things, split_train_val_from_hdf5, add_env_meta, compute_num_samples, add_config
+import h5py
 import numpy as np
 import json
 from sim.environment import Environment
@@ -27,97 +29,153 @@ def pixel_cord_from_frame1_to_frame3(h,w,h_hat,u1,v1):
 if __name__ == '__main__':
     img_w=220
     img_h=220
-    gau_h=64
-    cut_to_square=True
+
     config_dir= "../configs/demo_collection.json"
-    current_date = "25.01.24"
 
     with open(config_dir, "r") as j:
         config = json.load(j)
-    objs_descriptor=config['objs_descriptor']
-    motion_type=config['trans_and_rot_type']
-    demo_total_num=config['demo_total_num']
-    trans_vel_norm=config['trans_vel'] #m
-    rot_vel_norm=config['rot_vel']    #deg
-    use_max_rot=config['use_max_rot']
-    random_light_dir = config['random_light_dir']
-    use_light_key=["use_random_light_img_key"]
 
-    # a=p.connect(p.GUI)
-    # print(a)
-    if not random_light_dir:
-        use_light_key=False
+    #overall setting
+    objs_descriptor=config['overall_setting']['objs_descriptor']
+    current_date=config['overall_setting']['file_name']
+    demo_total_num = config['overall_setting']['demo_total_num']
+    replace_existed_hdf5=config["overall_setting"]["replace_existed_hdf5"] #TODO:remember to use
+
+    #demo_collection
+    dof = config["demo_collection"]["dof"]
+    motion_type=config["demo_collection"]['trans_and_rot_type']
+    trans_vel_norm=config["demo_collection"]['trans_vel'] #m
+    rot_vel_norm=config["demo_collection"]['rot_vel']    #deg
+    init_horizon_trans=config["demo_collection"]['init_horizon_trans']
+    init_vertical_trans = config["demo_collection"]['init_vertical_trans']
+    init_rot=config["demo_collection"]['init_rot']
+    use_max_rot=config["demo_collection"]['use_max_rot']
+    random_light_dir = config["demo_collection"]['random_light_dir']
+    use_light_key=config["demo_collection"]["use_random_light_img_key"] if random_light_dir else False
+
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env=Environment(camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot)
+    env=Environment(camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,init_rot=init_rot,dof=dof)
     env.init()
+
+    # wgT_tar = env.wgT_tar
+    # wgT = env.wgT
+    # print("init_wgT_tar:", wgT_tar)
+    # print("init_wgT:", wgT)
+    # print("init_error(mm):", np.linalg.norm(wgT_tar[0:3, 3] - wgT[0:3, 3]) * 1000)
+
     base_dir = return_disc_route("One Touch")
+
+    database_dir = os.path.join(base_dir, 'AlignAnything', current_date, 'hdf5')
+    ensure_dir(database_dir)
+    dataset_dir = os.path.join(database_dir, 'mimic.hdf5')
+
+    if replace_existed_hdf5:
+        new_f_out = h5py.File(dataset_dir, "w")
+    else:
+        if os.path.exists(dataset_dir):
+            new_f_out = h5py.File(dataset_dir, "r+")
+        else:
+            new_f_out = h5py.File(dataset_dir, "w")
+
+    existed_demo_num = 0
     for idx in range(demo_total_num):
         print("[INFO] start collecting demo_{} ...".format(idx))
-        npy_dir = os.path.join(base_dir, 'AlignAnything', current_date, f'npys/{int(time.time())}')
-        ensure_dir(npy_dir)
-        # image_rgb3_path = os.path.join(base_dir, 'AlignAnything', current_date, f'image/wrist/{int(time.time())}')
-        # ensure_dir(image_rgb3_path)
+
+        if idx==0:
+            if 'data' in new_f_out and not replace_existed_hdf5:
+                existed_demo_num=len(new_f_out["data"])
+
+        if existed_demo_num>=1:#根据existed_demo_num的数量整体偏移
+            obs_path = 'data/demo_{}/obs'.format(idx+existed_demo_num)
+            action_path = 'data/demo_{}/actions'.format(idx+existed_demo_num)
+        else:
+            obs_path = 'data/demo_{}/obs'.format(idx)
+            action_path = 'data/demo_{}/actions'.format(idx)
+
         action_list=[]
         img_lst=[]
         img_light_list=[]
+        img2_lst = []
+        img2_light_list = []
         rz_list=[]
         gaussian_img_ct_lst=[]
         gaussian_img_kpt_lst = []
         while True:
             if not use_light_key:
-                img=env.observation(random_light_dir=random_light_dir,use_prob=True)
+                rtn_dict=env.observation(random_light_dir=random_light_dir,use_prob=True)
+
+                img=rtn_dict['img_1']
+                img2=rtn_dict['img_2'] if 'img_2' in rtn_dict else None
+                img_light = None
+                img2_light = None
             else:
-                img=env.observation(random_light_dir=False)
-                img_light=env.observation(random_light_dir=True,use_prob=False)
+                rtn_dict=env.observation(random_light_dir=False)
+                rtn_light_dict=env.observation(random_light_dir=True,use_prob=False)
+
+                img = rtn_dict['img_1']
+                img2 = rtn_dict['img_2'] if 'img_2' in rtn_dict else None
+                img_light = rtn_light_dict['img_1']
+                img2_light = rtn_light_dict['img_2'] if 'img_2' in rtn_light_dict else None
 
             wgT_tar=env.wgT_tar
             wgT=env.wgT
-            rz=rmat2euler_rz_degree(wgT)
-            act_dict=get_expert_policy(wgT_tar=wgT_tar,wgT=wgT,trans_vel_norm=trans_vel_norm,rot_vel_norm=rot_vel_norm,dist_eps=env.dist_eps,angle_eps=env.angle_eps,motion_type=motion_type)
+            act_dict=get_expert_policy(wgT_tar=wgT_tar,wgT=wgT,trans_vel_norm=trans_vel_norm,rot_vel_norm=rot_vel_norm,dist_eps=env.dist_eps,angle_eps=env.angle_eps,motion_type=motion_type,dof=dof)
+
             vel_tr=act_dict['vel_tr']
-            vel_rot=act_dict['vel_rot']
+            vel_rot=act_dict['vel_rot'] #3dof:绕世界系 6dof:绕夹爪系
             dT=act_dict["dT"]
-            action_list.append(np.concatenate((vel_tr,np.array([vel_rot]))))
-            rz_list.append(rz)
-            # cv2.imshow("img",img)
-            # cv2.imshow("img_light",img_light)
-            cv2.waitKey(1)
-            if cut_to_square:
-                img=clip_image(img,img_h)
-                if use_light_key:
-                    img_light=clip_image(img_light,img_h)
-            else:
-                img=cv2.resize(img,(img_w,img_h))
-                if use_light_key:
-                    img_light=cv2.resize(img_light,(img_w,img_h))
+            # vel = np.concatenate((vel_tr,np.array([vel_rot]))) if not isinstance(vel_rot,np.ndarray) else  np.concatenate((vel_tr,vel_rot))
+            action_list.append(np.concatenate((vel_tr,vel_rot)))
+
+            if dof==3:
+                rz = rmat2euler_rz_degree(wgT)
+                rz_list.append(rz)
+
+            #postprocess
+            img_vis=img.copy()
+            img=clip_image(img,img_h)
             img_lst.append(img)
             if use_light_key:
+                img_light=clip_image(img_light,img_h)
                 img_light_list.append(img_light)
+            if img2 is not None:
+                img2_vis=img2.copy()
+                img2=clip_image(img2,img_h)
+                img2_lst.append(img2)
+                combined_img = np.hstack((img_vis, img2_vis))
+                cv2.imshow("Combined Image", combined_img)
+                cv2.waitKey(1)
+            if img2_light is not None:
+                img2_light=clip_image(img2_light,img_h)
+                img2_light_list.append(img2_light)
 
             env.action(dT)
             if env.reinit():
-                assert len(img_lst)==len(action_list)
-                if not use_light_key:
-                    episode={
-                        'img': np.asarray(img_lst,dtype=np.uint8),
-                        'action_list': np.asarray(action_list,dtype=np.float32),
-                        'abs_rot': np.asarray(rz_list,dtype=np.float32),
-                    }
+                epi_length=len(img_lst)
+                assert epi_length==len(action_list)
+                if existed_demo_num>=1:
+                    add_useless_things(new_f_out=new_f_out,demo_ind=idx+existed_demo_num,epi_len=epi_length)
                 else:
-                    episode = {
-                        'img': np.asarray(img_lst, dtype=np.uint8),
-                        'img_light':np.asarray(img_light_list, dtype=np.uint8),
-                        'action_list': np.asarray(action_list, dtype=np.float32),
-                        'abs_rot': np.asarray(rz_list, dtype=np.float32),
-                    }
-                npy_name = 'demo.npy'
-                npy_path = os.path.join(npy_dir, npy_name)
-                np.save(npy_path, episode)
+                    add_useless_things(new_f_out=new_f_out, demo_ind=idx, epi_len=epi_length)
+                new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image', data=img_lst)
+
+                if use_light_key:
+                    new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image_light', data=img_light_list)
+                if len(img2_lst)!=0:
+                    new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image_2', data=img2_lst)
+                if len(img2_light_list)!=0:
+                    new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image_2_light', data=img2_light_list)
+                if dof==3:
+                    new_f_out.create_dataset(obs_path + '/abs_rot', data=rz_list)
+                new_f_out.create_dataset(action_path, data=action_list)
                 print("action_lst-1:",action_list[-1])
                 print("[INFO] demo_{} collected successfully.".format(idx))
                 break
-
-
+    add_env_meta(new_f_out)
+    add_config(new_f_out, config)
+    new_f_out.close()
+    compute_num_samples(dataset_dir)
+    split_train_val_from_hdf5(dataset_dir, val_ratio=0.1)
 
 
 

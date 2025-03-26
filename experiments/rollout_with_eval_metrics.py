@@ -105,7 +105,6 @@ if __name__ == '__main__':
     else:
         raise RuntimeError("objs_descriptor must be an int or list")
 
-    npy_size=config['npy_img_size']
     cv2_visualize=config['cv2_visualize']
 
     stop_policy = config['stop_policy']
@@ -114,14 +113,19 @@ if __name__ == '__main__':
     succ_tr=eval_metrics['success_rate']['trans_threshold']
     succ_rot = eval_metrics['success_rate']['rot_threshold']
 
+    init_horizon_trans = config['init_horizon_trans']
+    init_vertical_trans = config['init_vertical_trans']
+    init_rot = config['init_rot']
+    use_max_rot = config['use_max_rot']
+
     expert_motion_type=config['expert_motion_type']
     record_video=config['record_video']
     random_light=config['random_light']
 
     rgb_key = [n for n in model_config["dataset"]['specific_obs_keys'] if ('image' in n or "img" in n)]
     low_dim_key = [n for n in model_config["dataset"]['specific_obs_keys'] if n not in rgb_key]
-    if 'hdf5_img_size' in model_config["dataset"]:
-        hdf5_img_size = model_config["dataset"]["hdf5_img_size"]
+    assert 'hdf5_img_size' in model_config["dataset"]
+    hdf5_img_size = model_config["dataset"]["hdf5_img_size"]
 
     assert low_dim_key == ['abs_rot']
     # assert rgb_key == ["robot0_eye_in_hand_image", "robot0_eye_in_hand_image_goal"]
@@ -129,7 +133,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = _setup_model(model_config,return_dual_feat)
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env = Environment(camera_intrinsic, objs_descriptor=objs_descriptor)
+    env = Environment(camera_intrinsic, objs_descriptor=objs_descriptor,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,init_rot=init_rot,use_max_rot=use_max_rot)
     env.init()
     env.setup_stop_policy(stop_policy)
 
@@ -163,17 +167,11 @@ if __name__ == '__main__':
             if cv2_visualize:
                 img_goal_vis = cv2.cvtColor(img_goal.copy(), cv2.COLOR_BGR2RGB)
             if cut_to_square:
-                img_goal = clip_image(img_goal, npy_size)
+                img_goal = clip_image(img_goal, hdf5_img_size)
             else:
-                img_goal = cv2.resize(img_goal, (npy_size, npy_size))
-            if 'hdf5_img_size' in model_config["dataset"]:
-                if npy_size != hdf5_img_size:
-                    img_goal = cv2.resize(img_goal, (hdf5_img_size, hdf5_img_size))
-                if hdf5_img_size != img_w or hdf5_img_size != img_h:
-                    img_goal = cv2.resize(img_goal, (img_w, img_h))
-            else:
-                if npy_size != img_w or npy_size != img_h:
-                    img_goal = cv2.resize(img_goal, (img_w, img_h))
+                img_goal = cv2.resize(img_goal, (hdf5_img_size, hdf5_img_size))
+            if hdf5_img_size != img_w or hdf5_img_size != img_h:
+                img_goal = cv2.resize(img_goal, (img_w, img_h))
             # cv2.imwrite('/media/kiriyamagk/One Touch/AlignAnything/imgs/{}.png'.format(idx+1),img_goal_vis)
             env.act_with_abs_dict(init_transform_dict)
             print("==============================")
@@ -206,17 +204,11 @@ if __name__ == '__main__':
                         env.init()
                         break
                 if cut_to_square:
-                    img=clip_image(img,npy_size)
+                    img=clip_image(img, hdf5_img_size)
                 else:
-                    img=cv2.resize(img, (npy_size, npy_size))
-                if 'hdf5_img_size' in model_config["dataset"]:
-                    if npy_size != hdf5_img_size:
-                        img = cv2.resize(img, (hdf5_img_size, hdf5_img_size))
-                    if hdf5_img_size != img_w or hdf5_img_size != img_h:
-                        img = cv2.resize(img, (img_w, img_h))
-                else:
-                    if npy_size != img_w or npy_size != img_h:
-                        img = cv2.resize(img, (img_w, img_h))
+                    img=cv2.resize(img, (hdf5_img_size,  hdf5_img_size))
+                if hdf5_img_size != img_w or hdf5_img_size != img_h:
+                    img = cv2.resize(img, (img_w, img_h))
                 obs_dict={
                     "robot0_eye_in_hand_image": img,
                     "robot0_eye_in_hand_image_goal": img_goal,
