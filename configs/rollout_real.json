@@ -18,7 +18,6 @@
         "rot_thres":30 ,
         "down_dis":45
     },
-    "cut_to_square": true,
     "logs_dir": "trained_models/trial/2025-03-17_13-04-57/config.json",
     "ckpts_dir": "all",
     "eval_epoch_num": 5,

@@ -24,6 +24,12 @@ def clip_image(img,img_size):
     img_cropped=cv2.resize(img_cropped,(img_size,img_size))
     return img_cropped
 
+def conditioned_clip_and_resize(img,img_h,img_w,hdf5_img_size):
+    img = clip_image(img, hdf5_img_size)
+    if hdf5_img_size != img_w or hdf5_img_size != img_h:
+        img = cv2.resize(img, (img_w, img_h))
+    return img
+
 def image_preprocess(img:np.ndarray,bgr2rgb:bool=False,img_size=None):
     if img_size is not None:
         if img_size>img.shape[0]:

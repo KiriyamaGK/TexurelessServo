@@ -9,7 +9,7 @@ import cv2
 import torch
 from real.environment import Environment
 from networks.helpers import get_network_cls
-from utils.input_process import clip_image
+from utils.input_process import clip_image,conditioned_clip_and_resize
 from utils.plot import plot_rot_and_trans,plot_trajs,plot_vel,plot_time,plot_img_diff
 from utils.statistics import calculate_success_rate,visualize_final_error
 import atexit
@@ -99,7 +99,6 @@ if __name__ == '__main__':
 
     img_w=model_config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"]
     img_h=img_w
-    cut_to_square=config["cut_to_square"]
 
     logs_dir=path_completion(config["logs_dir"],PROJECT_ROOT_DIR)
     ckpt_base = os.path.dirname(logs_dir)
@@ -167,13 +166,7 @@ if __name__ == '__main__':
 
             if cv2_visualize:
                 img_goal_vis = cv2.cvtColor(img_goal.copy(), cv2.COLOR_BGR2RGB)
-            if cut_to_square:
-                img_goal = clip_image(img_goal, hdf5_img_size)
-            else:
-                img_goal = cv2.resize(img_goal, (hdf5_img_size, hdf5_img_size))
-            if hdf5_img_size != img_w or hdf5_img_size != img_h:
-                img_goal = cv2.resize(img_goal, (img_w, img_h))
-
+            img_goal=conditioned_clip_and_resize(img=img_goal, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size)
             print("==============================")
             print("[INFO] start rollout_{}...".format(idx))
             theta, alpha, start_pt = env.generate_motion_paras(desire_pt)
@@ -201,12 +194,8 @@ if __name__ == '__main__':
                         out.write(combined_img)
                     key=cv2.waitKey(1)
 
-                if cut_to_square:
-                    img=clip_image(img,hdf5_img_size)
-                else:
-                    img=cv2.resize(img, (hdf5_img_size, hdf5_img_size))
-                if hdf5_img_size != img_w or hdf5_img_size != img_h:
-                    img = cv2.resize(img, (img_w, img_h))
+                img = conditioned_clip_and_resize(img=img, img_h=img_h, img_w=img_w,
+                                                       hdf5_img_size=hdf5_img_size)
 
                 obs_dict={
                     "robot0_eye_in_hand_image": img,

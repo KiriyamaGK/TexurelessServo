@@ -10,11 +10,12 @@ import time
 import cv2
 import torch
 from networks.helpers import get_network_cls
-from utils.input_process import clip_image
+from utils.input_process import clip_image,conditioned_clip_and_resize
 from utils.plot import plot_rot_and_trans,plot_trajs,plot_vel,plot_time,plot_img_diff
 from utils.statistics import calculate_success_rate,visualize_final_error
 import atexit
 from utils.paths import path_completion,PROJECT_ROOT_DIR,determine_ckpt_dirs
+from scipy.spatial.transform import Rotation as R
 
 
 def cleanup():
@@ -53,7 +54,7 @@ def get_epoch_num_from_pthname(strin):
     return strin[start_id:end_id+1]
 
 
-def _setup_model(model_config: dict,return_dual_feat:bool=False):
+def _setup_model(model_config: dict):
     """
     Set up the model.
     """
@@ -65,16 +66,14 @@ def _setup_model(model_config: dict,return_dual_feat:bool=False):
         batch_size=1,
         seq_length=1,
         training=False,
-        return_dual_features=return_dual_feat,
         **model_config["algorithm"]["policy"]["params"]
     )#**动态传参，字典中的键与函数参数名完全匹配
 
 if __name__ == '__main__':
     config_dir= "../configs/rollout.json"
-    return_dual_feat=False
 
     fps = 30
-    vis_h, vis_w = 480, 1280
+    vis_h, vis_w = 480, 640
     mp4 = cv2.VideoWriter_fourcc(*'mp4v')
 
     with open(config_dir, "r") as j:
@@ -85,7 +84,6 @@ if __name__ == '__main__':
 
     img_w=model_config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"]
     img_h=img_w
-    cut_to_square=config["cut_to_square"]
 
     logs_dir=path_completion(config["logs_dir"],PROJECT_ROOT_DIR)
     ckpt_base = os.path.dirname(logs_dir)
@@ -113,6 +111,7 @@ if __name__ == '__main__':
     succ_tr=eval_metrics['success_rate']['trans_threshold']
     succ_rot = eval_metrics['success_rate']['rot_threshold']
 
+    dof = config["dof"]
     init_horizon_trans = config['init_horizon_trans']
     init_vertical_trans = config['init_vertical_trans']
     init_rot = config['init_rot']
@@ -127,13 +126,12 @@ if __name__ == '__main__':
     assert 'hdf5_img_size' in model_config["dataset"]
     hdf5_img_size = model_config["dataset"]["hdf5_img_size"]
 
-    assert low_dim_key == ['abs_rot']
     # assert rgb_key == ["robot0_eye_in_hand_image", "robot0_eye_in_hand_image_goal"]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = _setup_model(model_config,return_dual_feat)
+    model = _setup_model(model_config)
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env = Environment(camera_intrinsic, objs_descriptor=objs_descriptor,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,init_rot=init_rot,use_max_rot=use_max_rot)
+    env = Environment(camera_intrinsic, objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,init_rot=init_rot,dof=dof)
     env.init()
     env.setup_stop_policy(stop_policy)
 
@@ -163,16 +161,17 @@ if __name__ == '__main__':
 
             init_transform_dict = env.return_cur_pos_info()
             env.act_to_goal()
-            img_goal = env.observation()
+
+            im_goal_dict = env.observation()
+            img_goal=im_goal_dict['img_1']
+            img_goal2 = im_goal_dict['img_2'] if 'img_2' in im_goal_dict else None
+
             if cv2_visualize:
-                img_goal_vis = cv2.cvtColor(img_goal.copy(), cv2.COLOR_BGR2RGB)
-            if cut_to_square:
-                img_goal = clip_image(img_goal, hdf5_img_size)
-            else:
-                img_goal = cv2.resize(img_goal, (hdf5_img_size, hdf5_img_size))
-            if hdf5_img_size != img_w or hdf5_img_size != img_h:
-                img_goal = cv2.resize(img_goal, (img_w, img_h))
-            # cv2.imwrite('/media/kiriyamagk/One Touch/AlignAnything/imgs/{}.png'.format(idx+1),img_goal_vis)
+                img_goal_vis = cv2.cvtColor(img_goal.copy(), cv2.COLOR_BGR2RGB) if img_goal2 is None else cv2.cvtColor(np.vstack((img_goal.copy(), img_goal2.copy())), cv2.COLOR_BGR2RGB)
+
+            img_goal=conditioned_clip_and_resize(img=img_goal, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size)
+            img_goal2 = conditioned_clip_and_resize(img=img_goal2, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size) if img_goal2 is not None else None
+
             env.act_with_abs_dict(init_transform_dict)
             print("==============================")
             print("[INFO] start rollout_{}...".format(idx))
@@ -182,40 +181,42 @@ if __name__ == '__main__':
 
             video_path=os.path.join(obj_pth,str(obj_id)+'.mp4')
             if not os.path.exists(video_path):
-                out = cv2.VideoWriter(video_path, mp4, fps, (vis_w, vis_h))
+                out = cv2.VideoWriter(video_path, mp4, fps, (vis_w*2, vis_h)) if dof==3 else cv2.VideoWriter(video_path, mp4, fps, (vis_w*2, vis_h*2))
                 video_flag=True
             t_0 = time.time()
             # try:
             while True:
                 wgT = env.wgT
-                rz = rmat2euler_rz_degree(wgT)
+                if dof == 3:
+                    rz = rmat2euler_rz_degree(wgT)
                 dT=np.eye(4)
-                if not random_light:
-                    img=env.observation()
-                else:
-                    img=env.observation(random_light_dir=True)
+
+                im_dict=env.observation() if not random_light else env.observation(random_light_dir=True)
+                img = im_dict['img_1']
+                img2 = im_dict['img_2'] if 'img_2' in im_dict else None
+
                 if cv2_visualize:
-                    img_vis = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
+                    img_vis = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB) if img2 is None else cv2.cvtColor(np.vstack((img.copy(), img2.copy())), cv2.COLOR_BGR2RGB)
                     combined_img = np.hstack((img_vis, img_goal_vis))
-                    cv2.imshow('Images', combined_img)
+                    cv2.imshow('Images:cur|goal', combined_img)
                     if record_video and video_flag:
                         out.write(combined_img)
                     if cv2.waitKey(1) & 0xFF == ord('q'):     #1ms
                         env.init()
                         break
-                if cut_to_square:
-                    img=clip_image(img, hdf5_img_size)
-                else:
-                    img=cv2.resize(img, (hdf5_img_size,  hdf5_img_size))
-                if hdf5_img_size != img_w or hdf5_img_size != img_h:
-                    img = cv2.resize(img, (img_w, img_h))
+                img=conditioned_clip_and_resize(img=img, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size)
+                img2 = conditioned_clip_and_resize(img=img2, img_h=img_h, img_w=img_w,hdf5_img_size=hdf5_img_size) if img2 is not None else None
                 obs_dict={
                     "robot0_eye_in_hand_image": img,
-                    "robot0_eye_in_hand_image_goal": img_goal,
-                    # 'gaussian_img_kpt': np.zeros((img_w//4, img_h//4,1)),
-                    # 'gaussian_img_kpt_goal': np.zeros((img_w // 4, img_h // 4, 1)),
-                    "abs_rot": np.array([rz]),
+                    "robot0_eye_in_hand_image_goal": img_goal
                 }
+
+                if dof == 3:
+                    obs_dict["abs_rot"]=np.array([rz])
+                if img2 is not None:
+                    obs_dict["robot0_eye_in_hand_image_2"]=img2
+                    obs_dict["robot0_eye_in_hand_image_2_goal"]=img_goal2
+
                 obs_dict=input_dict_preprocess(obs_dict,rollout=True)
                 pred=model(obs_dict)
                 if isinstance(pred, dict):
@@ -223,17 +224,14 @@ if __name__ == '__main__':
                 else:
                     predictions=pred
                 predictions=predictions.detach().cpu().numpy().reshape(-1,)
-                if return_dual_feat:
-                    img_feat=pred['x_img_feat'].detach().cpu().numpy().reshape(-1,)
-                    img_goal_dual_feat=pred["x_img_goal_dual_feat"].detach().cpu().numpy().reshape(-1,)
-                    diff=abs(np.mean(img_feat-img_goal_dual_feat))
-                    diff_list.append(diff)
+
                 # print("pred:",predictions)
                 # predictions/=4
-                vel_tr=predictions[0:2]
-                vel_rot=predictions[-1]
-                dT[0:2,3]=vel_tr
-                dT[0:3,0:3]=rotation_matrix_z(vel_rot/180*np.pi)
+                vel_tr=predictions[0:2] if dof == 3 else predictions[0:3]
+                vel_rot=predictions[-1] if dof == 3 else predictions[3:]
+                dT[0:3,3]=np.concatenate((vel_tr,np.array[0]),axis=0) if dof == 3 else vel_tr
+                dT[0:3,0:3]=rotation_matrix_z(vel_rot/180*np.pi) if dof==3 else R.from_rotvec(vel_rot/180*np.pi).as_matrix()
+
                 env.action(dT)
                 env.determine_vel_in_threshold(vel_tr=np.linalg.norm(vel_tr), vel_rot=abs(vel_rot))
                 # time.sleep(0.1)
@@ -265,10 +263,7 @@ if __name__ == '__main__':
                         vel_pth = os.path.join(obj_pth, "vel")
                         os.makedirs(vel_pth, exist_ok=True)
                         plot_vel(vel_tr=vel_tr_lst,vel_rot=vel_rot_lst,use_time=use_time,obj_path=vel_pth,show=False)
-                    if return_dual_feat:
-                        dual_feat_pth = os.path.join(obj_pth, "img_diff")
-                        os.makedirs(dual_feat_pth, exist_ok=True)
-                        plot_img_diff(diff_list=diff_list,use_time=use_time,obj_path=dual_feat_pth,show=False)
+
                     final_error_list.append([obj_id,error_trans_lst[-1],error_rot_lst[-1]])
                     time_list.append([obj_id,use_time])
                     if video_flag:
