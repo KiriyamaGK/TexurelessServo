@@ -11,8 +11,12 @@ import time
 import cv2
 from utils.input_process import clip_image
 from utils.policy import get_expert_policy
+from data.process_hdf5 import _disturb_abs_rot,_portion_last_episode,_add_end_episode,_add_medium_episode,insert_imgs
 
-
+def filter_translation(input,thres):
+    assert thres>0
+    input=np.array(input)
+    return np.where(np.abs(input) < thres, 0, input)
 
 def ensure_dir(directory):
     if not os.path.exists(directory):
@@ -53,15 +57,16 @@ if __name__ == '__main__':
     random_light_dir = config["demo_collection"]['random_light_dir']
     use_light_key=config["demo_collection"]["use_random_light_img_key"] if random_light_dir else False
 
+    #post process
+    disturb_abs_rot = config['post_process']['disturb_abs_rot']
+    portion_last_episode = config['post_process']['portion_last_episode']
+    add_end_episode = config['post_process']['add_end_episode']
+    add_medium_episode = config['post_process']['add_medium_episode']
+    assert (not portion_last_episode["utilized"]) or (not add_end_episode["utilized"])
+
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
     env=Environment(camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,init_rot=init_rot,dof=dof)
     env.init()
-
-    # wgT_tar = env.wgT_tar
-    # wgT = env.wgT
-    # print("init_wgT_tar:", wgT_tar)
-    # print("init_wgT:", wgT)
-    # print("init_error(mm):", np.linalg.norm(wgT_tar[0:3, 3] - wgT[0:3, 3]) * 1000)
 
     base_dir = return_disc_route("One Touch")
 
@@ -100,6 +105,7 @@ if __name__ == '__main__':
         rz_list=[]
         gaussian_img_ct_lst=[]
         gaussian_img_kpt_lst = []
+        # iii=0
         while True:
             if not use_light_key:
                 rtn_dict=env.observation(random_light_dir=random_light_dir,use_prob=True)
@@ -121,7 +127,7 @@ if __name__ == '__main__':
             wgT=env.wgT
             act_dict=get_expert_policy(wgT_tar=wgT_tar,wgT=wgT,trans_vel_norm=trans_vel_norm,rot_vel_norm=rot_vel_norm,dist_eps=env.dist_eps,angle_eps=env.angle_eps,motion_type=motion_type,dof=dof)
 
-            vel_tr=act_dict['vel_tr']
+            vel_tr=filter_translation(act_dict['vel_tr'],thres=1e-7)
             vel_rot=act_dict['vel_rot'] #3dof:绕世界系 6dof:绕夹爪系
             dT=act_dict["dT"]
             # vel = np.concatenate((vel_tr,np.array([vel_rot]))) if not isinstance(vel_rot,np.ndarray) else  np.concatenate((vel_tr,vel_rot))
@@ -143,14 +149,53 @@ if __name__ == '__main__':
                 img2=clip_image(img2,img_h)
                 img2_lst.append(img2)
                 combined_img = np.hstack((img_vis, img2_vis))
-                cv2.imshow("Combined Image", combined_img)
-                cv2.waitKey(1)
+                # cv2.imshow("Combined Image", combined_img)
+                # cv2.waitKey(1)
             if img2_light is not None:
                 img2_light=clip_image(img2_light,img_h)
                 img2_light_list.append(img2_light)
-
+            # print(iii)
+            # iii+=1
             env.action(dT)
             if env.reinit():
+
+                #post process
+                if disturb_abs_rot["utilized"]:
+                    rz_list,_=_disturb_abs_rot(rz_list,action_list)
+
+                if portion_last_episode["utilized"]:
+                    action_list,_=_portion_last_episode(action_list,portion_last_episode["portion_last_num"],dof)
+
+                if add_end_episode["utilized"]:
+                    pick_id=len(img_lst)-1
+                    insert_id=len(img_lst)-1
+                    add_num=add_end_episode["add_num"]
+
+                    rz_list, action_list=_add_end_episode(add_num,disturb_abs_rot["utilized"],rz_list,action_list)
+                    img_lst=insert_imgs(img_lst,pick_id,insert_id,add_num)
+                    if len(img_light_list) != 0:
+                        img_light_list=insert_imgs(img_light_list,pick_id,insert_id,add_num)
+                    if len(img2_lst) != 0:
+                        img2_lst=insert_imgs(img2_lst,pick_id,insert_id,add_num)
+                    if len(img2_light_list) != 0:
+                        img2_light_list=insert_imgs(img2_light_list,pick_id,insert_id,add_num)
+
+                if add_medium_episode["utilized"]:
+                    action_list, rz_list, need_add_medium, trans_id, rot_id=_add_medium_episode(action_list, rz_list, dof,add_medium_episode["add_num"])
+                    if need_add_medium:
+                        print("+++++++++++++++++++++++++++++++++++++++++")
+                        pick_id = trans_id + 1
+                        insert_id = rot_id
+                        add_num = add_medium_episode["add_num"]
+
+                        img_lst = insert_imgs(img_lst, pick_id, insert_id, add_num)
+                        if len(img_light_list) != 0:
+                            img_light_list = insert_imgs(img_light_list, pick_id, insert_id, add_num)
+                        if len(img2_lst) != 0:
+                            img2_lst = insert_imgs(img2_lst, pick_id, insert_id, add_num)
+                        if len(img2_light_list) != 0:
+                            img2_light_list = insert_imgs(img2_light_list, pick_id, insert_id, add_num)
+                #save hdf5
                 epi_length=len(img_lst)
                 assert epi_length==len(action_list)
                 if existed_demo_num>=1:

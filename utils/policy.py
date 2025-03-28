@@ -45,12 +45,15 @@ def get_expert_policy(wgT_tar,wgT,trans_vel_norm,rot_vel_norm,dist_eps,angle_eps
         v = del_T[:3, 3]  # 以上v,w的计算等价于，先求g_gtarT,对前三列旋转矩阵直接求轴角计算w,最后一列直接作为v
         abs_del_tr = np.linalg.norm(v) #mm
         abs_del_angle = np.linalg.norm(w) / np.pi * 180  # degree
-        vel_tr = v / np.linalg.norm(v) * trans_vel_norm if abs_del_tr > dist_eps else np.array([0, 0, 0])
-
-        if motion_type == "simultaneously":
-            vel_rot=w/np.linalg.norm(w)*rot_vel_norm if abs_del_angle>angle_eps else np.array([0, 0, 0])
-        else:
-            vel_rot = w / np.linalg.norm(w) * rot_vel_norm if abs_del_tr <= dist_eps and abs_del_angle > angle_eps else np.array([0, 0, 0])
+        # vel_tr = v / np.linalg.norm(v) * trans_vel_norm if abs_del_tr > dist_eps else np.array([0, 0, 0])
+        # if motion_type == "simultaneously":
+        #     vel_rot=w/np.linalg.norm(w)*rot_vel_norm if abs_del_angle>angle_eps else np.array([0, 0, 0])
+        # else:
+        #     vel_rot = w / np.linalg.norm(w) * rot_vel_norm if abs_del_tr <= dist_eps and abs_del_angle > angle_eps else np.array([0, 0, 0])
+        vel_tr = v / np.linalg.norm(v) * trans_vel_norm if trans_vel_norm < abs_del_tr else v
+        vel_rot = w / np.linalg.norm(w) * rot_vel_norm if rot_vel_norm<abs_del_angle else w
+        if motion_type != "simultaneously":
+            vel_rot =np.array([0, 0, 0]) if abs_del_tr > dist_eps else vel_rot
         dT[0:3, 3] = vel_tr
         dT[0:3, 0:3] = R.from_rotvec(vel_rot/180*np.pi).as_matrix()
     return {

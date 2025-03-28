@@ -44,7 +44,7 @@ class Environment(object):
         assert self.dof in [3,6] #TODO:converted
 
         self.angle_eps = 0.4  # degree
-        self.dist_eps = 0.0007  # m
+        self.dist_eps = 0.001  # m
 
         self.init_horizon_trans = init_horizon_trans # m
         self.init_vertical_trans=init_vertical_trans if self.dof==6 else 0   # m
@@ -63,7 +63,7 @@ class Environment(object):
         self.obj_idx_pointer = 0
         self.obj_total_num=23
         self.objs_descriptor=objs_descriptor
-        self.obj_scale_factor = 0.001                     #mm2m
+        self.obj_scale_factor = 0.0007                     #mm2m
         self.table_scale_factor = 3
         self.objStartPos = [0, 0, 1.88]
         self.objStartOrientation = p.getQuaternionFromEuler([0, 0, 0])
@@ -167,7 +167,7 @@ class Environment(object):
 
         dT=np.eye(4)
         dT[0:3,0:3]=R.from_rotvec(ang * np.pi / 180).as_matrix()
-        dT[0:3,3]=np.array([cos(ori)*self.init_horizon_trans, sin(ori)*self.init_horizon_trans,self.init_vertical_trans])
+        dT[0:3,3]=np.array([cos(ori)*self.init_horizon_trans, sin(ori)*self.init_horizon_trans,self.init_vertical_trans*random.uniform(0, 1)])
 
         self.wgT=self.wgT_tar@dT #绕夹爪系
         self.gwT=np.linalg.inv(self.wgT)

@@ -56,13 +56,24 @@ def create_hdf5_filter_key(hdf5_path, demo_keys, key_name):
     f.close()
     return ep_lengths
 
-def add_useless_things(new_f_out:h5py.File,demo_ind:int,epi_len:int):
+def add_useless_things(new_f_out:h5py.File,epi_len:int,demo_ind):
+    if isinstance(demo_ind,str):
+        assert "demo_"in demo_ind
+        demo_ind = int(demo_ind[5:])
     new_f_out.create_dataset('data/demo_{}/dones'.format(demo_ind), data=np.zeros((epi_len - 1)))
     new_f_out.create_dataset('data/demo_{}/interventions'.format(demo_ind), data=np.zeros((epi_len, 1)))
     new_f_out.create_dataset('data/demo_{}/policy_acting'.format(demo_ind), data=np.zeros((epi_len)))
     new_f_out.create_dataset('data/demo_{}/rewards'.format(demo_ind), data=np.zeros((epi_len - 1)))
     new_f_out.create_dataset('data/demo_{}/states'.format(demo_ind), data=np.zeros((0)))
     new_f_out.create_dataset('data/demo_{}/user_acting'.format(demo_ind), data=np.zeros((epi_len, 1)))
+
+def delete_useless_things(f:h5py.File,ep):
+    del f['data/{}/dones'.format(ep)]
+    del f['data/{}/interventions'.format(ep)]
+    del f['data/{}/policy_acting'.format(ep)]
+    del f['data/{}/rewards'.format(ep)]
+    del f['data/{}/states'.format(ep)]
+    del f['data/{}/user_acting'.format(ep)]
 
 def split_train_val_from_hdf5(hdf5_path, val_ratio=0.1, filter_key=None):
     """
