@@ -48,7 +48,6 @@ if __name__ == '__main__':
     #demo collection
     dof = config["demo_collection"]["dof"]
     motion_type=config["demo_collection"]['trans_and_rot_type']
-    use_max_rot = config["demo_collection"]['use_max_rot']
     random_light_dir = config["demo_collection"]['random_light_dir']
     use_light_key = config["demo_collection"]["use_random_light_img_key"] if random_light_dir else False
 
@@ -59,6 +58,7 @@ if __name__ == '__main__':
     init_vertical_trans = config["demo_collection"]["init"]['init_vertical_trans']["value"]
     using_minus_vertical=config["demo_collection"]["init"]['init_vertical_trans']["using_minus"]
     init_rot=config["demo_collection"]["init"]['init_rot']
+    use_max_rot = config["demo_collection"]["init"]['init_rot']['use_max_rot']
 
     angle_eps =config["demo_collection"]["stop_policy"]['angle_eps']
     dist_eps = config["demo_collection"]["stop_policy"]['dist_eps']
