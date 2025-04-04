@@ -57,7 +57,7 @@ if __name__ == '__main__':
     init_horizon_trans=config["demo_collection"]["init"]['init_horizon_trans']
     init_vertical_trans = config["demo_collection"]["init"]['init_vertical_trans']["value"]
     using_minus_vertical=config["demo_collection"]["init"]['init_vertical_trans']["using_minus"]
-    init_rot=config["demo_collection"]["init"]['init_rot']
+    init_rot=config["demo_collection"]["init"]['init_rot']["value"]
     use_max_rot = config["demo_collection"]["init"]['init_rot']['use_max_rot']
 
     angle_eps =config["demo_collection"]["stop_policy"]['angle_eps']
