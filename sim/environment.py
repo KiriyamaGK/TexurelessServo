@@ -18,9 +18,12 @@ class Environment(object):
         objs_descriptor=20,
         init_horizon_trans=0.05,
         init_vertical_trans=0.05,
+        using_minus_vertical=False,
         init_rot=60,
         use_max_rot=False,
-        dof=3
+        dof=3,
+        angle_eps = 0.4,
+        dist_eps=0.001
     ):
         #cam1
         cwT = np.array([[-1, 0, 0, 0],  # 左上角c右下角w，前三列是c系在w系中的表示,按列排列，最后一列是从c的原点指向w的原点并在c系中表示
@@ -41,13 +44,14 @@ class Environment(object):
         dT2x[0:3, 0:3] = R.from_rotvec(np.array([1, 0, 0]) * 30 / 180 * np.pi).as_matrix()
 
         self.dof = dof
-        assert self.dof in [3,6] #TODO:converted
+        assert self.dof in [3,6]
 
-        self.angle_eps = 0.4  # degree
-        self.dist_eps = 0.001  # m
+        self.angle_eps = angle_eps  # degree
+        self.dist_eps = dist_eps  # m
 
         self.init_horizon_trans = init_horizon_trans # m
         self.init_vertical_trans=init_vertical_trans if self.dof==6 else 0   # m
+        self.using_minus_vertical = using_minus_vertical
 
         if self.dof == 3:
             assert isinstance(init_rot,(int, float))
@@ -81,7 +85,7 @@ class Environment(object):
         self.cgT=self.cwT_tar @ np.linalg.inv(self.gwT_tar)
         self.wgT_tar = self.wcT_tar @ self.cgT
 
-        if self.dof == 6:   #TODO:converted
+        if self.dof == 6:
             self.wc2T_tar = wc2T @ dT2x
             self.c2wT_tar = np.linalg.inv(self.wc2T_tar)
             self.c2gT = self.c2wT_tar @ np.linalg.inv(self.gwT_tar)
@@ -106,7 +110,7 @@ class Environment(object):
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
 
         self.axes_cam = DebugAxesCam(self.client)
-        if self.dof==6:      #TODO:converted
+        if self.dof==6:
             self.axes_cam2 = DebugAxesCam2(self.client)
         self.axes_gripper = DebugAxesGripper(self.client)
 
@@ -168,6 +172,8 @@ class Environment(object):
         dT=np.eye(4)
         dT[0:3,0:3]=R.from_rotvec(ang * np.pi / 180).as_matrix()
         dT[0:3,3]=np.array([cos(ori)*self.init_horizon_trans, sin(ori)*self.init_horizon_trans,self.init_vertical_trans*random.uniform(0, 1)])
+        if self.using_minus_vertical:
+            dT[2,3]=dT[2,3]*(random.randint(0,1)-0.5)*2
 
         self.wgT=self.wgT_tar@dT #绕夹爪系
         self.gwT=np.linalg.inv(self.wgT)
@@ -210,7 +216,7 @@ class Environment(object):
             rgb2 = frame2.color_image()
             return {"img_1":rgb, "img_2":rgb2}
         else:
-            return {"img_1":rgb}     #TODO:converted,rollout结构需要大改
+            return {"img_1":rgb}
 
     def act_to_goal(self):
         self.wgT = self.wgT_tar

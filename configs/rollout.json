@@ -13,10 +13,10 @@
         "fov": 60
     },
 
-    "logs_dir":  "trained_models/trial/2025-03-27_14-20-03/config.json",
-    "ckpts_dir": [1],
-    "objs_descriptor": [15,16,17,18,19,20],
-    "eval_epoch_num": 300,
+    "logs_dir":  "trained_models/trial/2025-04-02_10-57-03/config.json",
+    "ckpts_dir": [201],
+    "objs_descriptor": 20,
+    "eval_epoch_num": 400,
     "bgr2rgb": false,
     "time_threshold": 30,
     "cv2_visualize": true,
@@ -26,10 +26,15 @@
     "random_light": false,
 
     "dof": 6,
-    "init_horizon_trans": 0.02,
-    "init_vertical_trans": 0.02,
-    "init_rot": [10,10,60],
     "use_max_rot": true,
+    "init": {
+        "init_horizon_trans": 0.01,
+        "init_vertical_trans": {
+            "value":0.03,
+            "using_minus": false
+        },
+        "init_rot": [10,10,60]
+    },
 
     "eval_metrics": {
         "utilized": true,
@@ -49,7 +54,7 @@
         }
     },
     "stop_policy": {
-        "trans_vel_threshold": 0.0003,
+        "trans_vel_threshold": 0.0001,
         "rot_vel_threshold": 0.05,
         "in_threshold_range_time":1,
         "use_time_upperbound":20

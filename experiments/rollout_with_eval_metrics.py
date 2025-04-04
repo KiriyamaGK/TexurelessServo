@@ -112,10 +112,12 @@ if __name__ == '__main__':
     succ_rot = eval_metrics['success_rate']['rot_threshold']
 
     dof = config["dof"]
-    init_horizon_trans = config['init_horizon_trans']
-    init_vertical_trans = config['init_vertical_trans']
-    init_rot = config['init_rot']
     use_max_rot = config['use_max_rot']
+
+    init_horizon_trans = config["init"]['init_horizon_trans']
+    init_vertical_trans = config["init"]['init_vertical_trans']["value"]
+    using_minus_vertical = config["init"]['init_vertical_trans']["using_minus"]
+    init_rot = config["init"]['init_rot']
 
     expert_motion_type=config['expert_motion_type']
     record_video=config['record_video']
@@ -131,7 +133,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = _setup_model(model_config)
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env = Environment(camera_intrinsic, objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,init_rot=init_rot,dof=dof)
+    env = Environment(camera_config=camera_intrinsic, objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof)
     env.init()
     env.setup_stop_policy(stop_policy)
 
@@ -145,7 +147,7 @@ if __name__ == '__main__':
         model.load_state_dict(state_dict)
         model.to(device).eval()
 
-        cv2.namedWindow('Images', cv2.WINDOW_NORMAL)
+        # cv2.namedWindow('Images', cv2.WINDOW_NORMAL)
         success_list = []
         final_error_list = []
         time_list = []
@@ -233,7 +235,7 @@ if __name__ == '__main__':
                 dT[0:3,0:3]=rotation_matrix_z(vel_rot/180*np.pi) if dof==3 else R.from_rotvec(vel_rot/180*np.pi).as_matrix()
 
                 env.action(dT)
-                env.determine_vel_in_threshold(vel_tr=np.linalg.norm(vel_tr), vel_rot=abs(vel_rot))
+                env.determine_vel_in_threshold(vel_tr=np.linalg.norm(vel_tr), vel_rot=abs(vel_rot) if dof == 3 else np.linalg.norm(vel_rot))
                 # time.sleep(0.1)
                 rtn_dict=env.reinit_eval()
                 trans_error=rtn_dict['dist']

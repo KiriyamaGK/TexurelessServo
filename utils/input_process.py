@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import cv2
 import torchvision.transforms
-from triton.language import dtype
+
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 

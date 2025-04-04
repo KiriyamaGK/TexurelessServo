@@ -1,0 +1,11 @@
+"demo_collection": {
+        "dof": 6,
+        "init_horizon_trans": 0.01,
+        "init_vertical_trans": 0.03,
+        "init_rot": [10,10,60],
+        "use_max_rot": false,
+        "trans_vel": 0.001,
+        "rot_vel": 0.5,
+        "trans_and_rot_type": "simultaneously",
+        "random_light_dir": true,
+        "use_random_light_img_key": true

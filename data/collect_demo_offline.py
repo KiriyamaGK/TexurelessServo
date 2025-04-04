@@ -45,17 +45,23 @@ if __name__ == '__main__':
     demo_total_num = config['overall_setting']['demo_total_num']
     replace_existed_hdf5=config["overall_setting"]["replace_existed_hdf5"] #TODO:remember to use
 
-    #demo_collection
+    #demo collection
     dof = config["demo_collection"]["dof"]
     motion_type=config["demo_collection"]['trans_and_rot_type']
-    trans_vel_norm=config["demo_collection"]['trans_vel'] #m
-    rot_vel_norm=config["demo_collection"]['rot_vel']    #deg
-    init_horizon_trans=config["demo_collection"]['init_horizon_trans']
-    init_vertical_trans = config["demo_collection"]['init_vertical_trans']
-    init_rot=config["demo_collection"]['init_rot']
-    use_max_rot=config["demo_collection"]['use_max_rot']
+    use_max_rot = config["demo_collection"]['use_max_rot']
     random_light_dir = config["demo_collection"]['random_light_dir']
-    use_light_key=config["demo_collection"]["use_random_light_img_key"] if random_light_dir else False
+    use_light_key = config["demo_collection"]["use_random_light_img_key"] if random_light_dir else False
+
+    trans_vel_norm=config["demo_collection"]["velocity"]['trans_vel'] #m
+    rot_vel_norm=config["demo_collection"]["velocity"]['rot_vel']    #deg
+
+    init_horizon_trans=config["demo_collection"]["init"]['init_horizon_trans']
+    init_vertical_trans = config["demo_collection"]["init"]['init_vertical_trans']["value"]
+    using_minus_vertical=config["demo_collection"]["init"]['init_vertical_trans']["using_minus"]
+    init_rot=config["demo_collection"]["init"]['init_rot']
+
+    angle_eps =config["demo_collection"]["stop_policy"]['angle_eps']
+    dist_eps = config["demo_collection"]["stop_policy"]['dist_eps']
 
     #post process
     disturb_abs_rot = config['post_process']['disturb_abs_rot']
@@ -65,7 +71,7 @@ if __name__ == '__main__':
     assert (not portion_last_episode["utilized"]) or (not add_end_episode["utilized"])
 
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env=Environment(camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,init_rot=init_rot,dof=dof)
+    env=Environment(camera_config=camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof,angle_eps=angle_eps,dist_eps=dist_eps)
     env.init()
 
     base_dir = return_disc_route("One Touch")

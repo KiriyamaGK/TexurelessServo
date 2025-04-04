@@ -19,29 +19,43 @@
         "fov": 60
     },
     "overall_setting": {
-        "file_name": "25.03.27",
+        "file_name": "25.04.04",
         "demo_total_num": 2500,
         "objs_descriptor": 14,
         "replace_existed_hdf5": true
     },
     "demo_collection": {
         "dof": 6,
-        "init_horizon_trans": 0.01,
-        "init_vertical_trans": 0.03,
-        "init_rot": [10,10,60],
         "use_max_rot": false,
-        "trans_vel": 0.001,
-        "rot_vel": 0.5,
         "trans_and_rot_type": "simultaneously",
         "random_light_dir": true,
-        "use_random_light_img_key": true
+        "use_random_light_img_key": true,
+
+        "init": {
+            "init_horizon_trans": 0.002,
+            "init_vertical_trans": {
+                "value":0.03,
+                "using_minus": false
+            },
+            "init_rot": [2,2,4]
+            },
+
+        "velocity": {
+            "trans_vel": 0.001,
+            "rot_vel": 0.5
+        },
+
+        "stop_policy":{
+            "angle_eps": 0.4,
+            "dist_eps": 0.001
+        }
     },
     "post_process": {
         "disturb_abs_rot": {
             "utilized": false
         },
         "portion_last_episode":{
-            "utilized": true,
+            "utilized": false,
             "portion_last_num":10
         },
         "add_end_episode":{
