@@ -167,6 +167,7 @@ class Environment(object):
             ang = np.array([random.uniform(0, self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
         else:
             ang =np.array([self.init_rot[i]* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+        print("angle:",ang)
         ori = random.uniform(0, np.pi*2)
 
         dT=np.eye(4)
@@ -306,32 +307,27 @@ class Environment(object):
         err_dict=self.compute_error(self.wcT_tar, self.wcT)
 
         if time.time()-self.task_timer>=self.time_up_bound:
-            return {"need_reinit": True,
-                    "dist": err_dict["dist"],
-                    "angle": err_dict["angle"]
-                    }
-
+            need_reinit=True
         else:
             if time.time()-self.vel_timer>=self.in_threshold_range_time and self.vel_in_threshold_flag:
-                return {"need_reinit": True,
-                        "dist": err_dict["dist"],
-                        "angle": err_dict["angle"]
-                        }
+                need_reinit=True
             else:
-                return {"need_reinit": False,
-                        "dist": err_dict["dist"],
-                        "angle": err_dict["angle"]
-                        }
+                need_reinit=False
+
+        err_dict["need_reinit"]=need_reinit
+        return err_dict
 
     def compute_error(self, T0, T1):
         dT = np.linalg.inv(T0) @ T1
         angle = np.linalg.norm(R.from_matrix(dT[:3, :3]).as_rotvec()) / np.pi * 180
         dist = np.linalg.norm(dT[:3, 3])
+        z_error=abs(dT[2, 3])
         self.close_enough_flag=(angle < self.angle_eps) and (dist < self.dist_eps)
         return {
             "close_enough":self.close_enough_flag,
             "dist":dist,
             "angle":angle,
+            "z_error":z_error,
         }
     def determine_vel_in_threshold(self,vel_tr,vel_rot): #self.vel_in_threshold_flag = True当且仅当速度在误差内
         if not self.vel_in_threshold_flag:

@@ -5,8 +5,12 @@ import numpy as np
 from utils.transform import rmat2euler_rz_degree
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
-def plot_rot_and_trans(error_rot_lst,error_trans_lst,use_time=10,obj_pth=None,show=False):
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+def plot_rot_and_trans(error_rot_lst,error_trans_lst,z_error_lst,use_time=10,obj_pth=None,show=False):
+    dof = 6 if len(z_error_lst)!= 0 else 3
+    if dof == 3:
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+    else:
+        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 14))
 
     ax1.plot(error_rot_lst, label='Rotation Error', marker='o', linestyle='-', color='blue')
     ax1.set_title('Rotation Error')
@@ -15,15 +19,25 @@ def plot_rot_and_trans(error_rot_lst,error_trans_lst,use_time=10,obj_pth=None,sh
     ax1.grid(True)
     ax1.legend()
 
-    ax2.plot(error_trans_lst, label='Translation Error', marker='x', linestyle='--', color='red')
-    ax2.set_title('Translation Error')
+    ax2.plot(error_trans_lst, label='Trans XYZ Error', marker='x', linestyle='--', color='red')
+    ax2.set_title('Translation XYZ Error')
     ax2.set_xlabel('Time Step')
     ax2.set_ylabel('Error(mm)')
     ax2.grid(True)
     ax2.legend()
 
+    if dof == 6:
+        ax3.plot(z_error_lst, label='Trans Z Error', marker='x', linestyle='--', color='green')
+        ax3.set_title('Translation Z Error')
+        ax3.set_xlabel('Time Step')
+        ax3.set_ylabel('Error(mm)')
+        ax3.grid(True)
+        ax3.legend()
+
     final_rot_error = error_rot_lst[-1]
     final_trans_error = error_trans_lst[-1]
+    if dof == 6:
+        final_z_error = z_error_lst[-1]
 
     ax1.annotate(f'Final Rot Error: {final_rot_error:.2f}(°)',
                  xy=(len(error_rot_lst) - 1, final_rot_error),
@@ -36,6 +50,13 @@ def plot_rot_and_trans(error_rot_lst,error_trans_lst,use_time=10,obj_pth=None,sh
                  xytext=(len(error_trans_lst) - 1, final_trans_error + 0.05),
                  # arrowprops=dict(facecolor='red', shrink=0.05),
                  color='red')
+    if dof == 6:
+        ax3.annotate(f'Final Trans Z Error: {final_z_error:.2f}(mm)',
+                     xy=(len(z_error_lst) - 1, final_z_error),
+                     xytext=(len(z_error_lst) - 1, final_z_error + 0.05),
+                     # arrowprops=dict(facecolor='red', shrink=0.05),
+                     color='green')
+
     plt.annotate(f'Use Time: {use_time:.2f}(s)',
                  xy=(len(error_trans_lst) - 1, final_trans_error),
                  xytext=(len(error_trans_lst), 0),

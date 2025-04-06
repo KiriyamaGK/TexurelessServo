@@ -51,22 +51,31 @@ def calculate_success_rate(data, output_file="success_rate.json"):
 def visualize_final_error(data, output_file="final_error.json"):
     obj_trans_stats = {}
     obj_rot_stats = {}
+    obj_z_error_stats = {}
+
+    dof = 6 if len(data[0]) == 4 else 3
     for idx in range(len(data)):
         obj_id = str(data[idx][0])
         if obj_id not in obj_trans_stats:
             assert obj_id not in obj_rot_stats
             obj_trans_stats[obj_id] = []
             obj_rot_stats[obj_id] = []
+            obj_z_error_stats[obj_id] = []
+
         obj_trans_stats[obj_id].append(data[idx][1])
         obj_rot_stats[obj_id].append(data[idx][2])
+        if dof == 6:
+            obj_z_error_stats[obj_id].append(data[idx][3])
 
     stats_summary = {}
     for obj_id in obj_trans_stats:
         trans_data = obj_trans_stats[obj_id]
         rot_data = obj_rot_stats[obj_id]
+        if dof == 6:
+            z_error_data = obj_z_error_stats[obj_id]
 
         stats_summary[obj_id] = {
-            "translation": {
+            "translation_total": {
                 "mean": sum(trans_data) / len(trans_data),
                 "max": max(trans_data),
                 "min": min(trans_data),
@@ -78,14 +87,24 @@ def visualize_final_error(data, output_file="final_error.json"):
             },
             "attempts": len(trans_data),
         }
+        if dof == 6:
+            stats_summary[obj_id]["translation_z"] =  {
+                "mean": sum(z_error_data) / len(z_error_data),
+                "max":  max(z_error_data),
+                "min":  min(z_error_data),
+            }
     print("==============================")
     print("Final Error Statistics:")
     for obj_id, stats in stats_summary.items():
         print(f"Object ID: {obj_id}")
         print(f"  Attempts: {stats['attempts']}")
-        print(f"  Translation - Mean: {stats['translation']['mean']:.4f}, "
-              f"Max: {stats['translation']['max']:.4f}, "
-              f"Min: {stats['translation']['min']:.4f}")
+        print(f"  Translation_XYZ - Mean: {stats['translation_total']['mean']:.4f}, "
+              f"Max: {stats['translation_total']['max']:.4f}, "
+              f"Min: {stats['translation_total']['min']:.4f}")
+        if dof == 6:
+            print(f"  Translation_Z - Mean: {stats['translation_z']['mean']:.4f}, "
+                  f"Max: {stats['translation_z']['max']:.4f}, "
+                  f"Min: {stats['translation_z']['min']:.4f}")
         print(f"  Rotation - Mean: {stats['rotation']['mean']:.4f}, "
               f"Max: {stats['rotation']['max']:.4f}, "
               f"Min: {stats['rotation']['min']:.4f}")

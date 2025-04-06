@@ -70,7 +70,7 @@ def _setup_model(model_config: dict):
     )#**动态传参，字典中的键与函数参数名完全匹配
 
 if __name__ == '__main__':
-    config_dir= "../configs/rollout.json"
+    config_dir= "../configs/rollout_near.json"
 
     fps = 30
     vis_h, vis_w = 480, 640
@@ -112,12 +112,12 @@ if __name__ == '__main__':
     succ_rot = eval_metrics['success_rate']['rot_threshold']
 
     dof = config["dof"]
-    use_max_rot = config['use_max_rot']
 
     init_horizon_trans = config["init"]['init_horizon_trans']
     init_vertical_trans = config["init"]['init_vertical_trans']["value"]
     using_minus_vertical = config["init"]['init_vertical_trans']["using_minus"]
-    init_rot = config["init"]['init_rot']
+    init_rot = config["init"]['init_rot']['value']
+    use_max_rot = config["init"]['init_rot']['use_max_rot']
 
     expert_motion_type=config['expert_motion_type']
     record_video=config['record_video']
@@ -155,6 +155,7 @@ if __name__ == '__main__':
             model.buffer=[]
             error_rot_lst=[]
             error_trans_lst=[]
+            z_error_lst=[]
             wgT_list=[]
             vel_tr_lst=[]
             vel_rot_lst=[]
@@ -240,8 +241,12 @@ if __name__ == '__main__':
                 rtn_dict=env.reinit_eval()
                 trans_error=rtn_dict['dist']
                 rot_error=rtn_dict['angle']
+                z_error=rtn_dict["z_error"]
                 error_rot_lst.append(rot_error)          #deg
                 error_trans_lst.append(trans_error*1000) #m to mm
+                if dof == 6:
+                    z_error_lst.append(z_error*1000) #m to mm
+
                 vel_tr_lst.append(np.linalg.norm(vel_tr)*1000) #mm
                 vel_rot_lst.append(abs(vel_rot))
                 wgT_list.append(wgT)
@@ -251,9 +256,11 @@ if __name__ == '__main__':
                     if eval_metrics["error_curve"]["utilized"] and use_eval_metrics:
                         error_pth = os.path.join(obj_pth, "error_curve")
                         os.makedirs(error_pth, exist_ok=True)
-                        plot_rot_and_trans(error_rot_lst=error_rot_lst, error_trans_lst=error_trans_lst, use_time=use_time,obj_pth=error_pth,show=False)
+                        plot_rot_and_trans(error_rot_lst=error_rot_lst, error_trans_lst=error_trans_lst, use_time=use_time,obj_pth=error_pth,z_error_lst=z_error_lst,show=False)
                         print("last rot error: {}".format(error_rot_lst[-1]))
                         print("last trans error: {}".format(error_trans_lst[-1]))
+                        if dof == 6:
+                            print("last z error: {}".format(z_error_lst[-1]))
                     if eval_metrics["success_rate"]["utilized"] and use_eval_metrics:
                         success=1 if (error_rot_lst[-1]<=succ_rot and error_trans_lst[-1]<=succ_tr*1000) else 0
                         success_list.append([obj_id,success])
@@ -266,7 +273,7 @@ if __name__ == '__main__':
                         os.makedirs(vel_pth, exist_ok=True)
                         plot_vel(vel_tr=vel_tr_lst,vel_rot=vel_rot_lst,use_time=use_time,obj_path=vel_pth,show=False)
 
-                    final_error_list.append([obj_id,error_trans_lst[-1],error_rot_lst[-1]])
+                    final_error_list.append([obj_id,error_trans_lst[-1],error_rot_lst[-1],z_error_lst[-1]] if dof==6 else [obj_id,error_trans_lst[-1],error_rot_lst[-1]])
                     time_list.append([obj_id,use_time])
                     if video_flag:
                         out.release()
