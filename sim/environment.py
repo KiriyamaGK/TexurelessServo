@@ -23,7 +23,8 @@ class Environment(object):
         use_max_rot=False,
         dof=3,
         angle_eps = 0.4,
-        dist_eps=0.001
+        dist_eps=0.001,
+        depth_info=None
     ):
         #cam1
         cwT = np.array([[-1, 0, 0, 0],  # 左上角c右下角w，前三列是c系在w系中的表示,按列排列，最后一列是从c的原点指向w的原点并在c系中表示
@@ -93,6 +94,7 @@ class Environment(object):
         self.init_flag=False
         self.close_enough_flag=False
         self.vel_in_threshold_flag=False
+        self.depth_info=depth_info if depth_info is not None else {"utilized":False,"normalize_scaler": 10}
 
         if isinstance(camera_config, str):
             with open(camera_config, "r") as j:
@@ -164,7 +166,10 @@ class Environment(object):
 
     def sample_init_pos(self):
         if not self.use_max_rot:
-            ang = np.array([random.uniform(0, self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+            if random.uniform(0, 1) < 0.85:
+                ang = np.array([random.uniform(0, self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+            else:
+                ang = np.array([self.init_rot[i] * (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
         else:
             ang =np.array([self.init_rot[i]* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
         print("angle:",ang)
@@ -210,14 +215,12 @@ class Environment(object):
         else:
             p.configureDebugVisualizer(lightPosition=[0,0,1])
         frame = self.camera.render(self.cwT, self.client)
-        rgb = frame.color_image()
 
         if self.dof==6:
             frame2 = self.camera.render(self.c2wT, self.client)
-            rgb2 = frame2.color_image()
-            return {"img_1":rgb, "img_2":rgb2}
+            return {"img_1":frame.color_image(), "img_2":frame2.color_image()} if not self.depth_info["utilized"] else {"img_1":frame.color_image(), "img_2":frame2.color_image(),"img_1_depth":frame.depth_image(), "img_2_depth":frame2.depth_image()}
         else:
-            return {"img_1":rgb}
+            return {"img_1":frame.color_image()} if not self.depth_info["utilized"] else {"img_1":frame.color_image(), "img_1_depth":frame.depth_image()}#TODO:万一有问题可以/self.depth_info["normalize_scaler"]
 
     def act_to_goal(self):
         self.wgT = self.wgT_tar

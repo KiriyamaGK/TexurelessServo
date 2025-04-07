@@ -84,6 +84,32 @@ class NetworkBase(ABC, nn.Module):
             raise RuntimeError('x_img.shape should between 3 and 5')
         return b, seq
 
+    def merging_depth(self,x):
+        if not self.using_depth:
+            return x
+        else:
+            assert "depth_image" in x
+            img_1_keys = [k for k in x.keys() if "depth" not in k and "_2" not in k and ("image" in k or "img" in k)]
+            dep_1_key="depth_image"
+            dep_1_goal_key = "depth_image_goal"
+            for k in img_1_keys:
+                x[k]=torch.concatenate((x[k],x[dep_1_key].clone()), dim=1) if "goal" not in k else torch.concatenate(
+                    (x[k],x[dep_1_goal_key].clone()), dim=1) #[_,c,h,w]
+            del x[dep_1_key]
+            del x[dep_1_goal_key]
+
+
+            if self.num_cameras==2:
+                img_2_keys = [k for k in x.keys() if "depth" not in k and "_2" in k and ("image" in k or "img" in k)]
+                dep_2_key = "depth_image_2"
+                dep_2_goal_key = "depth_image_2_goal"
+                for k in img_2_keys:
+                    x[k] = torch.concatenate((x[k], x[dep_2_key].clone()), dim=1) if "goal" not in k else torch.concatenate(
+                        (x[k], x[dep_2_goal_key].clone()), dim=1)  # [_,c,h,w]
+                del x[dep_2_key]
+                del x[dep_2_goal_key]
+            return x
+
     def create_util_img_tensors(self,x):
         dic = {}
         for k in list(x.keys()): #迭代字典的键时不能修改字典的键，所以把x.keys（）换成list(x.keys()）

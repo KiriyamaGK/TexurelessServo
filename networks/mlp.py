@@ -6,6 +6,7 @@ import math
 import numpy as np
 import torch.nn as nn
 from networks.Network import NetworkBase
+from networks import rgbd_resnet
 from networks.helpers import get_activation_fn
 from networks.SpatialSoftmax import SpatialSoftmax
 from torchvision import models
@@ -31,8 +32,10 @@ class MLP(NetworkBase):
         self.batch_size = batch_size
         self.seq_length = seq_length
 
+        self.using_depth = encoder['using_depth'] if "using_depth" in encoder else False
+
         self.ss_num_kp = encoder['params']['SpatialSoftmax']['num_kp']
-        self.ss_in_c = encoder['params']['SpatialSoftmax']['in_c']
+        self.ss_in_c = encoder['params']['SpatialSoftmax']['in_c'] if not self.using_depth else encoder['params']['SpatialSoftmax']['in_c']*4
         self.ss_in_h = encoder['params']['SpatialSoftmax']['in_h']
         self.ss_in_w = encoder['params']['SpatialSoftmax']['in_w']
 
@@ -82,10 +85,10 @@ class MLP(NetworkBase):
 
         if self.encoder_name == 'ResNet18':
             for _ in range(self.num_cameras):
-                resnet18 = models.resnet18()
-                resnet18_goal = models.resnet18()
-                self.img_encs.append(torch.nn.Sequential(*(list(resnet18.children())[:-2])))
-                self.img_enc_goals.append(torch.nn.Sequential(*(list(resnet18_goal.children())[:-2])))
+                resnet18 = models.resnet18() if not self.using_depth else rgbd_resnet.FusionEnhancedNet()
+                resnet18_goal = models.resnet18() if not self.using_depth else rgbd_resnet.FusionEnhancedNet()
+                self.img_encs.append(torch.nn.Sequential(*(list(resnet18.children())[:-2])) if not self.using_depth else resnet18_goal)
+                self.img_enc_goals.append(torch.nn.Sequential(*(list(resnet18_goal.children())[:-2])) if not self.using_depth else resnet18_goal)
                 self.spatial_softmaxs.append(SpatialSoftmax(self.ss_in_c,self.ss_in_h,self.ss_in_w,self.ss_num_kp))
                 self.spatial_softmax_goals.append(SpatialSoftmax(self.ss_in_c, self.ss_in_h, self.ss_in_w, self.ss_num_kp))
                 self.ee_lns.append(nn.Linear(self.ss_num_kp * 2, (self.hidden_sizes[0]-self.low_dim_hidden_sizes[-1])//(2*self.num_cameras)))
@@ -175,7 +178,7 @@ class MLP(NetworkBase):
         #change dimension
         for itms in x.keys():
             if "image" in itms or "img" in itms:
-                x[itms]=x[itms].view(-1,3,self.img_size,self.img_size)
+                x[itms]=x[itms].view(-1,3,self.img_size,self.img_size) if "depth" not in itms else x[itms].view(-1,1,self.img_size,self.img_size)
 
         #low_dim
         if self.input_low_dim!=0:
@@ -191,6 +194,7 @@ class MLP(NetworkBase):
             x_low_dim = None
 
         #imgs
+        x=self.merging_depth(x)
         x = self.create_util_img_tensors(x)
         x=self.preprocess_imgs(x)
         x=self.img_branch(x,b=b,seq=seq) # sequentially:  id + "goal" + "aug" + "feat"

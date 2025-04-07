@@ -19,7 +19,7 @@
         "fov": 60
     },
     "overall_setting": {
-        "file_name": "25.04.04",
+        "file_name": "25.04.07",
         "demo_total_num": 2500,
         "objs_descriptor": 14,
         "replace_existed_hdf5": true
@@ -29,6 +29,10 @@
         "trans_and_rot_type": "simultaneously",
         "random_light_dir": true,
         "use_random_light_img_key": true,
+        "depth": {
+            "utilized": true,
+            "normalize_scaler": 1
+        },
 
         "init": {
             "init_horizon_trans": 0.002,
@@ -38,18 +42,18 @@
             },
             "init_rot":{
                 "value":[5,5,5],
-                "use_max_rot": true
+                "use_max_rot": false
                 }
             },
 
         "velocity": {
-            "trans_vel": 0.001,
-            "rot_vel": 0.5
+            "trans_vel": 0.0005,
+            "rot_vel": 0.2
         },
 
         "stop_policy":{
-            "angle_eps": 0.4,
-            "dist_eps": 0.001
+            "angle_eps": 0.05,
+            "dist_eps": 0.0002
         }
     },
     "post_process": {

@@ -13,8 +13,8 @@
         "fov": 60
     },
 
-    "logs_dir":  "trained_models/trial/2025-04-04_01-23-47/config.json",
-    "ckpts_dir": [329],
+    "logs_dir":  "trained_models/trial/2025-04-04_22-30-20/config.json",
+    "ckpts_dir": [296],
     "objs_descriptor": 20,
     "eval_epoch_num": 400,
     "bgr2rgb": false,

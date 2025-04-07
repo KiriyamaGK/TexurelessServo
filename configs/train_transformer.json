@@ -23,6 +23,7 @@
         "encoder": {
           "name": "ResNet18",
           "num_cameras": 2,
+          "using_depth": true,
           "data_augmentation": true,
           "task_consistency_loss": true,
           "mixed_light_dataset":false,

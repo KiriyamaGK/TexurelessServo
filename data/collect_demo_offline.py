@@ -50,6 +50,7 @@ if __name__ == '__main__':
     motion_type=config["demo_collection"]['trans_and_rot_type']
     random_light_dir = config["demo_collection"]['random_light_dir']
     use_light_key = config["demo_collection"]["use_random_light_img_key"] if random_light_dir else False
+    depth_info=config["demo_collection"]['depth']
 
     trans_vel_norm=config["demo_collection"]["velocity"]['trans_vel'] #m
     rot_vel_norm=config["demo_collection"]["velocity"]['rot_vel']    #deg
@@ -71,7 +72,7 @@ if __name__ == '__main__':
     assert (not portion_last_episode["utilized"]) or (not add_end_episode["utilized"])
 
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env=Environment(camera_config=camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof,angle_eps=angle_eps,dist_eps=dist_eps)
+    env=Environment(camera_config=camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof,angle_eps=angle_eps,dist_eps=dist_eps,depth_info=depth_info)
     env.init()
 
     base_dir = return_disc_route("One Touch")
@@ -106,28 +107,29 @@ if __name__ == '__main__':
         action_list=[]
         img_lst=[]
         img_light_list=[]
+        im_dep_lst=[]
         img2_lst = []
         img2_light_list = []
+        im_dep2_lst=[]
         rz_list=[]
         gaussian_img_ct_lst=[]
         gaussian_img_kpt_lst = []
         # iii=0
         while True:
             if not use_light_key:
-                rtn_dict=env.observation(random_light_dir=random_light_dir,use_prob=True)
-
-                img=rtn_dict['img_1']
-                img2=rtn_dict['img_2'] if 'img_2' in rtn_dict else None
+                rtn_dict=env.observation(random_light_dir=random_light_dir,use_prob=True) #TODO:记得修改
                 img_light = None
                 img2_light = None
             else:
                 rtn_dict=env.observation(random_light_dir=False)
                 rtn_light_dict=env.observation(random_light_dir=True,use_prob=False)
-
-                img = rtn_dict['img_1']
-                img2 = rtn_dict['img_2'] if 'img_2' in rtn_dict else None
                 img_light = rtn_light_dict['img_1']
                 img2_light = rtn_light_dict['img_2'] if 'img_2' in rtn_light_dict else None
+
+            img = rtn_dict['img_1']
+            img2 = rtn_dict['img_2'] if 'img_2' in rtn_dict else None
+            im_dep = rtn_dict["img_1_depth"] if "img_1_depth" in rtn_dict else None
+            im_dep2 = rtn_dict["img_2_depth"] if "img_2_depth" in rtn_dict else None
 
             wgT_tar=env.wgT_tar
             wgT=env.wgT
@@ -160,6 +162,12 @@ if __name__ == '__main__':
             if img2_light is not None:
                 img2_light=clip_image(img2_light,img_h)
                 img2_light_list.append(img2_light)
+            if im_dep is not None:
+                im_dep=clip_image(im_dep,img_h)
+                im_dep_lst.append(im_dep[..., np.newaxis]) #[h,w,1]
+            if im_dep2 is not None:
+                im_dep2=clip_image(im_dep2,img_h)
+                im_dep2_lst.append(im_dep2[..., np.newaxis])
             # print(iii)
             # iii+=1
             env.action(dT)
@@ -185,6 +193,10 @@ if __name__ == '__main__':
                         img2_lst=insert_imgs(img2_lst,pick_id,insert_id,add_num)
                     if len(img2_light_list) != 0:
                         img2_light_list=insert_imgs(img2_light_list,pick_id,insert_id,add_num)
+                    if len(im_dep_lst) != 0:
+                        im_dep_lst=insert_imgs(im_dep_lst,pick_id,insert_id,add_num)
+                    if len(im_dep2_lst) != 0:
+                        im_dep2_lst=insert_imgs(im_dep2_lst,pick_id,insert_id,add_num)
 
                 if add_medium_episode["utilized"]:
                     action_list, rz_list, need_add_medium, trans_id, rot_id=_add_medium_episode(action_list, rz_list, dof,add_medium_episode["add_num"])
@@ -201,6 +213,10 @@ if __name__ == '__main__':
                             img2_lst = insert_imgs(img2_lst, pick_id, insert_id, add_num)
                         if len(img2_light_list) != 0:
                             img2_light_list = insert_imgs(img2_light_list, pick_id, insert_id, add_num)
+                        if len(im_dep_lst) != 0:
+                            im_dep_lst = insert_imgs(im_dep_lst, pick_id, insert_id, add_num)
+                        if len(im_dep2_lst) != 0:
+                            im_dep2_lst = insert_imgs(im_dep2_lst, pick_id, insert_id, add_num)
                 #save hdf5
                 epi_length=len(img_lst)
                 assert epi_length==len(action_list)
@@ -216,6 +232,10 @@ if __name__ == '__main__':
                     new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image_2', data=img2_lst)
                 if len(img2_light_list)!=0:
                     new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image_2_light', data=img2_light_list)
+                if len(im_dep_lst)!=0:
+                    new_f_out.create_dataset(obs_path + '/depth_image', data=im_dep_lst)
+                if len(im_dep2_lst)!=0:
+                    new_f_out.create_dataset(obs_path + '/depth_image_2', data=im_dep2_lst)
                 if dof==3:
                     new_f_out.create_dataset(obs_path + '/abs_rot', data=rz_list)
                 new_f_out.create_dataset(action_path, data=action_list)
