@@ -102,7 +102,11 @@ class BehaviorCloning():
                 # reset for next dataset pass
                 data_loader_iter = iter(train_loader)
                 batch = next(data_loader_iter)
-            batch["actions"]=batch["actions"].to(self.device)
+
+            for k, _ in batch.items():
+                if k !="obs":
+                    batch[k] = batch[k].to(self.device)
+
             batch_loss_dict = self.train_on_batch(batch)
             if idx==0:
                 for k,v in batch_loss_dict.items():
@@ -145,7 +149,11 @@ class BehaviorCloning():
                     # reset for next dataset pass
                     data_loader_iter = iter(eval_loader)
                     batch = next(data_loader_iter)
-                batch["actions"] = batch["actions"].to(self.device)
+
+                for k, _ in batch.items():
+                    if k != "obs":
+                        batch[k] = batch[k].to(self.device)
+
                 batch_loss_dict = self.eval_on_batch(batch)
                 if idx == 0:
                     for k, v in batch_loss_dict.items():
@@ -169,7 +177,7 @@ class BehaviorCloning():
         #     loss_dict = {'loss': loss_1}
         # else:
         predictions = self.model(batch["obs"])
-        loss_dict = self.criterion(predictions, batch["actions"])
+        loss_dict = self.criterion(predictions, {k:batch[k] for k in batch if k != "obs"})
         loss=loss_dict['loss']
         loss.backward()
         self.optimizer.step()
@@ -187,7 +195,7 @@ class BehaviorCloning():
         #     loss_dict = {'loss': loss_1}
         # else:
         predictions = self.model(batch["obs"])
-        loss_dict = self.criterion(predictions, batch["actions"])
+        loss_dict = self.criterion(predictions, {k:batch[k] for k in batch if k != "obs"})
         for k, v in loss_dict.items():
             loss_dict[k] = v.item()
         return loss_dict

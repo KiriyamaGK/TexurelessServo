@@ -45,22 +45,32 @@ def _portion_last_episode(action_list,portion_last_num,ac_dim):
                     action_list[i + num - cvt_last_num][3+kk] *= (cvt_last_num - 1 - i) / cvt_last_num
     return action_list,need_portion
 
-def _add_end_episode(add_num,disturb_abs_rot,abs_rot_list,act_lst):
+def _add_end_episode(add_num,disturb_abs_rot,abs_rot_list,act_lst,pose_list):
     act = act_lst[-1].copy()
+
     abs_rot_list=None if (isinstance(abs_rot_list,list) and len(abs_rot_list) == 0) else abs_rot_list
-    abs_rot=abs_rot_list[-1].copy() if abs_rot_list is not None else None
+    abs_rot = abs_rot_list[-1].copy() if abs_rot_list is not None else None
+
+    pose_list=None if (isinstance(pose_list,list) and len(pose_list) == 0) else pose_list
+    pose = pose_list[-1].copy() if pose_list is not None else None
+
     disturb_abs_rot=False if abs_rot_list is None else disturb_abs_rot
     for i in range(add_num):
         act_lst.append(act)
+
+        if pose_list is not None:
+            pose_list.append(pose)
         if disturb_abs_rot:
             abs_rot_list.append(random.uniform(1.0, 10.0))
         else:
             if abs_rot_list is not None:
                 abs_rot_list.append(abs_rot)
-    return abs_rot_list,act_lst
+    return abs_rot_list,act_lst,pose_list
 
-def _add_medium_episode(act_lst, abs_rot_list, ac_dim, add_num):
+def _add_medium_episode(act_lst, abs_rot_list, ac_dim, add_num,pose_list):
     abs_rot_list=None if (isinstance(abs_rot_list,list) and len(abs_rot_list) == 0) else abs_rot_list
+    pose_list = None if (isinstance(pose_list, list) and len(pose_list) == 0) else pose_list
+
     need_add = True
     num = len(act_lst)
     rot_id = num
@@ -79,19 +89,26 @@ def _add_medium_episode(act_lst, abs_rot_list, ac_dim, add_num):
         trans = np.array(act_lst[trans_id].copy()[0:2]) if ac_dim == 3 else np.array(
             act_lst[trans_id].copy()[0:3])
         trans *= 0.5
-
+        #abs rot
         if abs_rot_list is not None:
             abs_rot = np.array(abs_rot_list[trans_id + 1].copy())
             abs_rot_list = np.concatenate(
                 (abs_rot_list[0:rot_id].copy(), np.repeat(abs_rot.copy(), add_num, axis=0),
                  abs_rot_list[rot_id:].copy()))
             assert abs_rot_list.shape[0] == row_1
-
+        #delta pose
+        if pose_list is not None:
+            pose = np.array(pose_list[trans_id + 1].copy())
+            pose_list = np.concatenate(
+                (pose_list[0:rot_id].copy(), np.repeat(pose.copy(), add_num, axis=0),
+                 pose_list[rot_id:].copy()))
+            assert pose_list.shape[0] == row_1
+        #action
         act = np.concatenate((trans, np.array(rot)), axis=0)
         act_lst = np.concatenate(
             (act_lst[0:rot_id].copy(), np.repeat(act[np.newaxis, :].copy(), add_num, axis=0), act_lst[rot_id:].copy()))
         assert act_lst.shape[0] == row_1
-    return act_lst, abs_rot_list, need_add,trans_id, rot_id
+    return act_lst, abs_rot_list,pose_list, need_add,trans_id, rot_id
 
 def hdf_insert_images_for_medium(f, ep_key, dataset_name, trans_id, rot_id, add_num, row_1):
     if dataset_name in f[ep_key]:

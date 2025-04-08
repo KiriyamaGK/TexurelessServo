@@ -29,6 +29,7 @@ class MLP(NetworkBase):
         self.freeze_encoder=encoder['freeze']
         self.encoder_name = encoder['name']
         self.use_siamese = encoder['siamese']
+        self.using_pos_estm=encoder['using_pose_estimation'] if 'using_pose_estimation' in encoder else False
         self.batch_size = batch_size
         self.seq_length = seq_length
 
@@ -104,43 +105,15 @@ class MLP(NetworkBase):
 
         #for low_dim
         if self.input_low_dim!=0:
-            self.mlp_pos = nn.Sequential(
-                nn.Linear(self.input_low_dim, self.low_dim_hidden_sizes[0]),
-                self.activation(),
-                nn.Linear(self.low_dim_hidden_sizes[0], self.low_dim_hidden_sizes[1]),
-            )
+            self.mlp_pos = self._build_mlp([self.input_low_dim]+self.low_dim_hidden_sizes)
 
         #policy
         self.buffer=[]
         if self.use_GMM:
             self.gmm_modes = 5
-            self.mlp_decoder_mean = nn.Sequential(
-            nn.Linear(self.hidden_sizes[0], hidden_sizes[1]),
-            self.activation(),
-            nn.Linear(self.hidden_sizes[1], self.hidden_sizes[2]),
-            self.activation(),
-            nn.Linear(self.hidden_sizes[2], self.hidden_sizes[3]),
-            self.activation(),
-            nn.Linear(self.hidden_sizes[3], self.output_dim* self.gmm_modes),
-        )
-            self.mlp_decoder_scale = nn.Sequential(
-            nn.Linear(self.hidden_sizes[0], hidden_sizes[1]),
-            self.activation(),
-            nn.Linear(self.hidden_sizes[1], self.hidden_sizes[2]),
-            self.activation(),
-            nn.Linear(self.hidden_sizes[2], self.hidden_sizes[3]),
-            self.activation(),
-            nn.Linear(self.hidden_sizes[3], self.output_dim* self.gmm_modes),
-        )
-            self.mlp_decoder_logits = nn.Sequential(
-            nn.Linear(self.hidden_sizes[0], hidden_sizes[1]),
-            self.activation(),
-            nn.Linear(self.hidden_sizes[1], self.hidden_sizes[2]),
-            self.activation(),
-            nn.Linear(self.hidden_sizes[2], self.hidden_sizes[3]),
-            self.activation(),
-            nn.Linear(self.hidden_sizes[3], self.gmm_modes),
-        )
+            self.mlp_decoder_mean = self._build_mlp(self.hidden_sizes+[output_dim * self.gmm_modes])
+            self.mlp_decoder_scale = self._build_mlp(self.hidden_sizes+[output_dim * self.gmm_modes])
+            self.mlp_decoder_logits = self._build_mlp(self.hidden_sizes+[self.gmm_modes])
             self.min_std=0.0001
             self.activations = {
                 "softplus": F.softplus,
@@ -148,16 +121,14 @@ class MLP(NetworkBase):
             }
             self.std_activation = "softplus"
             self.low_noise_eval = False
+
         else:
-            self.policy_mlp=nn.Sequential(
-            nn.Linear(self.hidden_sizes[0], hidden_sizes[1]),
-            self.activation(),
-            nn.Linear(self.hidden_sizes[1], self.hidden_sizes[2]),
-            self.activation(),
-            nn.Linear(self.hidden_sizes[2], self.hidden_sizes[3]),
-            self.activation(),
-            nn.Linear(self.hidden_sizes[3], self.output_dim),
-        )
+            self.policy_mlp=self._build_mlp(self.hidden_sizes+[output_dim])
+
+        if self.using_pos_estm:
+            self.pos_estm_layer = self._build_mlp(self.hidden_sizes+[6])
+            self.pos_estm_bottleneck=self._create_fcn(6,self.hidden_sizes[0])
+
         self.print_training_settings()
 
     def gmm_policy_mlp(self,x,b,seq):
@@ -170,8 +141,10 @@ class MLP(NetworkBase):
         x_logits = x_logits.view(b, seq, self.gmm_modes).contiguous()
         return x_means, x_scales, x_logits
 
-
     def forward(self, x):
+        pos_pred= None
+        pos_aug_pred= None
+
         # determine b,seq
         b,seq = self.determine_batch_and_seq_len(x['robot0_eye_in_hand_image'].shape)
 
@@ -203,8 +176,17 @@ class MLP(NetworkBase):
         plc,plc_aug,x=self.determine_policy_inputs(x,x_low_dim)
 
         plc=plc.view(b,seq,-1).contiguous()
+        if self.using_pos_estm:
+            plc=self.pos_estm_layer(plc)
+            pos_pred=plc.clone()
+            plc=self.pos_estm_bottleneck(plc)
+
         if self.use_tcl_loss:
             plc_aug = plc_aug.view(b,seq,-1).contiguous()
+            if self.using_pos_estm:
+                plc_aug = self.pos_estm_layer(plc_aug)
+                pos_aug_pred = plc_aug.clone()
+                plc_aug = self.pos_estm_bottleneck(plc_aug)
 
         if not self.use_GMM:
             output=self.policy_mlp(plc)
@@ -227,17 +209,17 @@ class MLP(NetworkBase):
                 output_aug = dists_aug.mean
 
         if not self.use_tcl_loss:
-            return output
+            rtn_dict={"output_tensor": output, "pred_delta_pos": pos_pred}
         else:
             rtn_dict={"output_tensor": output, "output_tensor_aug": output_aug,"x_img_feat": x["x_0_feat"],
                     "x_img_goal_feat": x["x_0_goal_feat"], "x_img_aug_feat": x["x_0_aug_feat"],
-                    "x_img_goal_aug_feat": x["x_0_goal_aug_feat"]}
+                    "x_img_goal_aug_feat": x["x_0_goal_aug_feat"],"pred_delta_pos":pos_pred,"pred_delta_pos_aug":pos_aug_pred}
 
             if self.num_cameras == 2:
                 rtn_dict["x_img_feat"] = torch.cat((rtn_dict["x_img_feat"],x["x_1_feat"]),dim=-1)
                 rtn_dict["x_img_aug_feat"] = torch.cat((rtn_dict["x_img_aug_feat"],x["x_1_aug_feat"]),dim=-1)
                 rtn_dict["x_img_goal_feat"] =torch.cat((rtn_dict["x_img_goal_feat"], x["x_1_goal_feat"]),dim=-1)
                 rtn_dict["x_img_goal_aug_feat"] = torch.cat((rtn_dict["x_img_goal_aug_feat"],x["x_1_goal_aug_feat"]),dim=-1)
-            return rtn_dict
+        return rtn_dict
 
 

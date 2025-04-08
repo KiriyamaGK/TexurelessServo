@@ -7,6 +7,7 @@ import math
 import numpy as np
 import torch.nn as nn
 from networks.Network import NetworkBase
+from networks import rgbd_resnet
 from networks.helpers import get_activation_fn
 from networks.SpatialSoftmax import SpatialSoftmax
 from torchvision import models
@@ -401,11 +402,14 @@ class Transformer(NetworkBase):
         self.freeze_encoder=encoder['freeze']
         self.encoder_name = encoder['name']
         self.use_siamese = encoder['siamese']
+        self.using_pos_estm=encoder['using_pose_estimation'] if 'using_pose_estimation' in encoder else False
         self.batch_size = batch_size
         self.seq_length = seq_length
 
+        self.using_depth = encoder['using_depth'] if "using_depth" in encoder else False
+
         self.ss_num_kp = encoder['params']['SpatialSoftmax']['num_kp']
-        self.ss_in_c = encoder['params']['SpatialSoftmax']['in_c']
+        self.ss_in_c = encoder['params']['SpatialSoftmax']['in_c'] if not self.using_depth else encoder['params']['SpatialSoftmax']['in_c']*4
         self.ss_in_h = encoder['params']['SpatialSoftmax']['in_h']
         self.ss_in_w = encoder['params']['SpatialSoftmax']['in_w']
 
@@ -421,7 +425,7 @@ class Transformer(NetworkBase):
             if "image" not in obs_key and "img" not in obs_key:
                 self.low_dim_keys.append(obs_key)
 
-        self.low_dim_hidden_sizes = low_dim_hidden_sizes if self.input_low_dim != 0 else [0]
+        self.low_dim_hidden_sizes = low_dim_hidden_sizes if self.input_low_dim!=0 else [0]
 
         self.feat_dim = embedding_size
         self.output_head_sizes = output_head_sizes
@@ -464,10 +468,10 @@ class Transformer(NetworkBase):
 
         if self.encoder_name == 'ResNet18':
             for _ in range(self.num_cameras):
-                resnet18 = models.resnet18()
-                resnet18_goal = models.resnet18()
-                self.img_encs.append(torch.nn.Sequential(*(list(resnet18.children())[:-2])))
-                self.img_enc_goals.append(torch.nn.Sequential(*(list(resnet18_goal.children())[:-2])))
+                resnet18 = models.resnet18() if not self.using_depth else rgbd_resnet.FusionEnhancedNet()
+                resnet18_goal = models.resnet18() if not self.using_depth else rgbd_resnet.FusionEnhancedNet()
+                self.img_encs.append(torch.nn.Sequential(*(list(resnet18.children())[:-2])) if not self.using_depth else resnet18_goal)
+                self.img_enc_goals.append(torch.nn.Sequential(*(list(resnet18_goal.children())[:-2])) if not self.using_depth else resnet18_goal)
                 self.spatial_softmaxs.append(SpatialSoftmax(self.ss_in_c,self.ss_in_h,self.ss_in_w,self.ss_num_kp))
                 self.spatial_softmax_goals.append(SpatialSoftmax(self.ss_in_c, self.ss_in_h, self.ss_in_w, self.ss_num_kp))
                 self.ee_lns.append(nn.Linear(self.ss_num_kp * 2, (self.feat_dim-self.low_dim_hidden_sizes[-1])//(2*self.num_cameras)))
@@ -483,39 +487,16 @@ class Transformer(NetworkBase):
 
         #for low_dim
         if self.input_low_dim != 0:
-            self.mlp_pos = nn.Sequential(
-                nn.Linear(self.input_low_dim, self.low_dim_hidden_sizes[0]),
-                self.activation(),
-                nn.Linear(self.low_dim_hidden_sizes[0], self.low_dim_hidden_sizes[1]),
-                self.activation(),
-                nn.Linear(self.low_dim_hidden_sizes[1], self.low_dim_hidden_sizes[2]),
-            )
+            self.mlp_pos = self._build_mlp([self.input_low_dim]+self.low_dim_hidden_sizes)
+
         #policy
         self.gpt_model = GPT(self.model_config)
         self.buffer = []
         if self.use_GMM:
             self.gmm_modes = 5
-            self.mlp_decoder_mean = nn.Sequential(
-                nn.Linear(self.feat_dim, self.output_head_sizes[0]),
-                self.activation(),
-                nn.Linear(self.output_head_sizes[0], self.output_head_sizes[1]),
-                self.activation(),
-                nn.Linear(self.output_head_sizes[1], self.output_dim * self.gmm_modes),
-            )
-            self.mlp_decoder_scale = nn.Sequential(
-                nn.Linear(self.feat_dim, self.output_head_sizes[0]),
-                self.activation(),
-                nn.Linear(self.output_head_sizes[0], self.output_head_sizes[1]),
-                self.activation(),
-                nn.Linear(self.output_head_sizes[1], self.output_dim * self.gmm_modes),
-            )
-            self.mlp_decoder_logits = nn.Sequential(
-                nn.Linear(self.feat_dim, self.output_head_sizes[0]),
-                self.activation(),
-                nn.Linear(self.output_head_sizes[0], self.output_head_sizes[1]),
-                self.activation(),
-                nn.Linear(self.output_head_sizes[1],  self.gmm_modes),
-            )
+            self.mlp_decoder_mean = self._build_mlp([self.feat_dim]+self.output_head_sizes+[self.output_dim * self.gmm_modes])
+            self.mlp_decoder_scale = self._build_mlp([self.feat_dim]+self.output_head_sizes+[self.output_dim * self.gmm_modes])
+            self.mlp_decoder_logits = self._build_mlp([self.feat_dim]+self.output_head_sizes+[self.gmm_modes])
             self.min_std=0.0001
             self.activations = {
                 "softplus": F.softplus,
@@ -523,14 +504,13 @@ class Transformer(NetworkBase):
             }
             self.std_activation = "softplus"
             self.low_noise_eval = False
+
         else:
-            self.mlp_output_head = nn.Sequential(
-            nn.Linear(self.feat_dim, self.output_head_sizes[0]),
-            self.activation(),
-            nn.Linear(self.output_head_sizes[0], self.output_head_sizes[1]),
-            self.activation(),
-            nn.Linear(self.output_head_sizes[1], self.output_dim),
-        )
+            self.mlp_output_head = self._build_mlp([self.feat_dim]+self.output_head_sizes+[self.output_dim])
+
+        if self.using_pos_estm:
+            self.pos_estm_layer = self._build_mlp([self.feat_dim]+self.output_head_sizes+[6])
+            self.pos_estm_bottleneck=self._create_fcn(6,self.feat_dim)
 
         self.print_training_settings()
 
@@ -545,13 +525,16 @@ class Transformer(NetworkBase):
         return x_means, x_scales, x_logits
 
     def forward(self, x):
+        pos_pred= None
+        pos_aug_pred= None
+
         # determine b,seq
         b,seq = self.determine_batch_and_seq_len(x['robot0_eye_in_hand_image'].shape)
 
         # change dimension
         for itms in x.keys():
             if "image" in itms or "img" in itms:
-                x[itms] = x[itms].view(-1, 3, self.img_size, self.img_size)
+                x[itms]=x[itms].view(-1,3,self.img_size,self.img_size) if "depth" not in itms else x[itms].view(-1,1,self.img_size,self.img_size)
 
         # low_dim
         if self.input_low_dim != 0:
@@ -567,7 +550,8 @@ class Transformer(NetworkBase):
         else:
             x_low_dim = None
 
-        # imgs
+        #imgs
+        x=self.merging_depth(x)
         x = self.create_util_img_tensors(x)
         x = self.preprocess_imgs(x)
         x = self.img_branch(x, b=b, seq=seq)  # sequentially:  id + "goal" + "aug" + "feat"
@@ -576,8 +560,17 @@ class Transformer(NetworkBase):
         plc, plc_aug, x = self.determine_policy_inputs(x, x_low_dim)
 
         plc = plc.view(b, seq, -1).contiguous()
+        if self.using_pos_estm:
+            plc = self.pos_estm_layer(plc)
+            pos_pred = plc.clone()
+            plc = self.pos_estm_bottleneck(plc)
+
         if self.use_tcl_loss:
             plc_aug = plc_aug.view(b, seq, -1).contiguous()
+            if self.using_pos_estm:
+                plc_aug = self.pos_estm_layer(plc_aug)
+                pos_aug_pred = plc_aug.clone()
+                plc_aug = self.pos_estm_bottleneck(plc_aug)
 
         N = seq
         output = None
@@ -646,11 +639,11 @@ class Transformer(NetworkBase):
                 output_aug = dists_aug.mean
 
         if not self.use_tcl_loss:
-            return output
+            rtn_dict={"output_tensor": output, "pred_delta_pos": pos_pred}
         else:
-            rtn_dict = {"output_tensor": output, "output_tensor_aug": output_aug, "x_img_feat": x["x_0_feat"],
-                        "x_img_goal_feat": x["x_0_goal_feat"], "x_img_aug_feat": x["x_0_aug_feat"],
-                        "x_img_goal_aug_feat": x["x_0_goal_aug_feat"]}
+            rtn_dict={"output_tensor": output, "output_tensor_aug": output_aug,"x_img_feat": x["x_0_feat"],
+                    "x_img_goal_feat": x["x_0_goal_feat"], "x_img_aug_feat": x["x_0_aug_feat"],
+                    "x_img_goal_aug_feat": x["x_0_goal_aug_feat"],"pred_delta_pos":pos_pred,"pred_delta_pos_aug":pos_aug_pred}
 
             if self.num_cameras == 2:
                 rtn_dict["x_img_feat"] = torch.cat((rtn_dict["x_img_feat"], x["x_1_feat"]), dim=-1)
@@ -658,4 +651,6 @@ class Transformer(NetworkBase):
                 rtn_dict["x_img_goal_feat"] = torch.cat((rtn_dict["x_img_goal_feat"], x["x_1_goal_feat"]), dim=-1)
                 rtn_dict["x_img_goal_aug_feat"] = torch.cat((rtn_dict["x_img_goal_aug_feat"], x["x_1_goal_aug_feat"]),
                                                             dim=-1)
-            return rtn_dict
+        return rtn_dict
+
+

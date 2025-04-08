@@ -20,10 +20,13 @@
         "encoder": {
           "name": "ResNet18",
           "num_cameras": 2,
+
           "using_depth": true,
+          "using_pose_estimation": true,
           "data_augmentation": true,
           "task_consistency_loss": true,
           "mixed_light_dataset":false,
+
           "pretrained_path": "ultralytics/runs/pose/train/weights/best.pt",
           "freeze":false,
           "siamese": false,
@@ -54,8 +57,10 @@
         {
           "weight_tcl_img": 1,
           "weight_tcl_act": 1,
-          "weight_tr": 0.5,
-          "weight_rot": 1.0
+          "weight_tcl_pos": 1,
+          "weight_tr": 500,
+          "weight_rot": 1.0,
+          "weight_pose_estm": 10
         }
       }
 },
@@ -70,7 +75,7 @@
     "num_data_workers": 2
   },
   "dataset": {
-    "hdf5_path": "One Touch/AlignAnything/25.04.044/hdf5/mimic.hdf5",
+    "hdf5_path": "One Touch/AlignAnything/25.04.077/hdf5/mimic.hdf5",
     "specific_obs_keys": [
       "robot0_eye_in_hand_image",
       "robot0_eye_in_hand_image_goal",
@@ -85,6 +90,7 @@
       "depth_image_goal",
       "depth_image_2_goal"
     ],
+    "label_keys": ["actions","delta_pos_curgoal"],
     "num_demos": 5000,
     "seq_length": 10,
     "input_low_dim": 0,

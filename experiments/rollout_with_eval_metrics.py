@@ -223,7 +223,7 @@ if __name__ == '__main__':
                 obs_dict=input_dict_preprocess(obs_dict,rollout=True)
                 pred=model(obs_dict)
                 if isinstance(pred, dict):
-                    predictions=pred['pred_act']
+                    predictions=pred["output_tensor"]
                 else:
                     predictions=pred
                 predictions=predictions.detach().cpu().numpy().reshape(-1,)

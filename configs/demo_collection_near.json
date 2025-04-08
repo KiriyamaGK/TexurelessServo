@@ -19,8 +19,8 @@
         "fov": 60
     },
     "overall_setting": {
-        "file_name": "25.04.07",
-        "demo_total_num": 2500,
+        "file_name": "25.04.0777",
+        "demo_total_num": 2,
         "objs_descriptor": 14,
         "replace_existed_hdf5": true
     },
@@ -33,6 +33,7 @@
             "utilized": true,
             "normalize_scaler": 1
         },
+        "record_pose": true,
 
         "init": {
             "init_horizon_trans": 0.002,
@@ -47,12 +48,22 @@
             },
 
         "velocity": {
-            "trans_vel": 0.0005,
-            "rot_vel": 0.2
+            "trans_vel": {
+                "utilized":false,
+                "value": 0.0005
+            },
+            "rot_vel": {
+                "utilized":false,
+                "value": 0.2
+            },
+            "uniform_vel": {
+                "utilized":true,
+                "value": 0.8
+            }
         },
 
         "stop_policy":{
-            "angle_eps": 0.05,
+            "angle_eps": 0.1,
             "dist_eps": 0.0002
         }
     },

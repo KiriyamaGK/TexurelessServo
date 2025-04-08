@@ -15,6 +15,18 @@ class NetworkBase(ABC, nn.Module):
         self.input_dim = input_low_dim
         self.output_dim = output_dim
 
+    def _create_fcn(self,size_0,size_1):
+        return nn.Linear(size_0, size_1)
+
+    def _build_mlp(self, sizes:list):
+        layers = []
+        if len(sizes)>2:
+            for i in range(len(sizes) - 2):
+                layers.append(self._create_fcn(sizes[i], sizes[i + 1]))
+                layers.append(self.activation())
+        layers.append(self._create_fcn(sizes[-2], sizes[-1]))
+        return nn.Sequential(*layers)
+
     def random_crop_grid(self, x, grid):
         delta = x.size(2) - grid.size(1)
         grid = grid.repeat(x.size(0), 1, 1, 1).cuda()
@@ -119,7 +131,7 @@ class NetworkBase(ABC, nn.Module):
             attr = self.return_name_and_type_from_key(k)
             dic[attr["name"]] = x[k]
 
-        if self.create_mixed_light_dataset:  #仅代表tcl_raw，慎选
+        if self.create_mixed_light_dataset:  #仅代表tcl_raw，或no_tcl,慎选
             assert any("_aug" in k for k in dic.keys())
             for k in list(dic.keys()):
                 if "_aug" in k:

@@ -423,7 +423,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         # fetch observation from the dataset file
         seq = dict()
         for k in keys:
-            if not "goal" in k:
+            if not "_goal" in k:
                 data = self.get_dataset_for_ep(demo_id, k)
                 seq[k] = data[seq_begin_index: seq_end_index]
             else:
@@ -519,7 +519,7 @@ def dataset_factory(config, img_size=None,filter_by_attribute=None):
     ds_kwargs = dict(
         hdf5_path=config["hdf5_path"],
         obs_keys=config["specific_obs_keys"],
-        dataset_keys=["actions"],
+        dataset_keys=config["label_keys"] if "label_keys" in config else ["actions"],
         load_next_obs=False, # whether to load next observations (s') from dataset
         frame_stack=1,
         seq_length=config["seq_length"],

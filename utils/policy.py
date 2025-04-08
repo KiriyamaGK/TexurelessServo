@@ -2,10 +2,22 @@ import numpy as np
 from utils.transform import rotation_matrix_z
 from scipy.spatial.transform import Rotation as R
 
-def get_expert_policy(wgT_tar,wgT,trans_vel_norm,rot_vel_norm,dist_eps,angle_eps,motion_type,dof):
+def get_expert_policy(wgT_tar,wgT,trans_vel,rot_vel,uniform_vel,dist_eps,angle_eps,motion_type,dof):
+    if uniform_vel["utilized"]:
+        assert (not trans_vel["utilized"]) and (not rot_vel["utilized"])
+    else:
+        assert trans_vel["utilized"] and rot_vel["utilized"]
+    trans_vel_norm = trans_vel["value"] if trans_vel["utilized"] else uniform_vel["value"]
+    rot_vel_norm = rot_vel["value"] if rot_vel["utilized"] else uniform_vel["value"]
     dT=np.eye(4)
+    del_T = np.linalg.inv(wgT) @ wgT_tar
+
+    delta_pose = np.zeros(6)  # current2goal
+    delta_pose[0:3]=del_T[0:3,3]*1000 #mm
+    delta_pose[3:]=R.from_matrix(del_T[:3, :3]).as_rotvec()/np.pi*180 #deg
+
     if dof==3: #dT用于左乘
-        del_tr = wgT_tar[0:2, 3] - wgT[0:2, 3]
+        del_tr = wgT_tar[0:2, 3].copy() - wgT[0:2, 3].copy()
         abs_del_tr = np.linalg.norm(del_tr)
         if motion_type != "simultaneously":
             if abs_del_tr > dist_eps:
@@ -28,11 +40,11 @@ def get_expert_policy(wgT_tar,wgT,trans_vel_norm,rot_vel_norm,dist_eps,angle_eps
             if abs_del_tr > dist_eps:
                 vel_tr = del_tr / abs_del_tr * trans_vel_norm
             else:
-                vel_tr = np.array([0, 0])
+                vel_tr = np.array([0, 0])   #m
             if del_rot_mat[0, 1] > 0:
                 vel_rot = rot_vel_norm
             elif del_rot_mat[0, 1] < 0:
-                vel_rot = -rot_vel_norm
+                vel_rot = -rot_vel_norm     #degree
             else:
                 vel_rot = 0
             dT[0:2, 3] = vel_tr
@@ -40,24 +52,31 @@ def get_expert_policy(wgT_tar,wgT,trans_vel_norm,rot_vel_norm,dist_eps,angle_eps
         vel_rot = np.array([vel_rot])
 
     else:  #dT用于右乘
-        del_T = np.linalg.inv(wgT) @ wgT_tar
-        w = R.from_matrix(del_T[:3, :3]).as_rotvec()
-        v = del_T[:3, 3]  # 以上v,w的计算等价于，先求g_gtarT,对前三列旋转矩阵直接求轴角计算w,最后一列直接作为v
-        abs_del_tr = np.linalg.norm(v) #mm
+        w = R.from_matrix(del_T[:3, :3].copy()).as_rotvec()
+        v = del_T[:3, 3].copy()  # 以上v,w的计算等价于，先求g_gtarT,对前三列旋转矩阵直接求轴角计算w,最后一列直接作为v
+        abs_del_tr = np.linalg.norm(v) #m
+        # print("==================================")
         abs_del_angle = np.linalg.norm(w) / np.pi * 180  # degree
-        # vel_tr = v / np.linalg.norm(v) * trans_vel_norm if abs_del_tr > dist_eps else np.array([0, 0, 0])
-        # if motion_type == "simultaneously":
-        #     vel_rot=w/np.linalg.norm(w)*rot_vel_norm if abs_del_angle>angle_eps else np.array([0, 0, 0])
-        # else:
-        #     vel_rot = w / np.linalg.norm(w) * rot_vel_norm if abs_del_tr <= dist_eps and abs_del_angle > angle_eps else np.array([0, 0, 0])
-        vel_tr = v / np.linalg.norm(v) * trans_vel_norm if trans_vel_norm < abs_del_tr else v
-        vel_rot = w / np.linalg.norm(w) * rot_vel_norm if rot_vel_norm<abs_del_angle else w
+        if not uniform_vel["utilized"]:
+            vel_tr = v /  np.linalg.norm(v) * trans_vel_norm if trans_vel_norm < abs_del_tr else v #m
+            vel_rot = w /  np.linalg.norm(w) * rot_vel_norm if rot_vel_norm<abs_del_angle else w # degree
+        else:
+            dis=np.linalg.norm(np.array([np.linalg.norm(v)*1000, np.linalg.norm(w) / np.pi * 180])) #mm,degree
+            vel_tr = (1000*v) / dis * trans_vel_norm if trans_vel_norm < dis else 1000*v  # mm
+            vel_rot = (180*w/np.pi) / dis * rot_vel_norm if rot_vel_norm < dis else 180*w/np.pi  # degree
+            vel_tr/=1000 #m2m
+            # print("distance:", dis)
+        # print("dis_tr:",abs_del_tr*1000)
+        # print("dis_angle:", abs_del_angle)
+        # print("vel_tr:", np.linalg.norm(vel_tr))
+        # print("vel_rot:", np.linalg.norm(vel_rot))
         if motion_type != "simultaneously":
             vel_rot =np.array([0, 0, 0]) if abs_del_tr > dist_eps else vel_rot
         dT[0:3, 3] = vel_tr
         dT[0:3, 0:3] = R.from_rotvec(vel_rot/180*np.pi).as_matrix()
     return {
         "dT":dT,
-        "vel_rot":vel_rot,
-        "vel_tr":vel_tr
+        "vel_rot":vel_rot,  #deg
+        "vel_tr":vel_tr,    #m
+        "cur_goal_delta_pose":delta_pose #mm,degree
     }

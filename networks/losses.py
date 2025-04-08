@@ -6,12 +6,16 @@ import torch.nn as nn
 class CustomLoss(nn.Module):
     def __init__(self,weight,seq_length,output_dim):
         super().__init__()
-        self.weight_tr = weight["weight_tr"]
-        self.weight_rot = weight["weight_rot"]
+        self.weight_tr = weight["weight_tr"] #m
+        self.weight_rot = weight["weight_rot"] #deg
+        self.weight_pos = weight["weight_pose_estm"] if "weight_pose_estm" in weight else None #mm,deg
         self.seq_length = seq_length
         self.output_dim = output_dim
-    def forward(self, inputs, targets):
+    def forward(self, pred_dict, label_dict):
         # 自定义损失计算逻辑
+        inputs=pred_dict["output_tensor"]
+        targets=label_dict["actions"]
+
         inputs=inputs.view(-1,self.seq_length,self.output_dim)
         targets=targets.view(-1,self.seq_length,self.output_dim)
         loss_tr = torch.mean((inputs[:,:,0:2] - targets[:,:,0:2]) ** 2)*self.weight_tr  # mse,平方和/(b*t*n_dim)
@@ -21,6 +25,15 @@ class CustomLoss(nn.Module):
         "loss": loss,
         "loss_tr": loss_tr,
         "loss_rot": loss_rot}
+
+        if pred_dict["pred_delta_pos"] is not None:
+            label_dict["delta_pos_curgoal"]=label_dict["delta_pos_curgoal"].view(-1,self.seq_length,6)
+            pred_dict["pred_delta_pos"]=pred_dict["pred_delta_pos"].view(-1,self.seq_length,6)
+
+            loss_pos=torch.mean((label_dict["delta_pos_curgoal"] - pred_dict["pred_delta_pos"]) ** 2)*self.weight_pos
+            loss_dict["loss_pos"] = loss_pos
+            loss_dict["loss"]+=loss_pos
+        # print(list(loss_dict.keys()))
         return loss_dict
 
 class ModifiedFocalLoss(nn.Module):
@@ -113,21 +126,26 @@ class MSE_and_ModifiedFocalLoss(nn.Module):
 class TCL_MSE(nn.Module):
     def __init__(self,weight,seq_length,output_dim):
         super().__init__()
-        self.weight_tr = weight["weight_tr"]
-        self.weight_rot = weight["weight_rot"]
-        self.weight_img= weight["weight_tcl_img"]
-        self.weight_act= weight["weight_tcl_act"]
+        self.weight_tr = weight["weight_tr"]#m
+        self.weight_rot = weight["weight_rot"] #deg
+        self.weight_pos = weight["weight_pose_estm"] if "weight_pose_estm" in weight else None #mm deg
+
+        self.weight_tcl_img= weight["weight_tcl_img"]
+        self.weight_tcl_act= weight["weight_tcl_act"]
+        self.weight_tcl_pos = weight["weight_tcl_pos"] if "weight_tcl_pos" in weight else None
 
         self.seq_length = seq_length
         self.output_dim = output_dim
-    def forward(self, input_dict, target_act):
+
+    def forward(self, pred_dict, label_dict):
         # 自定义损失计算逻辑
-        pred_act = input_dict["output_tensor"]
-        pred_act_aug=input_dict["output_tensor_aug"]
-        img_feat=input_dict["x_img_feat"]
-        img_goal_feat=input_dict["x_img_goal_feat"]
-        img_aug_feat = input_dict["x_img_aug_feat"]
-        img_goal_aug_feat = input_dict["x_img_goal_aug_feat"]
+        pred_act = pred_dict["output_tensor"]
+        pred_act_aug=pred_dict["output_tensor_aug"]
+        img_feat=pred_dict["x_img_feat"]
+        img_goal_feat=pred_dict["x_img_goal_feat"]
+        img_aug_feat = pred_dict["x_img_aug_feat"]
+        img_goal_aug_feat = pred_dict["x_img_goal_aug_feat"]
+        target_act = label_dict["actions"]
 
         #act
         pred_act=pred_act.view(-1,self.seq_length,self.output_dim)
@@ -137,16 +155,35 @@ class TCL_MSE(nn.Module):
 
         #tcl
         pred_act_aug = pred_act_aug.view(-1, self.seq_length, self.output_dim)
-        loss_tcl_act=torch.mean((pred_act - pred_act_aug) ** 2)*self.weight_act
-        loss_tcl_img=torch.mean((img_feat - img_aug_feat) ** 2)*self.weight_img+torch.mean((img_goal_feat - img_goal_aug_feat) ** 2)*self.weight_img
+        loss_tcl_act=torch.mean((pred_act - pred_act_aug) ** 2)*self.weight_tcl_act
+        loss_tcl_img=torch.mean((img_feat - img_aug_feat) ** 2)*self.weight_tcl_img+torch.mean((img_goal_feat - img_goal_aug_feat) ** 2)*self.weight_tcl_img
 
         loss = loss_tr+ loss_rot+loss_tcl_act+loss_tcl_img
+
         loss_dict = {
         "loss": loss,
         "loss_tr": loss_tr,
         "loss_rot": loss_rot,
         "loss_tcl_act": loss_tcl_act,
         "loss_tcl_img": loss_tcl_img}
+
+        if pred_dict["pred_delta_pos"] is not None:
+            label_dict["delta_pos_curgoal"] = label_dict["delta_pos_curgoal"].view(-1, self.seq_length, 6)
+            pred_dict["pred_delta_pos"] = pred_dict["pred_delta_pos"].view(-1, self.seq_length, 6)
+            if label_dict["delta_pos_curgoal"] is None or pred_dict["pred_delta_pos"] is None:
+                raise ValueError("Predictions or targets cannot be None.")
+            loss_pos = torch.mean(
+                (label_dict["delta_pos_curgoal"] - pred_dict["pred_delta_pos"]) ** 2) * self.weight_pos
+            loss_dict["loss_pos"] = loss_pos
+            loss_dict["loss"] += loss_pos
+
+            if pred_dict["pred_delta_pos_aug"] is not None:
+                pred_dict["pred_delta_pos_aug"] = pred_dict["pred_delta_pos_aug"].view(-1, self.seq_length, 6)
+                loss_tcl_pos = torch.mean(
+                    (pred_dict["pred_delta_pos_aug"]- pred_dict["pred_delta_pos"]) ** 2) * self.weight_tcl_pos
+                loss_dict["loss_tcl_pos"] = loss_tcl_pos
+                loss_dict["loss"] += loss_tcl_pos
+        # print(list(loss_dict.keys()))
         return loss_dict
 
 

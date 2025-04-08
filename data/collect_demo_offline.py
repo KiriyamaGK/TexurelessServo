@@ -1,4 +1,7 @@
 import os
+
+from open3d.examples.reconstruction_system.opencv_pose_estimation import pose_estimation
+
 from utils.hdf5 import add_useless_things, split_train_val_from_hdf5, add_env_meta, compute_num_samples, add_config
 import h5py
 import numpy as np
@@ -51,9 +54,11 @@ if __name__ == '__main__':
     random_light_dir = config["demo_collection"]['random_light_dir']
     use_light_key = config["demo_collection"]["use_random_light_img_key"] if random_light_dir else False
     depth_info=config["demo_collection"]['depth']
+    record_pose=config["demo_collection"]['record_pose']
 
-    trans_vel_norm=config["demo_collection"]["velocity"]['trans_vel'] #m
-    rot_vel_norm=config["demo_collection"]["velocity"]['rot_vel']    #deg
+    trans_vel=config["demo_collection"]["velocity"]['trans_vel'] #m
+    rot_vel=config["demo_collection"]["velocity"]['rot_vel']    #deg
+    uniform_vel=config["demo_collection"]["velocity"]['uniform_vel']
 
     init_horizon_trans=config["demo_collection"]["init"]['init_horizon_trans']
     init_vertical_trans = config["demo_collection"]["init"]['init_vertical_trans']["value"]
@@ -100,9 +105,11 @@ if __name__ == '__main__':
         if existed_demo_num>=1:#根据existed_demo_num的数量整体偏移
             obs_path = 'data/demo_{}/obs'.format(idx+existed_demo_num)
             action_path = 'data/demo_{}/actions'.format(idx+existed_demo_num)
+            pos_path = 'data/demo_{}/delta_pos_curgoal'.format(idx + existed_demo_num)
         else:
             obs_path = 'data/demo_{}/obs'.format(idx)
             action_path = 'data/demo_{}/actions'.format(idx)
+            pos_path = 'data/demo_{}/delta_pos_curgoal'.format(idx)
 
         action_list=[]
         img_lst=[]
@@ -112,6 +119,7 @@ if __name__ == '__main__':
         img2_light_list = []
         im_dep2_lst=[]
         rz_list=[]
+        delta_pose_list=[]
         gaussian_img_ct_lst=[]
         gaussian_img_kpt_lst = []
         # iii=0
@@ -133,13 +141,15 @@ if __name__ == '__main__':
 
             wgT_tar=env.wgT_tar
             wgT=env.wgT
-            act_dict=get_expert_policy(wgT_tar=wgT_tar,wgT=wgT,trans_vel_norm=trans_vel_norm,rot_vel_norm=rot_vel_norm,dist_eps=env.dist_eps,angle_eps=env.angle_eps,motion_type=motion_type,dof=dof)
+            act_dict=get_expert_policy(wgT_tar=wgT_tar,wgT=wgT,trans_vel=trans_vel,rot_vel=rot_vel,uniform_vel=uniform_vel,dist_eps=env.dist_eps,angle_eps=env.angle_eps,motion_type=motion_type,dof=dof)
 
             vel_tr=filter_translation(act_dict['vel_tr'],thres=1e-7)
             vel_rot=act_dict['vel_rot'] #3dof:绕世界系 6dof:绕夹爪系
             dT=act_dict["dT"]
             # vel = np.concatenate((vel_tr,np.array([vel_rot]))) if not isinstance(vel_rot,np.ndarray) else  np.concatenate((vel_tr,vel_rot))
             action_list.append(np.concatenate((vel_tr,vel_rot)))
+            if record_pose:
+                delta_pose_list.append(act_dict['cur_goal_delta_pose'])
 
             if dof==3:
                 rz = rmat2euler_rz_degree(wgT)
@@ -185,7 +195,7 @@ if __name__ == '__main__':
                     insert_id=len(img_lst)-1
                     add_num=add_end_episode["add_num"]
 
-                    rz_list, action_list=_add_end_episode(add_num,disturb_abs_rot["utilized"],rz_list,action_list)
+                    rz_list, action_list,delta_pose_list=_add_end_episode(add_num=add_num,disturb_abs_rot=disturb_abs_rot["utilized"],abs_rot_list=rz_list,act_lst=action_list,pose_list=delta_pose_list)
                     img_lst=insert_imgs(img_lst,pick_id,insert_id,add_num)
                     if len(img_light_list) != 0:
                         img_light_list=insert_imgs(img_light_list,pick_id,insert_id,add_num)
@@ -199,7 +209,7 @@ if __name__ == '__main__':
                         im_dep2_lst=insert_imgs(im_dep2_lst,pick_id,insert_id,add_num)
 
                 if add_medium_episode["utilized"]:
-                    action_list, rz_list, need_add_medium, trans_id, rot_id=_add_medium_episode(action_list, rz_list, dof,add_medium_episode["add_num"])
+                    action_list, rz_list, delta_pose_list,need_add_medium, trans_id, rot_id=_add_medium_episode(act_lst=action_list, abs_rot_list=rz_list, ac_dim=dof,add_num=add_medium_episode["add_num"],pose_list=delta_pose_list)
                     if need_add_medium:
                         print("+++++++++++++++++++++++++++++++++++++++++")
                         pick_id = trans_id + 1
@@ -238,6 +248,9 @@ if __name__ == '__main__':
                     new_f_out.create_dataset(obs_path + '/depth_image_2', data=im_dep2_lst)
                 if dof==3:
                     new_f_out.create_dataset(obs_path + '/abs_rot', data=rz_list)
+                if len(delta_pose_list)!=0:
+                    new_f_out.create_dataset(pos_path, data=delta_pose_list)
+
                 new_f_out.create_dataset(action_path, data=action_list)
                 print("action_lst-1:",action_list[-1])
                 print("[INFO] demo_{} collected successfully.".format(idx))

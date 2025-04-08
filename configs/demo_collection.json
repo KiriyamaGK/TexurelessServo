@@ -33,6 +33,7 @@
             "utilized": true,
             "normalize_scaler": 1
         },
+        "record_pose": true,
 
         "init": {
             "init_horizon_trans": 0.01,
@@ -47,13 +48,23 @@
             },
 
         "velocity": {
-            "trans_vel": 0.001,
-            "rot_vel": 0.5
+            "trans_vel": {
+                "utilized":false,
+                "value": 0.0005
+            },
+            "rot_vel": {
+                "utilized":false,
+                "value": 0.2
+            },
+            "uniform_vel": {
+                "utilized":true,
+                "value": 3
+            }
         },
 
         "stop_policy":{
             "angle_eps": 0.4,
-            "dist_eps": 0.001
+            "dist_eps": 0.0002
         }
     },
     "post_process": {
