@@ -2,7 +2,7 @@ import os
 import numpy as np
 import json
 from sim.environment import Environment
-from utils.transform import rotation_matrix_z,rmat2euler_rz_degree
+from utils.transform import rotation_matrix_z,rmat2euler_rz_degree,compute_pos_error,error_pos_transform
 from sim.perception import CameraIntrinsic
 from utils.input_process import input_dict_preprocess
 import datetime
@@ -11,8 +11,9 @@ import cv2
 import torch
 from networks.helpers import get_network_cls
 from utils.input_process import clip_image,conditioned_clip_and_resize
-from utils.plot import plot_rot_and_trans,plot_trajs,plot_vel,plot_time,plot_img_diff
+from utils.plot import plot_rot_and_trans,plot_trajs,plot_vel,plot_time,plot_img_diff,plot_error_pose
 from utils.statistics import calculate_success_rate,visualize_final_error
+from utils.policy import get_cur_goal_deltapos
 import atexit
 from utils.paths import path_completion,PROJECT_ROOT_DIR,determine_ckpt_dirs
 from scipy.spatial.transform import Rotation as R
@@ -70,11 +71,14 @@ def _setup_model(model_config: dict):
     )#**动态传参，字典中的键与函数参数名完全匹配
 
 if __name__ == '__main__':
-    config_dir= "../configs/rollout_near.json"
+    config_dir= "../configs/rollout.json"
 
     fps = 30
     vis_h, vis_w = 480, 640
     mp4 = cv2.VideoWriter_fourcc(*'mp4v')
+
+    depth_info = {
+        "normalize_scaler": 1}
 
     with open(config_dir, "r") as j:
         config = json.load(j)
@@ -115,8 +119,9 @@ if __name__ == '__main__':
 
     init_horizon_trans = config["init"]['init_horizon_trans']
     init_vertical_trans = config["init"]['init_vertical_trans']["value"]
-    using_minus_vertical = config["init"]['init_vertical_trans']["using_minus"]
     init_rot = config["init"]['init_rot']['value']
+    using_minus_vertical = config["init"]['init_vertical_trans']["using_minus"]
+    use_max_trans = config["init"]['init_horizon_trans']["use_max_trans"]
     use_max_rot = config["init"]['init_rot']['use_max_rot']
 
     expert_motion_type=config['expert_motion_type']
@@ -127,13 +132,15 @@ if __name__ == '__main__':
     low_dim_key = [n for n in model_config["dataset"]['specific_obs_keys'] if n not in rgb_key]
     assert 'hdf5_img_size' in model_config["dataset"]
     hdf5_img_size = model_config["dataset"]["hdf5_img_size"]
-
-    # assert rgb_key == ["robot0_eye_in_hand_image", "robot0_eye_in_hand_image_goal"]
+    pose_and_orientations=model_config["dataset"]["additional_demo_info"]["pose_and_orientations"] if "additional_demo_info" in model_config["dataset"] and "pose_and_orientations" in model_config["dataset"]["additional_demo_info"] else None
+    depth_info["utilized"]=model_config["algorithm"]["policy"]["params"]["encoder"]["using_depth"] if "using_depth" in model_config["algorithm"]["policy"]["params"]["encoder"] else False
+    using_pose_estm=model_config["algorithm"]["policy"]["params"]["encoder"]["using_pose_estimation"] if "using_pose_estimation" in model_config["algorithm"]["policy"]["params"]["encoder"] else False
+    num_cams=model_config["algorithm"]["policy"]["params"]["encoder"]["num_cameras"] if "num_cameras" in model_config["algorithm"]["policy"]["params"]["encoder"] else 1
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = _setup_model(model_config)
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env = Environment(camera_config=camera_intrinsic, objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof)
+    env = Environment(camera_config=camera_intrinsic, objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof,depth_info=depth_info,pose_and_orientations=pose_and_orientations)
     env.init()
     env.setup_stop_policy(stop_policy)
 
@@ -152,9 +159,11 @@ if __name__ == '__main__':
         final_error_list = []
         time_list = []
         for idx in range(eval_epoch_num):
+            final_error_info_dict = {}
             model.buffer=[]
             error_rot_lst=[]
             error_trans_lst=[]
+            error_pos_list=[]
             z_error_lst=[]
             wgT_list=[]
             vel_tr_lst=[]
@@ -167,13 +176,17 @@ if __name__ == '__main__':
 
             im_goal_dict = env.observation()
             img_goal=im_goal_dict['img_1']
-            img_goal2 = im_goal_dict['img_2'] if 'img_2' in im_goal_dict else None
+            img_goal2 = im_goal_dict['img_2'] if 'img_2' in im_goal_dict and num_cams==2 else None
+            img_dep_goal = im_goal_dict["img_1_depth"] if "img_1_depth" in im_goal_dict else None  #[h,w]->[h,w,1]
+            img_dep_goal2 = im_goal_dict["img_2_depth"] if "img_2_depth" in im_goal_dict and num_cams==2 else None
 
             if cv2_visualize:
                 img_goal_vis = cv2.cvtColor(img_goal.copy(), cv2.COLOR_BGR2RGB) if img_goal2 is None else cv2.cvtColor(np.vstack((img_goal.copy(), img_goal2.copy())), cv2.COLOR_BGR2RGB)
 
             img_goal=conditioned_clip_and_resize(img=img_goal, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size)
             img_goal2 = conditioned_clip_and_resize(img=img_goal2, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size) if img_goal2 is not None else None
+            img_dep_goal = conditioned_clip_and_resize(img=img_dep_goal, img_h=img_h, img_w=img_w,hdf5_img_size=hdf5_img_size) if img_dep_goal is not None else None
+            img_dep_goal2 = conditioned_clip_and_resize(img=img_dep_goal2, img_h=img_h, img_w=img_w,hdf5_img_size=hdf5_img_size) if img_dep_goal2 is not None else None
 
             env.act_with_abs_dict(init_transform_dict)
             print("==============================")
@@ -184,19 +197,21 @@ if __name__ == '__main__':
 
             video_path=os.path.join(obj_pth,str(obj_id)+'.mp4')
             if not os.path.exists(video_path):
-                out = cv2.VideoWriter(video_path, mp4, fps, (vis_w*2, vis_h)) if dof==3 else cv2.VideoWriter(video_path, mp4, fps, (vis_w*2, vis_h*2))
+                out = cv2.VideoWriter(video_path, mp4, fps, (vis_w*2, vis_h)) if num_cams==1 else cv2.VideoWriter(video_path, mp4, fps, (vis_w*2, vis_h*2))
                 video_flag=True
             t_0 = time.time()
             # try:
             while True:
-                wgT = env.wgT
+                wgT,wgT_tar = env.wgT,env.wgT_tar
                 if dof == 3:
                     rz = rmat2euler_rz_degree(wgT)
                 dT=np.eye(4)
 
                 im_dict=env.observation() if not random_light else env.observation(random_light_dir=True)
                 img = im_dict['img_1']
-                img2 = im_dict['img_2'] if 'img_2' in im_dict else None
+                img2 = im_dict['img_2'] if 'img_2' in im_dict and num_cams==2 else None
+                img_dep = im_dict["img_1_depth"] if "img_1_depth" in im_dict else None
+                img_dep2 = im_dict["img_2_depth"] if "img_2_depth" in im_dict and num_cams==2 else None
 
                 if cv2_visualize:
                     img_vis = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB) if img2 is None else cv2.cvtColor(np.vstack((img.copy(), img2.copy())), cv2.COLOR_BGR2RGB)
@@ -209,13 +224,22 @@ if __name__ == '__main__':
                         break
                 img=conditioned_clip_and_resize(img=img, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size)
                 img2 = conditioned_clip_and_resize(img=img2, img_h=img_h, img_w=img_w,hdf5_img_size=hdf5_img_size) if img2 is not None else None
+                img_dep = conditioned_clip_and_resize(img=img_dep, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size) if img_dep is not None else None
+                img_dep2 = conditioned_clip_and_resize(img=img_dep2, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size) if img_dep2 is not None else None
                 obs_dict={
                     "robot0_eye_in_hand_image": img,
                     "robot0_eye_in_hand_image_goal": img_goal
                 }
+                if img_dep is not None:
+                    obs_dict["depth_image"] = img_dep[..., np.newaxis]
+                    obs_dict["depth_image_goal"] = img_dep_goal[..., np.newaxis]
+                if img_dep2 is not None:
+                    obs_dict["depth_image_2"] = img_dep2[..., np.newaxis]
+                    obs_dict["depth_image_2_goal"] = img_dep_goal2[..., np.newaxis]
 
                 if dof == 3:
                     obs_dict["abs_rot"]=np.array([rz])
+
                 if img2 is not None:
                     obs_dict["robot0_eye_in_hand_image_2"]=img2
                     obs_dict["robot0_eye_in_hand_image_2_goal"]=img_goal2
@@ -223,18 +247,18 @@ if __name__ == '__main__':
                 obs_dict=input_dict_preprocess(obs_dict,rollout=True)
                 pred=model(obs_dict)
                 if isinstance(pred, dict):
-                    predictions=pred["output_tensor"]
+                    predictions=pred["output_tensor"].detach().cpu().numpy().reshape(-1,)
+                    delta_pos = pred["pred_delta_pos"].detach().cpu().numpy().reshape(-1,) if using_pose_estm else None
                 else:
-                    predictions=pred
-                predictions=predictions.detach().cpu().numpy().reshape(-1,)
-
+                    predictions=pred.detach().cpu().numpy().reshape(-1,)
+                    delta_pos = None
                 # print("pred:",predictions)
                 # predictions/=4
                 vel_tr=predictions[0:2] if dof == 3 else predictions[0:3]
                 vel_rot=predictions[-1] if dof == 3 else predictions[3:]
                 dT[0:3,3]=np.concatenate((vel_tr,np.array[0]),axis=0) if dof == 3 else vel_tr
                 dT[0:3,0:3]=rotation_matrix_z(vel_rot/180*np.pi) if dof==3 else R.from_rotvec(vel_rot/180*np.pi).as_matrix()
-
+                print("vel_rot:{}".format(vel_rot))
                 env.action(dT)
                 env.determine_vel_in_threshold(vel_tr=np.linalg.norm(vel_tr), vel_rot=abs(vel_rot) if dof == 3 else np.linalg.norm(vel_rot))
                 # time.sleep(0.1)
@@ -250,9 +274,15 @@ if __name__ == '__main__':
                 vel_tr_lst.append(np.linalg.norm(vel_tr)*1000) #mm
                 vel_rot_lst.append(abs(vel_rot))
                 wgT_list.append(wgT)
-                # print("time:",time.time()-env.task_timer)
+                if delta_pos is not None:
+                    delta_pos_gt=get_cur_goal_deltapos(wgT,wgT_tar)["delta_pose"] #mm,deg
+                    error_pos=compute_pos_error(pos_cur=delta_pos,pos_tar=delta_pos_gt)  #[6,]
+                    error_pos_list.append(error_pos_transform(error_pos))      #[delta_xyz,delta_z,delta_theta][3,]
+
                 if rtn_dict["need_reinit"]:
                     use_time=time.time()-t_0
+
+                    #eval metrics
                     if eval_metrics["error_curve"]["utilized"] and use_eval_metrics:
                         error_pth = os.path.join(obj_pth, "error_curve")
                         os.makedirs(error_pth, exist_ok=True)
@@ -261,6 +291,15 @@ if __name__ == '__main__':
                         print("last trans error: {}".format(error_trans_lst[-1]))
                         if dof == 6:
                             print("last z error: {}".format(z_error_lst[-1]))
+
+                    if eval_metrics["error_delta_pose"]["utilized"] and use_eval_metrics:
+                        error_pose_pth = os.path.join(obj_pth, "error_pose")
+                        os.makedirs(error_pose_pth, exist_ok=True)
+                        plot_error_pose(error_pos_list=error_pos_list, use_time=use_time,obj_pth=error_pose_pth,show=False)
+                        print("last trans pose XYZ estimation error: {}".format(error_pos_list[-1][0]))
+                        print("last trans pose Z estimation error: {}".format(error_pos_list[-1][1]))
+                        print("last rot pose estimation error: {}".format(error_pos_list[-1][2]))
+
                     if eval_metrics["success_rate"]["utilized"] and use_eval_metrics:
                         success=1 if (error_rot_lst[-1]<=succ_rot and error_trans_lst[-1]<=succ_tr*1000) else 0
                         success_list.append([obj_id,success])
@@ -273,7 +312,16 @@ if __name__ == '__main__':
                         os.makedirs(vel_pth, exist_ok=True)
                         plot_vel(vel_tr=vel_tr_lst,vel_rot=vel_rot_lst,use_time=use_time,obj_path=vel_pth,show=False)
 
-                    final_error_list.append([obj_id,error_trans_lst[-1],error_rot_lst[-1],z_error_lst[-1]] if dof==6 else [obj_id,error_trans_lst[-1],error_rot_lst[-1]])
+                    final_error_info_dict["obj_id"]=obj_id
+                    final_error_info_dict["final_trans_error"]=error_trans_lst[-1]
+                    final_error_info_dict["final_rot_error"]=error_rot_lst[-1]
+                    final_error_info_dict["final_z_error"]=z_error_lst[-1] if dof == 6 else None
+                    final_error_info_dict["final_pos_xyz_error"]=error_pos_list[-1][0] if len(error_pos_list)!=0 else None
+                    final_error_info_dict["final_pos_z_error"] = error_pos_list[-1][1] if len(
+                        error_pos_list) != 0 else None
+                    final_error_info_dict["final_pos_rot_error"] = error_pos_list[-1][2] if len(
+                        error_pos_list) != 0 else None
+                    final_error_list.append(final_error_info_dict)
                     time_list.append([obj_id,use_time])
                     if video_flag:
                         out.release()

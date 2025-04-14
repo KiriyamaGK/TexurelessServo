@@ -19,9 +19,9 @@
         "fov": 60
     },
     "overall_setting": {
-        "file_name": "25.04.044",
-        "demo_total_num": 10,
-        "objs_descriptor": 14,
+        "file_name": "25.04.14",
+        "demo_total_num": 3000,
+        "objs_descriptor": 20,
         "replace_existed_hdf5": true
     },
     "demo_collection": {
@@ -36,35 +36,53 @@
         "record_pose": true,
 
         "init": {
-            "init_horizon_trans": 0.01,
+            "init_horizon_trans": {
+                "value": 0.01,
+                "use_max_trans": false
+            },
+
             "init_vertical_trans": {
-                "value":0.03,
-                "using_minus": true
+                "value":0.10,
+                "using_minus": false
             },
             "init_rot":{
-                "value":[10,10,60],
-                "use_max_rot": true
+                "value":[8,8,40],
+                "use_max_rot": false
+                },
+            "pose_and_orientations": {
+                "cam1":{
+                    "cwT_trans":[0,-0.098,2.05],
+                    "rotation": 45
+                },
+                "cam2": {
+                    "c2wT_trans": [0, -0.098, 2.05],
+                    "rotation": 45
+                },
+                "grip": {
+                    "start_pos_z": 2.20,
+                    "offset_z": [-0.05,-0.05,-0.02,-0.05,-0.05,0,-0.05,-0.05,-0.02,-0.05,-0.05,-0.05,-0.05,-0.05,-0.05,-0.02,-0.05,-0.02,0,-0.05,-0.05,-0.05,-0.05]
                 }
-            },
+            }
+        },
 
         "velocity": {
             "trans_vel": {
-                "utilized":false,
-                "value": 0.0005
+                "utilized":true,
+                "value": [0.00012,0.0012]
             },
             "rot_vel": {
-                "utilized":false,
-                "value": 0.2
+                "utilized":true,
+                "value": 0.5
             },
             "uniform_vel": {
-                "utilized":true,
+                "utilized":false,
                 "value": 3
             }
         },
 
         "stop_policy":{
-            "angle_eps": 0.4,
-            "dist_eps": 0.0002
+            "angle_eps": 0.3,
+            "dist_eps": 0.0005
         }
     },
     "post_process": {

@@ -13,8 +13,8 @@
         "fov": 60
     },
 
-    "logs_dir":  "trained_models/trial/2025-04-04_22-30-20/config.json",
-    "ckpts_dir": [198],
+    "logs_dir":  "trained_models/trial/2025-04-14_15-15-52/config.json",
+    "ckpts_dir": [1],
     "objs_descriptor": 20,
     "eval_epoch_num": 400,
     "bgr2rgb": false,
@@ -27,14 +27,17 @@
 
     "dof": 6,
     "init": {
-        "init_horizon_trans": 0.01,
+        "init_horizon_trans": {
+            "value": 0.01,
+            "use_max_trans": false
+        },
         "init_vertical_trans": {
             "value":0.03,
             "using_minus": false
         },
         "init_rot": {
             "value":[10,10,60],
-            "use_max_rot": true
+            "use_max_rot": false
         }
     },
 
@@ -47,6 +50,9 @@
         },
         "error_curve":{
             "utilized": true
+        },
+        "error_delta_pose":{
+            "utilized": false
         },
         "trajectory": {
              "utilized": false

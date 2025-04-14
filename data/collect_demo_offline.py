@@ -37,7 +37,7 @@ if __name__ == '__main__':
     img_w=220
     img_h=220
 
-    config_dir= "../configs/demo_collection_near.json"
+    config_dir= "../configs/demo_collection.json"
 
     with open(config_dir, "r") as j:
         config = json.load(j)
@@ -60,11 +60,13 @@ if __name__ == '__main__':
     rot_vel=config["demo_collection"]["velocity"]['rot_vel']    #deg
     uniform_vel=config["demo_collection"]["velocity"]['uniform_vel']
 
-    init_horizon_trans=config["demo_collection"]["init"]['init_horizon_trans']
+    init_horizon_trans=config["demo_collection"]["init"]['init_horizon_trans']["value"]
     init_vertical_trans = config["demo_collection"]["init"]['init_vertical_trans']["value"]
-    using_minus_vertical=config["demo_collection"]["init"]['init_vertical_trans']["using_minus"]
     init_rot=config["demo_collection"]["init"]['init_rot']["value"]
     use_max_rot = config["demo_collection"]["init"]['init_rot']['use_max_rot']
+    use_max_trans=config["demo_collection"]["init"]['init_horizon_trans']["use_max_trans"]
+    using_minus_vertical = config["demo_collection"]["init"]['init_vertical_trans']["using_minus"]
+    pose_and_orientations=config["demo_collection"]["init"]['pose_and_orientations']
 
     angle_eps =config["demo_collection"]["stop_policy"]['angle_eps']
     dist_eps = config["demo_collection"]["stop_policy"]['dist_eps']
@@ -77,7 +79,7 @@ if __name__ == '__main__':
     assert (not portion_last_episode["utilized"]) or (not add_end_episode["utilized"])
 
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env=Environment(camera_config=camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof,angle_eps=angle_eps,dist_eps=dist_eps,depth_info=depth_info)
+    env=Environment(camera_config=camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof,angle_eps=angle_eps,dist_eps=dist_eps,depth_info=depth_info,pose_and_orientations=pose_and_orientations)
     env.init()
 
     base_dir = return_disc_route("One Touch")
@@ -167,8 +169,8 @@ if __name__ == '__main__':
                 img2=clip_image(img2,img_h)
                 img2_lst.append(img2)
                 combined_img = np.hstack((img_vis, img2_vis))
-                # cv2.imshow("Combined Image", combined_img)
-                # cv2.waitKey(1)
+                cv2.imshow("Combined Image", combined_img)
+                cv2.waitKey(1)
             if img2_light is not None:
                 img2_light=clip_image(img2_light,img_h)
                 img2_light_list.append(img2_light)
@@ -255,7 +257,7 @@ if __name__ == '__main__':
                 print("action_lst-1:",action_list[-1])
                 print("[INFO] demo_{} collected successfully.".format(idx))
                 break
-    add_env_meta(new_f_out)
+    # add_env_meta(new_f_out,additional_itms={"pose_and_orientations":pose_and_orientations})
     add_config(new_f_out, config)
     new_f_out.close()
     compute_num_samples(dataset_dir)

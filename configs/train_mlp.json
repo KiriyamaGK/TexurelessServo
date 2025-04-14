@@ -75,7 +75,7 @@
     "num_data_workers": 2
   },
   "dataset": {
-    "hdf5_path": "One Touch/AlignAnything/25.04.077/hdf5/mimic.hdf5",
+    "hdf5_path": "One Touch/AlignAnything/25.04.044/hdf5/mimic.hdf5",
     "specific_obs_keys": [
       "robot0_eye_in_hand_image",
       "robot0_eye_in_hand_image_goal",

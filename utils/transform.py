@@ -1,5 +1,6 @@
 from math import sin,cos,sqrt,atan2,pi
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 def is_number(var):
     return isinstance(var, (int, float, complex))
@@ -250,3 +251,32 @@ def rot_angle_normalization(ang,max_attempts_num=10): #轉換到0-360之間，-1
         if ang>=0 and ang <360:
             return ang
         attempts_num += 1
+
+def compute_pos_error(pos_cur,pos_tar):
+    '''
+    :param pos_cur:mm/m ,deg [6,]
+    :param pos_tar:mm/m ,deg [6,]
+    :return:
+    delta_pos:mm/m,deg [6,]
+    '''
+    delta_pos = np.zeros(6)
+
+    T_cur =np.eye(4)
+    T_tar =np.eye(4)
+    T_cur[0:3,0:3]=R.from_rotvec(pos_cur[3:]/180*np.pi).as_matrix()
+    T_cur[0:3,3]=pos_cur[0:3]
+    T_tar[0:3, 0:3] = R.from_rotvec(pos_tar[3:] / 180 * np.pi).as_matrix()
+    T_tar[0:3, 3] = pos_tar[0:3]
+    dT = np.linalg.inv(T_cur) @ T_tar
+
+    delta_pos[3:] = np.linalg.norm(R.from_matrix(dT[:3, :3]).as_rotvec()) / np.pi * 180
+    delta_pos[0:3] = np.linalg.norm(dT[:3, 3])
+
+    return delta_pos
+
+def error_pos_transform(error_pos):
+    '''
+    :param error_pos: [dx,dy,dz,theta(in axis-angle)] [6,]
+    :return: [delta_xyz,delta_z,delta_theta][3,]
+    '''
+    return np.array([np.linalg.norm(error_pos[0:3]),abs(error_pos[2]),np.linalg.norm(error_pos[3:])])

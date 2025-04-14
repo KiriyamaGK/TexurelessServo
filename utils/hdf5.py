@@ -128,7 +128,7 @@ def split_train_val_from_hdf5(hdf5_path, val_ratio=0.1, filter_key=None):
     print("Total number of valid samples: {}".format(np.sum(valid_lengths)))
     print("Average number of valid samples {}".format(np.mean(valid_lengths)))
 
-def add_env_meta(new_f_out:h5py.File):
+def add_env_meta(new_f_out:h5py.File,additional_itms=None):
     env_meta = {
         "env_name": "Libero_Kitchen_Tabletop_Manipulation",
         "env_version": "1.4.1",
@@ -192,7 +192,9 @@ def add_env_meta(new_f_out:h5py.File):
             "render_gpu_device_id": 0
         }
     }
-
+    if additional_itms is not None:
+        for k, v in additional_itms.items():
+            env_meta[k] = v
     dat = new_f_out['data']
     dat.attrs['env_args'] = json.dumps(env_meta, indent=4)
 

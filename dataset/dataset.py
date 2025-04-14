@@ -2,6 +2,7 @@
 This file contains Dataset classes that are used by torch dataloaders
 to fetch batches from hdf5 files.
 """
+import json
 import os
 import h5py
 import numpy as np
@@ -169,6 +170,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         hdf_shape=self.hdf5_file["data/demo_0/obs/robot0_eye_in_hand_image"].shape
         assert len(hdf_shape) == 4 and hdf_shape[1]==hdf_shape[2]
         self.hdf_img_size=hdf_shape[1]
+        self.additional_demo_info = json.loads(self.hdf5_file["data"].attrs['env_args']) if 'env_args' in self.hdf5_file["data"].attrs else None
 
         # sort demo keys
         inds = np.argsort([int(elem[5:]) for elem in self.demos])

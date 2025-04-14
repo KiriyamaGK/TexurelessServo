@@ -36,16 +36,33 @@
         "record_pose": true,
 
         "init": {
-            "init_horizon_trans": 0.003,
+            "init_horizon_trans": {
+                "value": 0.003,
+                "use_max_trans": false
+            },
             "init_vertical_trans": {
                 "value":0.07,
-                "using_minus": true
+                "using_minus": false
             },
             "init_rot":{
                 "value":[5,5,5],
                 "use_max_rot": false
+                },
+            "pose_and_orientations": {
+                "cam1":{
+                    "cwT_trans":[0,-0.085,2.05],
+                    "rotation": 45
+                },
+                "cam2": {
+                    "c2wT_trans": [0, -0.08, 2.05],
+                    "rotation": 45
+                },
+                "grip": {
+                    "start_pos_z": 2.20,
+                    "offset_z": -0.05
                 }
-            },
+            }
+        },
 
         "velocity": {
             "trans_vel": {

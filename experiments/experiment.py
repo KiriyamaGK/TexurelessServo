@@ -99,7 +99,9 @@ class BehaviorCloningExperiment():
         os.makedirs(self._log_dir, exist_ok=False)
         shutil.copy(self.config_path, os.path.join(self._model_out_dir, "config.json"))
         with open(os.path.join(self._model_out_dir, "config.json"), 'r+') as f:
-            data = json.load(f)
+            data = json.load(f) #json.load:参数是文件对象；json.loads:参数是json格式的字符串
+            if self.additional_demo_info is not None:
+                data['dataset']['additional_demo_info']={"pose_and_orientations":self.additional_demo_info["demo_collection"]["init"]["pose_and_orientations"]}
             data['dataset']['hdf5_img_size'] = self.hdf_img_size
             f.seek(0)    # 将文件指针移动到文件开头
             json.dump(data, f, indent=4)
@@ -128,7 +130,7 @@ class BehaviorCloningExperiment():
             drop_last=True
         )
         self.hdf_img_size=train_set.hdf_img_size
-
+        self.additional_demo_info=train_set.additional_demo_info
     def _setup_logging(self):
         """
         Set up the logging.
@@ -200,7 +202,7 @@ class BehaviorCloningExperiment():
 
 
 if __name__ == "__main__":
-    # exp = BehaviorCloningExperiment(config_path="train_mlp.json")
-    exp = BehaviorCloningExperiment(config_path="train_transformer.json")
+    exp = BehaviorCloningExperiment(config_path="train_mlp.json")
+    # exp = BehaviorCloningExperiment(config_path="train_transformer.json")
     # exp = BehaviorCloningExperiment(config_path="train_transformer_single.json")
     exp.run()

@@ -69,6 +69,66 @@ def plot_rot_and_trans(error_rot_lst,error_trans_lst,z_error_lst,use_time=10,obj
         plt.show()
     plt.close()
 
+def plot_error_pose(error_pos_list, use_time,obj_pth,show):
+    '''
+    error_pos_list:[delta_xyz,delta_z,delta_theta],[3]
+    '''
+    error_pos_list = np.array(error_pos_list)
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 14))
+
+    ax1.plot(error_pos_list[:,2], label='Pose Estimation Rotation Error', marker='o', linestyle='-', color='blue')
+    ax1.set_title('Rotation Error')
+    ax1.set_xlabel('Time Step')
+    ax1.set_ylabel('Error(°)')
+    ax1.grid(True)
+    ax1.legend()
+
+    ax2.plot(error_pos_list[:,0], label='Pose Estimation Trans XYZ Error', marker='x', linestyle='--', color='red')
+    ax2.set_title('Translation XYZ Error')
+    ax2.set_xlabel('Time Step')
+    ax2.set_ylabel('Error(mm)')
+    ax2.grid(True)
+    ax2.legend()
+
+    ax3.plot(error_pos_list[:,1], label='Pose Estimation Trans Z Error', marker='x', linestyle='--', color='green')
+    ax3.set_title('Translation Z Error')
+    ax3.set_xlabel('Time Step')
+    ax3.set_ylabel('Error(mm)')
+    ax3.grid(True)
+    ax3.legend()
+
+    final_rot_error = error_pos_list[-1,2]
+    final_trans_error = error_pos_list[-1,0]
+    final_z_error =error_pos_list[-1,1]
+
+    ax1.annotate(f'Final Rot Error: {final_rot_error:.2f}(°)',
+                 xy=(len(error_pos_list) - 1, final_rot_error),
+                 xytext=(len(error_pos_list) - 1, final_rot_error + 0.05),
+                 # arrowprops=dict(facecolor='blue', shrink=0.05),
+                 color='blue')
+
+    ax2.annotate(f'Final Trans Error: {final_trans_error:.2f}(mm)',
+                 xy=(len(error_pos_list) - 1, final_trans_error),
+                 xytext=(len(error_pos_list) - 1, final_trans_error + 0.05),
+                 # arrowprops=dict(facecolor='red', shrink=0.05),
+                 color='red')
+    ax3.annotate(f'Final Trans Z Error: {final_z_error:.2f}(mm)',
+                 xy=(len(error_pos_list) - 1, final_z_error),
+                 xytext=(len(error_pos_list) - 1, final_z_error + 0.05),
+                 # arrowprops=dict(facecolor='red', shrink=0.05),
+                 color='green')
+
+    plt.annotate(f'Use Time: {use_time:.2f}(s)',
+                 xy=(len(error_pos_list) - 1, final_trans_error),
+                 xytext=(len(error_pos_list), 0),
+                 # arrowprops=dict(facecolor='red', shrink=0.05),
+                 color='black')
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(obj_pth, '{}.png'.format({int(time.time())})), dpi=50, bbox_inches='tight')
+    if show:
+        plt.show()
+    plt.close()
 
 def plot_trajs(wgT_list, wgT_tar, motion_type, obj_path=None,show=False):
     wgT_list = np.array(wgT_list)
