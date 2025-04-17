@@ -249,15 +249,29 @@ class Environment(object):
             self.gwT=np.linalg.inv(self.wgT)
             self.cwT=self.cgT@self.gwT
             self.wcT=np.linalg.inv(self.cwT)
-        else:
-            self.wcT=self.wcT_tar@dT
-            self.cwT=np.linalg.inv(self.wcT)
-            self.wgT=self.wcT@self.cgT
-            self.gwT=np.linalg.inv(self.wgT)
-        if self.dof == 6:
-            self.c2wT = self.c2gT @ self.gwT
-            self.wc2T = dT @ self.wc2T_tar
 
+            if self.dof == 6:
+                self.c2wT = self.c2gT @ self.gwT
+                self.wc2T = np.linalg.inv(self.c2wT)
+
+        else:
+            if self.dof==3:
+                self.wcT=self.wcT_tar@dT
+                self.cwT=np.linalg.inv(self.wcT)
+                self.wgT=self.wcT@self.cgT
+                self.gwT=np.linalg.inv(self.wgT)
+            else:
+                #设置两个相机之间的中间坐标系
+                mid_frame=self.wcT_tar.copy()
+                mid_frame[0:3,3]=0.5*(self.wcT_tar[0:3,3].copy()+self.wc2T_tar[0:3,3].copy())
+                cmT=self.cwT_tar@mid_frame.copy()
+                c2mT = self.c2wT_tar@mid_frame.copy()
+
+                mid_frame= mid_frame @ dT
+                self.cwT=cmT@np.linalg.inv(mid_frame)
+                self.wcT=np.linalg.inv(self.cwT)
+                self.c2wT = c2mT @ np.linalg.inv(mid_frame)
+                self.wc2T = np.linalg.inv(self.c2wT)
 
 
     def init(self):

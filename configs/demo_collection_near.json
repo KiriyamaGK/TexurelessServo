@@ -38,11 +38,11 @@
         "init": {
             "init_transform_frame": "cam",
             "init_horizon_trans": {
-                "value": 0.003,
+                "value": 0,
                 "use_max_trans": false
             },
             "init_vertical_trans": {
-                "value":0.02,
+                "value":0.2,
                 "using_minus": true
             },
             "init_rot":{
@@ -68,7 +68,7 @@
         "velocity": {
             "trans_vel": {
                 "utilized":true,
-                "value": [0.00012,0.0012]
+                "value": [0.0012,0.0012]
             },
             "rot_vel": {
                 "utilized":true,
