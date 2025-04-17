@@ -272,6 +272,7 @@ class Environment(object):
                 self.wcT=np.linalg.inv(self.cwT)
                 self.c2wT = c2mT @ np.linalg.inv(mid_frame)
                 self.wc2T = np.linalg.inv(self.c2wT)
+                self.wgT=self.wcT@self.cgT
 
 
     def init(self):

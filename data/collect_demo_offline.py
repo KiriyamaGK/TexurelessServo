@@ -37,7 +37,7 @@ if __name__ == '__main__':
     img_w=220
     img_h=220
 
-    config_dir= "../configs/demo_collection.json"
+    config_dir= "../configs/demo_collection_near.json"
 
     with open(config_dir, "r") as j:
         config = json.load(j)

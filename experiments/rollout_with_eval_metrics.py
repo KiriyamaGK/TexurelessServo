@@ -123,7 +123,7 @@ if __name__ == '__main__':
     using_minus_vertical = config["init"]['init_vertical_trans']["using_minus"]
     use_max_trans = config["init"]['init_horizon_trans']["use_max_trans"]
     use_max_rot = config["init"]['init_rot']['use_max_rot']
-    init_transform_frame = config["demo_collection"]["init"]['init_transform_frame'] if 'init_transform_frame' in \
+    init_transform_frame = config["init"]['init_transform_frame'] if 'init_transform_frame' in \
                                                                                         config["demo_collection"][
                                                                                             "init"] else "grip"
 
