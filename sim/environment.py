@@ -18,6 +18,7 @@ class Environment(object):
         objs_descriptor=20,
         init_horizon_trans=0.05,
         init_vertical_trans=0.05,
+        init_transform_frame="grip",
         using_minus_vertical=False,
         init_rot=60,
         use_max_rot=False,
@@ -82,6 +83,7 @@ class Environment(object):
 
         self.init_horizon_trans = init_horizon_trans # m
         self.init_vertical_trans=init_vertical_trans if self.dof==6 else 0   # m
+        self.init_transform_frame = init_transform_frame
         self.using_minus_vertical = using_minus_vertical
 
         if self.dof == 3:
@@ -224,6 +226,7 @@ class Environment(object):
             self.wc2T_tar = np.linalg.inv(self.c2wT_tar.copy())
 
     def sample_init_pos(self):
+        assert self.init_transform_frame in ["grip","cam"]
         if not self.use_max_rot:
             if random.uniform(0, 1) < 0.95:
                 ang = np.array([random.uniform(0, self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
@@ -241,13 +244,20 @@ class Environment(object):
         if self.using_minus_vertical:
             dT[2,3]=dT[2,3]*(random.randint(0,1)-0.5)*2
 
-        self.wgT=self.wgT_tar@dT #绕夹爪系
-        self.gwT=np.linalg.inv(self.wgT)
-        self.cwT=self.cgT@self.gwT
-        self.wcT=np.linalg.inv(self.cwT)
-        if self.dof==6:
+        if self.init_transform_frame=="grip":
+            self.wgT=self.wgT_tar@dT #绕夹爪系
+            self.gwT=np.linalg.inv(self.wgT)
+            self.cwT=self.cgT@self.gwT
+            self.wcT=np.linalg.inv(self.cwT)
+        else:
+            self.wcT=self.wcT_tar@dT
+            self.cwT=np.linalg.inv(self.wcT)
+            self.wgT=self.wcT@self.cgT
+            self.gwT=np.linalg.inv(self.wgT)
+        if self.dof == 6:
             self.c2wT = self.c2gT @ self.gwT
             self.wc2T = dT @ self.wc2T_tar
+
 
 
     def init(self):

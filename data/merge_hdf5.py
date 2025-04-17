@@ -6,41 +6,69 @@ from utils.paths import return_disc_route
 
 
 if __name__ == "__main__":
-    folder_path_1 = return_disc_route('One Touch/AlignAnything/25.01.18/hdf5/mimic.hdf5')
-    folder_path_2 = return_disc_route('One Touch/AlignAnything/25.01.19/hdf5/mimic.hdf5')
-    merged_path= return_disc_route('One Touch/AlignAnything/25.01.19/hdf5/merged.hdf5')
+    folder_path_1 = return_disc_route('One Touch/AlignAnything/25.04.1444/hdf5/mimic.hdf5')
+    folder_path_2 = return_disc_route('One Touch/AlignAnything/25.04.144/hdf5/mimic.hdf5')
+    merged_path= return_disc_route('One Touch/AlignAnything/25.04.1444/hdf5/mimic.hdf5')
     val_ratio = 0.1
+
 
     # List all hdf5 files in the directory
     hdf5_files = [folder_path_1, folder_path_2]
 
     counter = 0
+    if merged_path not in hdf5_files:
+        # Create or open the merged.hdf5 file
+        with h5py.File(merged_path, "w") as merged_file:
+            # Create a group named data if it doesn't exist yet
+            data_group = merged_file.require_group("data")
 
-    # Create or open the merged.hdf5 file
-    with h5py.File(merged_path, "w") as merged_file:
-        # Create a group named data if it doesn't exist yet
-        data_group = merged_file.require_group("data")
+            # Iterate over all the hdf5 files and merge demos
+            for hdf5_file in hdf5_files:
+                print("merging {}".format(hdf5_file))
+                with h5py.File(hdf5_file, 'r') as source_file:
+                    source_data_group = source_file['data']
+                    if counter == 0:
+                        copy_attributes(source_data_group, data_group)
 
-        # Iterate over all the hdf5 files and merge demos
-        for hdf5_file in hdf5_files:
-            print("merging {}".format(hdf5_file))
-            with h5py.File(hdf5_file, 'r') as source_file:
-                source_data_group = source_file['data']
-                if counter == 0:
-                    copy_attributes(source_data_group, data_group)
+                    # Iterate through all demos in the 'data' group of the source file
+                    for demo_name in source_data_group:
+                        print('merging {}'.format(demo_name))
+                        new_demo_name = f"demo_{counter}"
 
-                # Iterate through all demos in the 'data' group of the source file
-                for demo_name in source_data_group:
-                    print('merging {}'.format(demo_name))
-                    new_demo_name = f"demo_{counter}"
+                        # Copy demo to merged_file
+                        source_file.copy(f"data/{demo_name}", data_group, new_demo_name)
 
-                    # Copy demo to merged_file
-                    source_file.copy(f"data/{demo_name}", data_group, new_demo_name)
+                        # Copy attributes of the demo dataset
+                        copy_attributes(source_data_group[demo_name], data_group[new_demo_name])
 
-                    # Copy attributes of the demo dataset
-                    copy_attributes(source_data_group[demo_name], data_group[new_demo_name])
+                        counter += 1
 
-                    counter += 1
+    else:
+        with h5py.File(merged_path, "r+") as merged_file:
+            num_existed=len(merged_file["data"])
+            for hdf5_file in hdf5_files:
+                if hdf5_file != merged_path:
+                    with h5py.File(hdf5_file, 'r') as source_file:
+                        num_cur = len(source_file["data"])
+                        for idx in range(num_cur):
+                            cur_demo_name = f"demo_{idx}"
+                            all_demo_name = f"demo_{num_existed}"
+                            if all_demo_name not in merged_file["data"]:
+                                merged_file["data"].create_group(all_demo_name)
+                            for k in source_file["data"][cur_demo_name].keys():
+                                if k !="obs":
+                                    merged_file["data"][all_demo_name][k] = source_file["data"][cur_demo_name][k][()]#数据显式复制
+                                else:
+                                    obs_key = f"data/{all_demo_name}/{k}"
+                                    if obs_key not in merged_file:
+                                        merged_file.create_group(obs_key)
+                                    for obs_k,obs_v in source_file["data"][cur_demo_name][k].items():
+                                        merged_file[f"{obs_key}/{obs_k}"] = obs_v[()]
+                            num_existed+=1
+
+
+
+
     print("Merging completed!")
 
     # store metadata about number of samples

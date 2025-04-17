@@ -27,6 +27,7 @@
 
     "dof": 6,
     "init": {
+        "init_transform_frame": "grip",
         "init_horizon_trans": {
             "value": 0.03,
             "use_max_trans": false

@@ -67,6 +67,7 @@ if __name__ == '__main__':
     use_max_trans=config["demo_collection"]["init"]['init_horizon_trans']["use_max_trans"]
     using_minus_vertical = config["demo_collection"]["init"]['init_vertical_trans']["using_minus"]
     pose_and_orientations=config["demo_collection"]["init"]['pose_and_orientations']
+    init_transform_frame=config["demo_collection"]["init"]['init_transform_frame'] if 'init_transform_frame' in config["demo_collection"]["init"] else "grip"
 
     angle_eps =config["demo_collection"]["stop_policy"]['angle_eps']
     dist_eps = config["demo_collection"]["stop_policy"]['dist_eps']
@@ -79,7 +80,7 @@ if __name__ == '__main__':
     assert (not portion_last_episode["utilized"]) or (not add_end_episode["utilized"])
 
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env=Environment(camera_config=camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof,angle_eps=angle_eps,dist_eps=dist_eps,depth_info=depth_info,pose_and_orientations=pose_and_orientations)
+    env=Environment(camera_config=camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,init_transform_frame=init_transform_frame,dof=dof,angle_eps=angle_eps,dist_eps=dist_eps,depth_info=depth_info,pose_and_orientations=pose_and_orientations)
     env.init()
 
     base_dir = return_disc_route("One Touch")

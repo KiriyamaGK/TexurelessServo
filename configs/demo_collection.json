@@ -19,7 +19,7 @@
         "fov": 60
     },
     "overall_setting": {
-        "file_name": "25.04.14",
+        "file_name": "25.04.144",
         "demo_total_num": 3000,
         "objs_descriptor": 20,
         "replace_existed_hdf5": true
@@ -36,6 +36,7 @@
         "record_pose": true,
 
         "init": {
+            "init_transform_frame": "grip",
             "init_horizon_trans": {
                 "value": 0.01,
                 "use_max_trans": false

@@ -117,12 +117,15 @@ if __name__ == '__main__':
 
     dof = config["dof"]
 
-    init_horizon_trans = config["init"]['init_horizon_trans']
+    init_horizon_trans = config["init"]['init_horizon_trans']["value"]
     init_vertical_trans = config["init"]['init_vertical_trans']["value"]
     init_rot = config["init"]['init_rot']['value']
     using_minus_vertical = config["init"]['init_vertical_trans']["using_minus"]
     use_max_trans = config["init"]['init_horizon_trans']["use_max_trans"]
     use_max_rot = config["init"]['init_rot']['use_max_rot']
+    init_transform_frame = config["demo_collection"]["init"]['init_transform_frame'] if 'init_transform_frame' in \
+                                                                                        config["demo_collection"][
+                                                                                            "init"] else "grip"
 
     expert_motion_type=config['expert_motion_type']
     record_video=config['record_video']
@@ -140,7 +143,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = _setup_model(model_config)
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env = Environment(camera_config=camera_intrinsic, objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof,depth_info=depth_info,pose_and_orientations=pose_and_orientations)
+    env = Environment(camera_config=camera_intrinsic, objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,init_transform_frame=init_transform_frame,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof,depth_info=depth_info,pose_and_orientations=pose_and_orientations)
     env.init()
     env.setup_stop_policy(stop_policy)
 
@@ -258,7 +261,7 @@ if __name__ == '__main__':
                 vel_rot=predictions[-1] if dof == 3 else predictions[3:]
                 dT[0:3,3]=np.concatenate((vel_tr,np.array[0]),axis=0) if dof == 3 else vel_tr
                 dT[0:3,0:3]=rotation_matrix_z(vel_rot/180*np.pi) if dof==3 else R.from_rotvec(vel_rot/180*np.pi).as_matrix()
-                print("vel_rot:{}".format(vel_rot))
+                # print("vel_rot:{}".format(vel_rot))
                 env.action(dT)
                 env.determine_vel_in_threshold(vel_tr=np.linalg.norm(vel_tr), vel_rot=abs(vel_rot) if dof == 3 else np.linalg.norm(vel_rot))
                 # time.sleep(0.1)
