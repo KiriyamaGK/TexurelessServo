@@ -44,6 +44,7 @@
 
             "init_vertical_trans": {
                 "value":0.10,
+                "using_max_v_trans": false,
                 "using_minus": false
             },
             "init_rot":{

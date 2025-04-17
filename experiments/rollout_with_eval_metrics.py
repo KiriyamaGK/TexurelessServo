@@ -120,6 +120,7 @@ if __name__ == '__main__':
     init_horizon_trans = config["init"]['init_horizon_trans']["value"]
     init_vertical_trans = config["init"]['init_vertical_trans']["value"]
     init_rot = config["init"]['init_rot']['value']
+    using_max_v_trans=config["init"]['init_vertical_trans']["using_max_v_trans"]
     using_minus_vertical = config["init"]['init_vertical_trans']["using_minus"]
     use_max_trans = config["init"]['init_horizon_trans']["use_max_trans"]
     use_max_rot = config["init"]['init_rot']['use_max_rot']
@@ -143,7 +144,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = _setup_model(model_config)
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env = Environment(camera_config=camera_intrinsic, objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,init_transform_frame=init_transform_frame,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof,depth_info=depth_info,pose_and_orientations=pose_and_orientations)
+    env = Environment(camera_config=camera_intrinsic, objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,init_transform_frame=init_transform_frame,using_max_v_trans=using_max_v_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof,depth_info=depth_info,pose_and_orientations=pose_and_orientations)
     env.init()
     env.setup_stop_policy(stop_policy)
 

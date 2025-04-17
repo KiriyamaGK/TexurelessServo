@@ -23,6 +23,7 @@ class Environment(object):
         init_rot=60,
         use_max_rot=False,
         use_max_trans=False,
+        using_max_v_trans=False,
         dof=3,
         angle_eps = 0.4,
         dist_eps=0.001,
@@ -84,7 +85,6 @@ class Environment(object):
         self.init_horizon_trans = init_horizon_trans # m
         self.init_vertical_trans=init_vertical_trans if self.dof==6 else 0   # m
         self.init_transform_frame = init_transform_frame
-        self.using_minus_vertical = using_minus_vertical
 
         if self.dof == 3:
             assert isinstance(init_rot,(int, float))
@@ -96,6 +96,8 @@ class Environment(object):
 
         self.use_max_rot=use_max_rot
         self.use_max_trans=use_max_trans
+        self.using_minus_vertical = using_minus_vertical
+        self.using_max_v_trans = using_max_v_trans
 
         self.obj_idx = 0
         self.obj_idx_pointer = 0
@@ -240,7 +242,10 @@ class Environment(object):
 
         dT=np.eye(4)
         dT[0:3,0:3]=R.from_rotvec(ang * np.pi / 180).as_matrix()
-        dT[0:3,3]=np.array([cos(ori)*trans_dev, sin(ori)*trans_dev,-self.init_vertical_trans*random.uniform(0, 1)])
+        dT[0:3,3]=np.array([cos(ori)*trans_dev, sin(ori)*trans_dev,-self.init_vertical_trans])
+
+        if self.using_max_v_trans:
+            dT[2, 3]*=random.uniform(0, 1)
         if self.using_minus_vertical:
             dT[2,3]=dT[2,3]*(random.randint(0,1)-0.5)*2
 
