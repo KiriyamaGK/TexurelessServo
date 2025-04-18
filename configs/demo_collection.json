@@ -20,13 +20,14 @@
     },
     "overall_setting": {
         "file_name": "25.04.144",
-        "demo_total_num": 3000,
-        "objs_descriptor": 20,
+        "demo_total_num": 5000,
+        "objs_descriptor": 14,
         "replace_existed_hdf5": true
     },
     "demo_collection": {
         "dof": 6,
         "trans_and_rot_type": "simultaneously",
+        "conditioned_sampling": true,
         "random_light_dir": true,
         "use_random_light_img_key": true,
         "depth": {
@@ -38,14 +39,14 @@
         "init": {
             "init_transform_frame": "grip",
             "init_horizon_trans": {
-                "value": 0.01,
+                "value": 0.005,
                 "use_max_trans": false
             },
 
             "init_vertical_trans": {
-                "value":0.10,
+                "value":0.07,
                 "using_max_v_trans": false,
-                "using_minus": false
+                "using_minus": true
             },
             "init_rot":{
                 "value":[8,8,40],
@@ -92,8 +93,8 @@
             "utilized": false
         },
         "portion_last_episode":{
-            "utilized": false,
-            "portion_last_num":10
+            "utilized": true,
+            "portion_last_num":3
         },
         "add_end_episode":{
             "utilized": false,

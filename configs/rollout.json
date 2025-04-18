@@ -13,8 +13,8 @@
         "fov": 60
     },
 
-    "logs_dir":  "trained_models/trial/2025-04-16_13-04-21/config.json",
-    "ckpts_dir": [294],
+    "logs_dir":  "trained_models/trial/2025-04-18_11-27-20/config.json",
+    "ckpts_dir": [204],
     "objs_descriptor": 20,
     "eval_epoch_num": 400,
     "bgr2rgb": false,
@@ -34,6 +34,7 @@
         },
         "init_vertical_trans": {
             "value":0.10,
+            "using_max_v_trans": false,
             "using_minus": false
         },
         "init_rot": {

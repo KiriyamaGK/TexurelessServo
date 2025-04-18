@@ -27,6 +27,7 @@
     "demo_collection": {
         "dof": 6,
         "trans_and_rot_type": "simultaneously",
+        "conditioned_sampling": true,
         "random_light_dir": true,
         "use_random_light_img_key": true,
         "depth": {

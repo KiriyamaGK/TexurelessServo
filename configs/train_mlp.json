@@ -70,7 +70,7 @@
     "num_epochs_logging_and_valid": 1,
     "num_train_steps_per_epoch": 100,
     "num_val_steps_per_epoch": 10,
-    "num_epochs_save": 3,
+    "num_epochs_save": 10,
     "batch_size": 16,
     "num_data_workers": 2
   },

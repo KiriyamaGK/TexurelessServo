@@ -29,6 +29,10 @@ class Environment(object):
         dist_eps=0.001,
         depth_info=None,
         pose_and_orientations=None,
+        _is_collect=False,
+        conditioned_sampling=False,
+        trans_vel=None,
+        rot_vel=None,
     ):
         '''
         self.obj_idx:当前物体id
@@ -73,7 +77,7 @@ class Environment(object):
 
         #determine grip startpos
         self.gripStartPos = [0, 0, 0]   #it is for determining hand-eye, not actual goal position,which should be obtained by adding to offset
-        self.gripStartPos[2]=pose_and_orientations["grip"]["start_pos_z"]
+        self.gripStartPos[2]=pose_and_orientations["grip"]["start_pos_z"]   #夹爪顶端
 
         #others
         self.dof = dof
@@ -81,6 +85,8 @@ class Environment(object):
 
         self.angle_eps = angle_eps  # degree
         self.dist_eps = dist_eps  # m
+        self.trans_vel = trans_vel
+        self.rot_vel = rot_vel
 
         self.init_horizon_trans = init_horizon_trans # m
         self.init_vertical_trans=init_vertical_trans if self.dof==6 else 0   # m
@@ -96,8 +102,20 @@ class Environment(object):
 
         self.use_max_rot=use_max_rot
         self.use_max_trans=use_max_trans
-        self.using_minus_vertical = using_minus_vertical
         self.using_max_v_trans = using_max_v_trans
+        self.using_minus_vertical = using_minus_vertical
+        self.conditioned_sampling = conditioned_sampling
+        if self.conditioned_sampling:
+            assert (not self.use_max_rot) and (not self.use_max_trans) and (not self.using_max_v_trans)
+            assert self.dof == 6
+            self.max_transxy_points = int(self.init_horizon_trans / self.trans_vel[0])
+            self.max_transz_points = int(self.init_vertical_trans / self.trans_vel[1])
+            self.max_rot_points = int(np.linalg.norm(self.init_rot) / self.rot_vel)
+            print("==================================================================")
+            print("max_xy_points:",self.max_transxy_points)
+            print("max_z_points:",self.max_transz_points)
+            print("max_rot_points:",self.max_rot_points)
+            self.demo_cond_p=0
 
         self.obj_idx = 0
         self.obj_idx_pointer = 0
@@ -110,10 +128,12 @@ class Environment(object):
         self.world_ori_axis=np.array([0, 0.2, 1.9]) #世界坐标系设置在原点，但显示的时候按照[0, 0.2, 1.9]平移
 
         self.gripStartOrientation = p.getQuaternionFromEuler([np.pi, 0, 0])
-
+        self.gripper_len=0.25
+        self.g_g_top=np.eye(4)
+        self.g_g_top[2,3]=-self.gripper_len
         self.gwT_tar=np.eye(4)
         self.gwT_tar[0:3,0:3]=R.from_rotvec(np.array([np.pi, 0, 0])).as_matrix()
-        self.gwT_tar[0:3,3]=np.array(self.gripStartPos)#绕世界系先旋转再平移的结果
+        self.gwT_tar[0:3,3]=np.array(self.gripStartPos+np.array([0,0,-self.gripper_len]))#绕世界系先旋转再平移的结果
 
         self.wcT_tar = wcT.copy() @ dTx.copy()
         # print(self.wcT_tar)
@@ -131,6 +151,7 @@ class Environment(object):
         self.close_enough_flag=False
         self.vel_in_threshold_flag=False
         self.depth_info=depth_info if depth_info is not None else {"utilized":False,"normalize_scaler": 10}
+        self._is_collect=_is_collect
 
         if isinstance(camera_config, str):
             with open(camera_config, "r") as j:
@@ -203,8 +224,9 @@ class Environment(object):
         self.tableId = p.loadURDF(TableFileName, globalScaling=self.table_scale_factor, useFixedBase=True)
         self.gripId = p.loadSDF(GripFileName, globalScaling=1)
 
+        wg_topT_tar=self.wgT_tar.copy()@self.g_g_top.copy()
         p.resetBasePositionAndOrientation(self.objId, self.objStartPos, self.objStartOrientation)
-        p.resetBasePositionAndOrientation(self.gripId[0], self.wgT_tar[0:3, 3], rmat2quat(self.gwT_tar[0:3, 0:3]))
+        p.resetBasePositionAndOrientation(self.gripId[0], wg_topT_tar[0:3, 3], rmat2quat(wg_topT_tar[0:3, 0:3].T))
         p.addUserDebugLine(self.world_ori_axis, self.world_ori_axis+np.array([0.05, 0, 0]), lineColorRGB=[1, 0, 0], lineWidth=2, lifeTime=0)
         p.addUserDebugLine(self.world_ori_axis, self.world_ori_axis+np.array([0, 0.05, 0]), lineColorRGB=[0, 1, 0], lineWidth=2, lifeTime=0)
         p.addUserDebugLine(self.world_ori_axis, self.world_ori_axis+np.array([0, 0, 0.05]), lineColorRGB=[0, 0, 1], lineWidth=2, lifeTime=0)
@@ -219,7 +241,7 @@ class Environment(object):
             p.stepSimulation(physicsClientId=self.client)
 
     def update_goal_position(self):
-        self.gwT_tar[2,3]=self.gripStartPos[2]+self.gripOffset_z_dict[self.obj_idx]
+        self.gwT_tar[2,3]=self.gripStartPos[2]+self.gripOffset_z_dict[self.obj_idx]-self.gripper_len
         self.wgT_tar=np.linalg.inv(self.gwT_tar.copy())
         self.cwT_tar=self.cgT.copy()@self.gwT_tar.copy()
         self.wcT_tar=np.linalg.inv(self.cwT_tar.copy())
@@ -227,27 +249,72 @@ class Environment(object):
             self.c2wT_tar = self.c2gT.copy() @ self.gwT_tar.copy()
             self.wc2T_tar = np.linalg.inv(self.c2wT_tar.copy())
 
+    def cond_sample_init_pos_algo(self):
+        if self.demo_cond_p == 0:
+            trans_xy_points = random.randint(int(0.8 * self.max_transxy_points), self.max_transxy_points)
+            trans_z_points = random.randint(int(0.8 * min(trans_xy_points, self.max_transz_points)),
+                                            min(trans_xy_points, self.max_transz_points))
+            rot_points = random.randint(int(0.8 * min(trans_xy_points, self.max_rot_points)),
+                                        min(trans_xy_points, self.max_rot_points))
+            self.demo_cond_p += 1
+        elif self.demo_cond_p == 1:
+            trans_z_points = random.randint(int(0.8 * self.max_transz_points), self.max_transz_points)
+            trans_xy_points = random.randint(int(0.8 * min(trans_z_points, self.max_transxy_points)),
+                                             min(trans_z_points, self.max_transxy_points))
+            rot_points = random.randint(int(0.8 * min(trans_z_points, self.max_rot_points)),
+                                        min(trans_z_points, self.max_rot_points))
+            self.demo_cond_p += 1
+        else:
+            rot_points = random.randint(int(0.8 * self.max_rot_points), self.max_rot_points)
+            trans_xy_points = random.randint(int(0.8 * min(rot_points, self.max_transxy_points)),
+                                             min(rot_points, self.max_transxy_points))
+            trans_z_points = random.randint(int(0.8 * min(rot_points, self.max_transz_points)),
+                                            min(rot_points, self.max_transz_points))
+            self.demo_cond_p = 0
+        print("===============================================")
+        print("trans_xy_points:", trans_xy_points)
+        print("trans_z_points:", trans_z_points)
+        print("rot_points:", rot_points)
+        return trans_xy_points, trans_z_points, rot_points
+
     def sample_init_pos(self):
         assert self.init_transform_frame in ["grip","cam"]
-        if not self.use_max_rot:
-            if random.uniform(0, 1) < 0.95:
-                ang = np.array([random.uniform(0, self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+
+        dT = np.eye(4)
+        ori = random.uniform(0, np.pi * 2)
+        if not self.conditioned_sampling:
+            if not self.use_max_rot:
+                if random.uniform(0, 1) < 0.95:
+                    ang = np.array([random.uniform(0, self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+                else:
+                    ang = np.array([self.init_rot[i] * (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
             else:
-                ang = np.array([self.init_rot[i] * (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+                ang =np.array([self.init_rot[i]* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+            print("angle:",ang)
+            trans_dev=self.init_horizon_trans if self.use_max_trans else self.init_horizon_trans*random.uniform(0, 1)
+
+            dT[0:3,0:3]=R.from_rotvec(ang * np.pi / 180).as_matrix()
+            dT[0:3,3]=np.array([cos(ori)*trans_dev, sin(ori)*trans_dev,-self.init_vertical_trans])
+
+            if self.using_max_v_trans:
+                dT[2, 3]*=random.uniform(0, 1)
+            if self.using_minus_vertical:
+                dT[2,3]=dT[2,3]*(random.randint(0,1)-0.5)*2
         else:
-            ang =np.array([self.init_rot[i]* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
-        print("angle:",ang)
-        ori = random.uniform(0, np.pi*2)
-        trans_dev=self.init_horizon_trans if self.use_max_trans else self.init_horizon_trans*random.uniform(0, 1)
+            trans_xy_points, trans_z_points, rot_points = self.cond_sample_init_pos_algo()
+            trans_dev = trans_xy_points*self.trans_vel[0]
+            vertical_dev=trans_z_points*self.trans_vel[1] if not self.using_minus_vertical else trans_z_points*self.trans_vel[1]*(random.randint(0,1)-0.5)*2
 
-        dT=np.eye(4)
-        dT[0:3,0:3]=R.from_rotvec(ang * np.pi / 180).as_matrix()
-        dT[0:3,3]=np.array([cos(ori)*trans_dev, sin(ori)*trans_dev,-self.init_vertical_trans])
+            dr=np.array([random.uniform(0,5) for _ in range(3)])
+            rot_dev_mat=R.from_rotvec(self.init_rot* np.pi / 180).as_matrix()@R.from_rotvec(dr* np.pi / 180).as_matrix()
+            rot_dev_vec=R.from_matrix(rot_dev_mat).as_rotvec()
+            rot_dev_vec/=np.linalg.norm(rot_dev_vec)/(rot_points*self.rot_vel)
+            print("trans_dev:",trans_dev)
+            print("vertical_dev:",vertical_dev)
+            print("rot_dev_vec:",rot_dev_vec)
 
-        if self.using_max_v_trans:
-            dT[2, 3]*=random.uniform(0, 1)
-        if self.using_minus_vertical:
-            dT[2,3]=dT[2,3]*(random.randint(0,1)-0.5)*2
+            dT[0:3, 0:3] = R.from_rotvec(rot_dev_vec * np.pi / 180).as_matrix()
+            dT[0:3, 3] = np.array([cos(ori) * trans_dev, sin(ori) * trans_dev, -vertical_dev])
 
         if self.init_transform_frame=="grip":
             self.wgT=self.wgT_tar@dT #绕夹爪系
@@ -318,8 +385,8 @@ class Environment(object):
         self.gwT = self.gwT_tar
         self.cwT = self.cwT_tar
         self.wcT = self.wcT_tar
-
-        p.resetBasePositionAndOrientation(self.gripId[0], self.wgT_tar[0:3, 3], rmat2quat(self.gwT_tar[0:3, 0:3]))
+        wg_topT_tar = self.wgT_tar.copy() @ self.g_g_top.copy()
+        p.resetBasePositionAndOrientation(self.gripId[0], wg_topT_tar[0:3, 3], rmat2quat(wg_topT_tar[0:3, 0:3].T))
         self.axes_gripper.update(self.wgT_tar)
         self.axes_cam.update(self.wcT_tar)
 
@@ -335,7 +402,8 @@ class Environment(object):
         self.cwT = pos["cwT"]
         self.wcT = pos["wcT"]
         # 更新夹爪位置
-        p.resetBasePositionAndOrientation(self.gripId[0], self.wgT[0:3, 3], rmat2quat(self.gwT[0:3, 0:3]))
+        wg_topT = self.wgT.copy() @ self.g_g_top.copy()
+        p.resetBasePositionAndOrientation(self.gripId[0], wg_topT[0:3, 3], rmat2quat(wg_topT[0:3, 0:3].T))
         # 更新夹爪坐标轴
         self.axes_gripper.update(self.wgT)
         # 更新相机坐标轴
@@ -366,7 +434,8 @@ class Environment(object):
             self.axes_cam2.update(self.wc2T)
 
         #更新夹爪位置
-        p.resetBasePositionAndOrientation(self.gripId[0], self.wgT[0:3,3], rmat2quat(self.gwT[0:3,0:3].T))
+        wg_topT = self.wgT.copy() @ self.g_g_top.copy()
+        p.resetBasePositionAndOrientation(self.gripId[0], wg_topT[0:3, 3], rmat2quat(wg_topT[0:3, 0:3]))
 
     def reinit(self):
         if  self.need_reinit():

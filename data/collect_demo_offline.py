@@ -1,6 +1,7 @@
 import os
 
 from open3d.examples.reconstruction_system.opencv_pose_estimation import pose_estimation
+from sympy.strategies.branch import condition
 
 from utils.hdf5 import add_useless_things, split_train_val_from_hdf5, add_env_meta, compute_num_samples, add_config
 import h5py
@@ -37,7 +38,7 @@ if __name__ == '__main__':
     img_w=220
     img_h=220
 
-    config_dir= "../configs/demo_collection_near.json"
+    config_dir= "../configs/demo_collection.json"
 
     with open(config_dir, "r") as j:
         config = json.load(j)
@@ -51,6 +52,7 @@ if __name__ == '__main__':
     #demo collection
     dof = config["demo_collection"]["dof"]
     motion_type=config["demo_collection"]['trans_and_rot_type']
+    conditioned_sampling=config["demo_collection"]['conditioned_sampling']
     random_light_dir = config["demo_collection"]['random_light_dir']
     use_light_key = config["demo_collection"]["use_random_light_img_key"] if random_light_dir else False
     depth_info=config["demo_collection"]['depth']
@@ -80,7 +82,7 @@ if __name__ == '__main__':
     assert (not portion_last_episode["utilized"]) or (not add_end_episode["utilized"])
 
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env=Environment(camera_config=camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,init_transform_frame=init_transform_frame,dof=dof,angle_eps=angle_eps,dist_eps=dist_eps,depth_info=depth_info,pose_and_orientations=pose_and_orientations)
+    env=Environment(camera_config=camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,init_transform_frame=init_transform_frame,dof=dof,angle_eps=angle_eps,dist_eps=dist_eps,depth_info=depth_info,pose_and_orientations=pose_and_orientations,_is_collect=True,conditioned_sampling=conditioned_sampling,trans_vel=trans_vel["value"],rot_vel=rot_vel["value"])
     env.init()
 
     base_dir = return_disc_route("One Touch")
