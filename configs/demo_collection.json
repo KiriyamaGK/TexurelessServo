@@ -44,7 +44,7 @@
             },
 
             "init_vertical_trans": {
-                "value":0.07,
+                "value":0.05,
                 "using_max_v_trans": false,
                 "using_minus": true
             },

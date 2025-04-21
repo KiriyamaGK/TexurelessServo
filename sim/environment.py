@@ -299,15 +299,18 @@ class Environment(object):
             if self.using_max_v_trans:
                 dT[2, 3]*=random.uniform(0, 1)
             if self.using_minus_vertical:
-                dT[2,3]=dT[2,3]*(random.randint(0,1)-0.5)*2
+                if random.randint(0,1)>0.8:
+                    dT[2,3]=dT[2,3]*(-1)*random.uniform(0.5, 1)
         else:
             trans_xy_points, trans_z_points, rot_points = self.cond_sample_init_pos_algo()
             trans_dev = trans_xy_points*self.trans_vel[0]
-            vertical_dev=trans_z_points*self.trans_vel[1] if not self.using_minus_vertical else trans_z_points*self.trans_vel[1]*(random.randint(0,1)-0.5)*2
-
-            dr=np.array([random.uniform(0,5) for _ in range(3)])
-            rot_dev_mat=R.from_rotvec(self.init_rot* np.pi / 180).as_matrix()@R.from_rotvec(dr* np.pi / 180).as_matrix()
-            rot_dev_vec=R.from_matrix(rot_dev_mat).as_rotvec()
+            vertical_dev=trans_z_points*self.trans_vel[1]
+            if self.using_minus_vertical:
+                if random.uniform(0,1)>0.8:
+                    vertical_dev=vertical_dev*(-1)*0.6
+            # dr=np.array([random.uniform(0,5) for _ in range(3)])
+            # rot_dev_mat=R.from_rotvec(self.init_rot* np.pi / 180).as_matrix()@R.from_rotvec(dr* np.pi / 180).as_matrix()
+            rot_dev_vec = np.array([random.uniform(0.5*self.init_rot[i], self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
             rot_dev_vec/=np.linalg.norm(rot_dev_vec)/(rot_points*self.rot_vel)
             print("trans_dev:",trans_dev)
             print("vertical_dev:",vertical_dev)

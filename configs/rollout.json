@@ -14,9 +14,9 @@
     },
 
     "logs_dir":  "trained_models/trial/2025-04-20_20-54-02/config.json",
-    "ckpts_dir": [294],
+    "ckpts_dir": "all",
     "objs_descriptor": 20,
-    "eval_epoch_num": 400,
+    "eval_epoch_num": 5,
     "bgr2rgb": false,
     "time_threshold": 30,
     "cv2_visualize": true,
