@@ -481,11 +481,14 @@ class Environment(object):
         return err_dict
 
     def compute_error(self, T0, T1):
+        # print("======================================")
         dT = np.linalg.inv(T0) @ T1
         angle = np.linalg.norm(R.from_matrix(dT[:3, :3]).as_rotvec()) / np.pi * 180
         dist = np.linalg.norm(dT[:3, 3])
         z_error=abs(dT[2, 3])
         self.close_enough_flag=(angle < self.angle_eps) and (dist < self.dist_eps)
+        # print("angle:",angle)
+        # print("dist:",dist)
         return {
             "close_enough":self.close_enough_flag,
             "dist":dist,

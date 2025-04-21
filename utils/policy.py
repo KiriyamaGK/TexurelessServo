@@ -75,10 +75,37 @@ def get_expert_policy(wgT_tar,wgT,trans_vel,rot_vel,uniform_vel,dist_eps,angle_e
                 assert isinstance(trans_vel_norm, list)
                 abs_del_tr_xy = np.linalg.norm(del_T[:2, 3].copy())
                 abs_del_tr_z = abs(del_T[2, 3].copy())
-                vel_tr_xy = v[0:2] / np.linalg.norm(v[0:2]) * trans_vel_norm[0] if trans_vel_norm[0] < abs_del_tr_xy else v[0:2]  # m
-                vel_tr_z = v[2:] / np.linalg.norm(v[2:]) * trans_vel_norm[1] if trans_vel_norm[1] < abs_del_tr_z else v[2:]  # m
+                print("================================")
+                print("abs_del_tr_xy", abs_del_tr_xy)
+                # print("abs_del_tr_z", abs_del_tr_z)
+                if  trans_vel_norm[0] >= abs_del_tr_xy:
+                    if not 0.1 * trans_vel_norm[0] >= abs_del_tr_xy:
+                        vel_tr_xy = v[0:2]
+                    else:
+                        vel_tr_xy = np.array([0, 0])
+                else:
+                    vel_tr_xy=v[0:2] / np.linalg.norm(v[0:2]) * trans_vel_norm[0]
+
+                if  trans_vel_norm[1] >= abs_del_tr_z:
+                    if not 0.1 * trans_vel_norm[1] >= abs_del_tr_z:
+                        vel_tr_z = v[2:]
+                    else:
+                        vel_tr_z = np.array([0])
+                else:
+                    vel_tr_z=v[2:] / np.linalg.norm(v[2:]) * trans_vel_norm[1]
+                # vel_tr_xy = v[0:2] / np.linalg.norm(v[0:2]) * trans_vel_norm[0] if trans_vel_norm[0] < abs_del_tr_xy else v[0:2]  # m
+                # vel_tr_z = v[2:] / np.linalg.norm(v[2:]) * trans_vel_norm[1] if trans_vel_norm[1] < abs_del_tr_z else v[2:]  # m
+                print("vel_tr_xy", vel_tr_xy)
+                if vel_tr_xy[0]!=0:
+                    print(vel_tr_xy[1]/vel_tr_xy[0])
                 vel_tr=np.concatenate((vel_tr_xy,vel_tr_z),axis=0)
-            vel_rot = w /  np.linalg.norm(w) * rot_vel_norm if rot_vel_norm<abs_del_angle else w # degree
+            if rot_vel_norm >= abs_del_angle:
+                if not 0.5*rot_vel_norm >= abs_del_angle:
+                    vel_rot = w/ np.pi * 180
+                else:
+                    vel_rot=np.array([0, 0,0])
+            else:
+                vel_rot = w / np.linalg.norm(w) * rot_vel_norm
         else:
             assert isinstance(trans_vel_norm, (int, float))
             dis=np.linalg.norm(np.array([np.linalg.norm(v)*1000, np.linalg.norm(w) / np.pi * 180])) #mm,degree

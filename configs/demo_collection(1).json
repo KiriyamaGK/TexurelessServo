@@ -19,7 +19,7 @@
         "fov": 60
     },
     "overall_setting": {
-        "file_name": "25.04.144",
+        "file_name": "25.04.118",
         "demo_total_num": 5000,
         "objs_descriptor": 14,
         "replace_existed_hdf5": true
@@ -84,7 +84,7 @@
         },
 
         "stop_policy":{
-            "angle_eps": 0.5,
+            "angle_eps": 0.3,
             "dist_eps": 0.0005
         }
     },

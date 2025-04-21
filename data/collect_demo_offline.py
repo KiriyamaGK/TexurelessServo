@@ -152,6 +152,7 @@ if __name__ == '__main__':
             vel_rot=act_dict['vel_rot'] #3dof:绕世界系 6dof:绕夹爪系
             dT=act_dict["dT"]
             # vel = np.concatenate((vel_tr,np.array([vel_rot]))) if not isinstance(vel_rot,np.ndarray) else  np.concatenate((vel_tr,vel_rot))
+            # print(np.concatenate((vel_tr,vel_rot)))
             action_list.append(np.concatenate((vel_tr,vel_rot)))
             if record_pose:
                 delta_pose_list.append(act_dict['cur_goal_delta_pose'])

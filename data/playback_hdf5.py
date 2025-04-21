@@ -6,7 +6,7 @@ from utils.paths import return_disc_route
 
 if __name__ == '__main__':
     # hdf_pth=return_disc_route('One Touch/AlignAnything_real/25.03.11/hdf5/mimic.hdf5')
-    hdf_pth = return_disc_route('One Touch/AlignAnything/25.03.111/hdf5/mimic.hdf5')
+    hdf_pth = return_disc_route('One Touch/AlignAnything/25.04.144/hdf5/mimic.hdf5')
     # temp_dir='/media/kiriyamagk/One Touch/AlignAnything/25.01.17/hdf5/temp'
     hdf_base=os.path.dirname(hdf_pth)
     fps=30
