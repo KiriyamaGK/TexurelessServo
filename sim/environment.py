@@ -307,7 +307,7 @@ class Environment(object):
             vertical_dev=trans_z_points*self.trans_vel[1]
             if self.using_minus_vertical:
                 if random.uniform(0,1)>0.8:
-                    vertical_dev=vertical_dev*(-1)*0.6
+                    vertical_dev=vertical_dev*(-1)
             # dr=np.array([random.uniform(0,5) for _ in range(3)])
             # rot_dev_mat=R.from_rotvec(self.init_rot* np.pi / 180).as_matrix()@R.from_rotvec(dr* np.pi / 180).as_matrix()
             rot_dev_vec = np.array([random.uniform(0.5*self.init_rot[i], self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
