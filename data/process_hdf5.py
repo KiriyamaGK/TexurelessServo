@@ -26,23 +26,24 @@ def _disturb_abs_rot(abs_rot_list,action_list):
 def _portion_last_episode(action_list,portion_last_num,ac_dim):
     need_portion = True
     num = len(action_list)
-    rot_id = num + 1
-    for uu in range(num):
-        rot = action_list[uu][2] if ac_dim == 3 else np.linalg.norm(
-            np.array(action_list[uu][3:]))
-        if rot != 0:
-            rot_id = uu + 1
-            break
-    if rot_id > num:  # 纯平移
-        need_portion = False
-    else:
-        cvt_last_num = min(portion_last_num,num - rot_id)  # eg: 0 0 0 0 0 1 1 num=7 ,rot_id=5+1=6 -> cvt_last_num=7-6=1
-        for i in range(cvt_last_num):
-            if ac_dim == 3:
-                action_list[i + num - cvt_last_num][2] *= (cvt_last_num - 1 - i) / cvt_last_num
-            else:
-                for kk in range(3):
-                    action_list[i + num - cvt_last_num][3+kk] *= (cvt_last_num - 1 - i) / cvt_last_num
+    # rot_id = num + 1
+    # for uu in range(num):
+    #     rot = action_list[uu][2] if ac_dim == 3 else np.linalg.norm(
+    #         np.array(action_list[uu][3:]))
+    #     if rot != 0:
+    #         rot_id = uu + 1
+    #         break
+    # if rot_id > num:  # 纯平移
+    #     need_portion = False
+    # else:
+    # cvt_last_num = min(portion_last_num,num - rot_id)  # eg: 0 0 0 0 0 1 1 num=7 ,rot_id=5+1=6 -> cvt_last_num=7-6=1
+    cvt_last_num=portion_last_num
+    for i in range(cvt_last_num):
+        if ac_dim == 3:
+            action_list[i + num - cvt_last_num][2] *= (cvt_last_num - 1 - i) / cvt_last_num
+        else:
+            for kk in range(6):
+                action_list[i + num - cvt_last_num][kk] *= (cvt_last_num - 1 - i) / cvt_last_num
     return action_list,need_portion
 
 def _add_end_episode(add_num,disturb_abs_rot,abs_rot_list,act_lst,pose_list):

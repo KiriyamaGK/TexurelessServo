@@ -13,10 +13,10 @@
         "fov": 60
     },
 
-    "logs_dir":  "trained_models/trial/2025-04-20_20-54-02/config.json",
-    "ckpts_dir": "all",
+    "logs_dir":  "trained_models/trial/2025-04-26_16-51-52/config.json",
+    "ckpts_dir": [417,710,497,149,575],
     "objs_descriptor": 20,
-    "eval_epoch_num": 5,
+    "eval_epoch_num": 300,
     "bgr2rgb": false,
     "time_threshold": 30,
     "cv2_visualize": true,
@@ -33,7 +33,7 @@
             "use_max_trans": false
         },
         "init_vertical_trans": {
-            "value":0.07,
+            "value":0.05,
             "using_max_v_trans": false,
             "using_minus": false
         },

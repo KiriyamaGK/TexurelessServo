@@ -34,6 +34,25 @@ def pixel_cord_from_frame1_to_frame3(h,w,h_hat,u1,v1):
      """
      return np.array([(u1-w/2+h/2)*h_hat/h,v1*h_hat/h])
 
+def get_goal_info(env):
+    env.act_to_goal()
+    if not use_light_key:
+        rtn_dict = env.observation(random_light_dir=random_light_dir, use_prob=True)  # TODO:记得修改
+        img_light = None
+        img2_light = None
+    else:
+        rtn_dict = env.observation(random_light_dir=False)
+        rtn_light_dict = env.observation(random_light_dir=True, use_prob=False)
+        img_light = rtn_light_dict['img_1']
+        img2_light = rtn_light_dict['img_2'] if 'img_2' in rtn_light_dict else None
+
+    img = rtn_dict['img_1']
+    img2 = rtn_dict['img_2'] if 'img_2' in rtn_dict else None
+    im_dep = rtn_dict["img_1_depth"] if "img_1_depth" in rtn_dict else None
+    im_dep2 = rtn_dict["img_2_depth"] if "img_2_depth" in rtn_dict else None
+
+    return {"img_goal":img,"img_goal2":img2,"img_light_goal":img_light,"img_light_goal2":img2_light,"img_dep_goal":im_dep,"img_dep_goal2":im_dep2}
+
 if __name__ == '__main__':
     img_w=220
     img_h=220
@@ -125,9 +144,13 @@ if __name__ == '__main__':
         im_dep2_lst=[]
         rz_list=[]
         delta_pose_list=[]
-        gaussian_img_ct_lst=[]
-        gaussian_img_kpt_lst = []
-        # iii=0
+
+        #get goal info
+        init_transform_dict = env.return_cur_pos_info()
+        env.act_to_goal()
+        goal_dict=get_goal_info(env)
+        env.act_with_abs_dict(init_transform_dict)
+
         while True:
             if not use_light_key:
                 rtn_dict=env.observation(random_light_dir=random_light_dir,use_prob=True) #TODO:记得修改
@@ -188,6 +211,31 @@ if __name__ == '__main__':
             # iii+=1
             env.action(dT)
             if env.reinit():
+                action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
+
+                img_goal = clip_image(goal_dict["img_goal"], img_h)
+                img_lst.append(img_goal)
+
+                if goal_dict["img_light_goal"] is not None:
+                    img_light_goal = clip_image(goal_dict["img_light_goal"], img_h)
+                    img_light_list.append(img_light_goal)
+                if goal_dict["img_dep_goal"] is not None:
+                    im_dep_goal = clip_image(goal_dict["img_dep_goal"], img_h)
+                    im_dep_lst.append(im_dep_goal[..., np.newaxis])  # [h,w,1]
+                if goal_dict["img_goal2"] is not None:
+                    im_goal2 = clip_image(goal_dict["img_goal2"], img_h)
+                    img2_lst.append(im_goal2)
+                if goal_dict["img_light_goal2"] is not None:
+                    img_light_goal2 = clip_image(goal_dict["img_light_goal2"], img_h)
+                    img2_light_list.append(img_light_goal2)
+                if goal_dict["img_dep_goal2"] is not None:
+                    im_dep_goal2 = clip_image(goal_dict["img_dep_goal2"], img_h)
+                    im_dep2_lst.append(im_dep_goal2[..., np.newaxis])  # [h,w,1]
+                if dof==3:
+                    rz_list.append(0)
+                if record_pose:
+                    delta_pose_list.append(np.zeros(6))
+
 
                 #post process
                 if disturb_abs_rot["utilized"]:

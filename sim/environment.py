@@ -283,17 +283,21 @@ class Environment(object):
         dT = np.eye(4)
         ori = random.uniform(0, np.pi * 2)
         if not self.conditioned_sampling:
-            if not self.use_max_rot:
-                if random.uniform(0, 1) < 0.95:
-                    ang = np.array([random.uniform(0, self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
-                else:
-                    ang = np.array([self.init_rot[i] * (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+            #rot
+            if (self.init_rot==np.array([0,0,0])).all():
+                dT[0:3,0:3]=np.eye(3)
             else:
-                ang =np.array([self.init_rot[i]* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
-            print("angle:",ang)
+                if not self.use_max_rot:
+                    if random.uniform(0, 1) < 0.95:
+                        ang = np.array([random.uniform(0, self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+                    else:
+                        ang = np.array([self.init_rot[i] * (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+                else:
+                    ang =np.array([self.init_rot[i]* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+                print("angle:",ang)
+                dT[0:3, 0:3] = R.from_rotvec(ang * np.pi / 180).as_matrix()
+            #trans
             trans_dev=self.init_horizon_trans if self.use_max_trans else self.init_horizon_trans*random.uniform(0, 1)
-
-            dT[0:3,0:3]=R.from_rotvec(ang * np.pi / 180).as_matrix()
             dT[0:3,3]=np.array([cos(ori)*trans_dev, sin(ori)*trans_dev,-self.init_vertical_trans])
 
             if self.using_max_v_trans:
@@ -302,16 +306,21 @@ class Environment(object):
                 if random.randint(0,1)>0.8:
                     dT[2,3]=dT[2,3]*(-1)*random.uniform(0.5, 1)
         else:
+            # print("1")
             trans_xy_points, trans_z_points, rot_points = self.cond_sample_init_pos_algo()
             trans_dev = trans_xy_points*self.trans_vel[0]
             vertical_dev=trans_z_points*self.trans_vel[1]
             if self.using_minus_vertical:
                 if random.uniform(0,1)>0.8:
                     vertical_dev=vertical_dev*(-1)
-            # dr=np.array([random.uniform(0,5) for _ in range(3)])
-            # rot_dev_mat=R.from_rotvec(self.init_rot* np.pi / 180).as_matrix()@R.from_rotvec(dr* np.pi / 180).as_matrix()
+            # dr = np.array([random.uniform(0, 5) for _ in range(3)])#TODO:记得注释这四行
+            # rot_dev_mat = R.from_rotvec(self.init_rot * np.pi / 180).as_matrix() @ R.from_rotvec(
+            #     dr * np.pi / 180).as_matrix()
+            # rot_dev_vec = R.from_matrix(rot_dev_mat).as_rotvec()
+            # rot_dev_vec /= np.linalg.norm(rot_dev_vec) / (rot_points * self.rot_vel)
+
             rot_dev_vec = np.array([random.uniform(0.5*self.init_rot[i], self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
-            rot_dev_vec/=np.linalg.norm(rot_dev_vec)/(rot_points*self.rot_vel)
+            rot_dev_vec/=np.linalg.norm(rot_dev_vec)/(rot_points*self.rot_vel) #TODO:记得解注释这两行
             print("trans_dev:",trans_dev)
             print("vertical_dev:",vertical_dev)
             print("rot_dev_vec:",rot_dev_vec)
