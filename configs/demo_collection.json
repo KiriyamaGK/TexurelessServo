@@ -19,8 +19,8 @@
         "fov": 60
     },
     "overall_setting": {
-        "file_name": "25.04.144",
-        "demo_total_num": 5000,
+        "file_name": "25.04.30",
+        "demo_total_num": 6000,
         "objs_descriptor": 14,
         "replace_existed_hdf5": true
     },
@@ -40,7 +40,8 @@
             "init_transform_frame": "grip",
             "init_horizon_trans": {
                 "value": 0.005,
-                "use_max_trans": false
+                "use_max_trans": false,
+                "use_high_proportion_x":false
             },
 
             "init_vertical_trans": {
@@ -71,7 +72,7 @@
         "velocity": {
             "trans_vel": {
                 "utilized":true,
-                "value": [0.00012,0.0012]
+                "value": [0.0006,0.0006]
             },
             "rot_vel": {
                 "utilized":true,
@@ -85,7 +86,7 @@
 
         "stop_policy":{
             "angle_eps": 0.5,
-            "dist_eps": 0.0005
+            "dist_eps": 0.001
         }
     },
     "post_process": {

@@ -28,6 +28,7 @@ class Environment(object):
         angle_eps = 0.4,
         dist_eps=0.001,
         depth_info=None,
+        use_high_proportion_x=False,
         pose_and_orientations=None,
         _is_collect=False,
         conditioned_sampling=False,
@@ -151,6 +152,7 @@ class Environment(object):
         self.close_enough_flag=False
         self.vel_in_threshold_flag=False
         self.depth_info=depth_info if depth_info is not None else {"utilized":False,"normalize_scaler": 10}
+        self.use_high_proportion_x=use_high_proportion_x
         self._is_collect=_is_collect
 
         if isinstance(camera_config, str):
@@ -282,6 +284,13 @@ class Environment(object):
 
         dT = np.eye(4)
         ori = random.uniform(0, np.pi * 2)
+        if self.use_high_proportion_x:
+            ori=np.pi/2
+            if random.uniform(0, 1) > 0.5:
+                ori *=-1
+            if random.uniform(0, 1) < 0.3:
+                ori+=np.pi/9* (random.randint(0, 1) - 0.5) * 2
+
         if not self.conditioned_sampling:
             #rot
             if (self.init_rot==np.array([0,0,0])).all():
@@ -303,15 +312,15 @@ class Environment(object):
             if self.using_max_v_trans:
                 dT[2, 3]*=random.uniform(0, 1)
             if self.using_minus_vertical:
-                if random.randint(0,1)>0.8:
-                    dT[2,3]=dT[2,3]*(-1)*random.uniform(0.5, 1)
+                if random.randint(0,1)>0.65:
+                    dT[2,3]=dT[2,3]*(-1)*random.uniform(0.6, 1)
         else:
             # print("1")
             trans_xy_points, trans_z_points, rot_points = self.cond_sample_init_pos_algo()
             trans_dev = trans_xy_points*self.trans_vel[0]
             vertical_dev=trans_z_points*self.trans_vel[1]
             if self.using_minus_vertical:
-                if random.uniform(0,1)>0.8:
+                if random.uniform(0,1)>0.65:
                     vertical_dev=vertical_dev*(-1)
             # dr = np.array([random.uniform(0, 5) for _ in range(3)])#TODO:记得注释这四行
             # rot_dev_mat = R.from_rotvec(self.init_rot * np.pi / 180).as_matrix() @ R.from_rotvec(
