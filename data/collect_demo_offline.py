@@ -76,6 +76,7 @@ if __name__ == '__main__':
     use_light_key = config["demo_collection"]["use_random_light_img_key"] if random_light_dir else False
     depth_info=config["demo_collection"]['depth']
     record_pose=config["demo_collection"]['record_pose']
+    third_view_camera=config["demo_collection"]['third_view_camera']
 
     trans_vel=config["demo_collection"]["velocity"]['trans_vel'] #m
     rot_vel=config["demo_collection"]["velocity"]['rot_vel']    #deg
@@ -102,7 +103,7 @@ if __name__ == '__main__':
     assert (not portion_last_episode["utilized"]) or (not add_end_episode["utilized"])
 
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env=Environment(camera_config=camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,use_high_proportion_x=use_high_proportion_x,init_rot=init_rot,init_transform_frame=init_transform_frame,dof=dof,angle_eps=angle_eps,dist_eps=dist_eps,depth_info=depth_info,pose_and_orientations=pose_and_orientations,_is_collect=True,conditioned_sampling=conditioned_sampling,trans_vel=trans_vel["value"],rot_vel=rot_vel["value"])
+    env=Environment(camera_config=camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,use_high_proportion_x=use_high_proportion_x,init_rot=init_rot,init_transform_frame=init_transform_frame,dof=dof,angle_eps=angle_eps,dist_eps=dist_eps,depth_info=depth_info,pose_and_orientations=pose_and_orientations,_is_collect=True,conditioned_sampling=conditioned_sampling,trans_vel=trans_vel["value"],rot_vel=rot_vel["value"],third_view_camera=third_view_camera)
     env.init()
 
     base_dir = return_disc_route("One Touch")

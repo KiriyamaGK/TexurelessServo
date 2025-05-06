@@ -21,7 +21,7 @@
     "time_threshold": 30,
     "cv2_visualize": true,
     "expert_motion_type": "trans_first",
-
+    "third_view_camera": false,
     "record_video": true,
     "random_light": false,
 

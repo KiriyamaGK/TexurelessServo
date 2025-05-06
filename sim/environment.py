@@ -34,6 +34,7 @@ class Environment(object):
         conditioned_sampling=False,
         trans_vel=None,
         rot_vel=None,
+        third_view_camera=False
     ):
         '''
         self.obj_idx:当前物体id
@@ -67,14 +68,32 @@ class Environment(object):
         dTx[0:3, 0:3] = R.from_rotvec(np.array([1, 0, 0]) * pose_and_orientations["cam1"]["rotation"] / 180 * np.pi).as_matrix()
 
         #cam2
-        c2wT = np.array([[1., 0, 0, 0],  # 左上角c右下角w，前三列是c系在w系中的表示,按列排列，最后一列是从c的原点指向w的原点并在c系中表示
-                        [0, -1., 0, 0],
-                        [0, 0, -1., 0],
-                        [0, 0, 0, 1.]])
-        c2wT[0:3,3]=np.array(pose_and_orientations["cam2"]["c2wT_trans"])
-        wc2T = np.linalg.inv(c2wT)
+        # c2wT = np.array([[1., 0, 0, 0],  # 左上角c右下角w，前三列是c系在w系中的表示,按列排列，最后一列是从c的原点指向w的原点并在c系中表示
+        #                 [0, -1., 0, 0],
+        #                 [0, 0, -1., 0],
+        #                 [0, 0, 0, 1.]])
+        # c2wT[0:3,3]=np.array(pose_and_orientations["cam2"]["c2wT_trans"])
+        # wc2T = np.linalg.inv(c2wT)
+        # dT2x = np.eye(4)
+        # dT2x[0:3, 0:3] = R.from_rotvec(np.array([1, 0, 0]) * pose_and_orientations["cam2"]["rotation"] / 180 * np.pi).as_matrix()
+
+        tmp_vec = np.array([0.4, 0, 2.05])
+
+        rz=np.array([-tmp_vec[0], -tmp_vec[1], 1.88-tmp_vec[2]])
+        rx=np.array([rz[1], -rz[0], 0.])
+        ry=np.cross(rz.copy(), rx.copy())
+        rx /= np.linalg.norm(rx)
+        ry /= np.linalg.norm(ry)
+        rz /= np.linalg.norm(rz)
+
+        rot=np.array([[rx[0], ry[0], rz[0]] , # 左上角c右下角w，前三列是c系在w系中的表示,按列排列，最后一列是从c的原点指向w的原点并在c系中表示
+                         [rx[1], ry[1], rz[1]],
+                         [rx[2], ry[2], rz[2]]])
+        rot=rot@R.from_rotvec(np.array([0,0,np.pi])).as_matrix()
+        wc2T=np.eye(4)
+        wc2T[0:3, 0:3]=rot
+        wc2T[0:3, 3] = tmp_vec
         dT2x = np.eye(4)
-        dT2x[0:3, 0:3] = R.from_rotvec(np.array([1, 0, 0]) * pose_and_orientations["cam2"]["rotation"] / 180 * np.pi).as_matrix()
 
         #determine grip startpos
         self.gripStartPos = [0, 0, 0]   #it is for determining hand-eye, not actual goal position,which should be obtained by adding to offset
@@ -83,6 +102,7 @@ class Environment(object):
         #others
         self.dof = dof
         assert self.dof in [3,6]
+        self.third_view_camera = third_view_camera if dof == 6 else False
 
         self.angle_eps = angle_eps  # degree
         self.dist_eps = dist_eps  # m
@@ -147,6 +167,10 @@ class Environment(object):
             # print(self.wc2T_tar)
             self.c2wT_tar = np.linalg.inv(self.wc2T_tar.copy())
             self.c2gT = self.c2wT_tar.copy() @ np.linalg.inv(self.gwT_tar.copy())
+            if self.third_view_camera:
+                self.standard_wc2T=wc2T
+                # self.wc2T=self.wc2T_tar
+                # self.c2wT=self.c2wT_tar
 
         self.init_flag=False
         self.close_enough_flag=False
@@ -198,6 +222,17 @@ class Environment(object):
                 raise RuntimeError('objs_descriptor has invalid index')
         else:
             raise RuntimeError('objs_descriptor must be an integer or a list')
+    def change_thirdview_campos(self):
+        if self.third_view_camera:
+            self.wc2T_tar=self.standard_wc2T.copy()
+            dx=random.uniform(0,0.2)
+            dy=random.uniform(-0.1,0.1)
+            self.wc2T_tar[0,3]+=dx
+            self.wc2T_tar[1,3]+=dy
+            self.c2wT_tar=np.linalg.inv(self.wc2T_tar)
+            self.wc2T = self.wc2T_tar
+            self.c2wT = self.c2wT_tar
+            print(f"thirdview campos dx,dy:{dx},{dy}")
 
     def determine_offsetz_idxes(self,gripOffset_z):
         if isinstance(gripOffset_z,list):
@@ -247,7 +282,8 @@ class Environment(object):
         self.wgT_tar=np.linalg.inv(self.gwT_tar.copy())
         self.cwT_tar=self.cgT.copy()@self.gwT_tar.copy()
         self.wcT_tar=np.linalg.inv(self.cwT_tar.copy())
-        if self.dof==6:
+
+        if self.dof==6 and (not self.third_view_camera):
             self.c2wT_tar = self.c2gT.copy() @ self.gwT_tar.copy()
             self.wc2T_tar = np.linalg.inv(self.c2wT_tar.copy())
 
@@ -343,7 +379,7 @@ class Environment(object):
             self.cwT=self.cgT@self.gwT
             self.wcT=np.linalg.inv(self.cwT)
 
-            if self.dof == 6:
+            if self.dof==6 and (not self.third_view_camera):
                 self.c2wT = self.c2gT @ self.gwT
                 self.wc2T = np.linalg.inv(self.c2wT)
 
@@ -366,9 +402,11 @@ class Environment(object):
                 self.c2wT = c2mT @ np.linalg.inv(mid_frame)
                 self.wc2T = np.linalg.inv(self.c2wT)
                 self.wgT=self.wcT@self.cgT
+                self.gwT = np.linalg.inv(self.wgT)
 
 
     def init(self):
+        self.change_thirdview_campos()
         if self.obj_idx_pointer>=len(self.obj_idxs):
             self.obj_idx_pointer=0
         self.obj_idx=self.obj_idxs[self.obj_idx_pointer]
@@ -449,7 +487,7 @@ class Environment(object):
         self.axes_gripper.update(self.wgT)
         # 更新相机坐标轴
         self.axes_cam.update(self.wcT)
-        if self.dof == 6:
+        if self.dof==6 and (not self.third_view_camera):
             self.c2wT = self.c2gT @ self.gwT
             self.wc2T = np.linalg.inv(self.c2wT)
             self.axes_cam2.update(self.wc2T)
@@ -457,6 +495,7 @@ class Environment(object):
         #更新夹爪位置
         wg_topT = self.wgT.copy() @ self.g_g_top.copy()
         p.resetBasePositionAndOrientation(self.gripId[0], wg_topT[0:3, 3], rmat2quat(wg_topT[0:3, 0:3]))
+        # time.sleep(1000000)
 
     def reinit(self):
         if  self.need_reinit():

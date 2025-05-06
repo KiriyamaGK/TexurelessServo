@@ -108,6 +108,7 @@ if __name__ == '__main__':
         raise RuntimeError("objs_descriptor must be an int or list")
 
     cv2_visualize=config['cv2_visualize']
+    third_view_camera = config['third_view_camera']
 
     stop_policy = config['stop_policy']
     eval_metrics=config['eval_metrics']
@@ -142,7 +143,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = _setup_model(model_config)
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env = Environment(camera_config=camera_intrinsic, objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,init_transform_frame=init_transform_frame,using_max_v_trans=using_max_v_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof,depth_info=depth_info,pose_and_orientations=pose_and_orientations,conditioned_sampling=True,trans_vel=[0.00012,0.0012],rot_vel=0.5)
+    env = Environment(camera_config=camera_intrinsic, objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,init_transform_frame=init_transform_frame,using_max_v_trans=using_max_v_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof,depth_info=depth_info,pose_and_orientations=pose_and_orientations,conditioned_sampling=True,trans_vel=[0.00012,0.0012],rot_vel=0.5,third_view_camera=third_view_camera)
     # env = Environment(camera_config=camera_intrinsic, objs_descriptor=objs_descriptor, use_max_rot=use_max_rot,
     #                   use_max_trans=use_max_trans, init_horizon_trans=init_horizon_trans,
     #                   init_vertical_trans=init_vertical_trans, init_transform_frame=init_transform_frame,
