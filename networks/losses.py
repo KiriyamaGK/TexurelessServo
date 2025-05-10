@@ -11,6 +11,10 @@ class CustomLoss(nn.Module):
         self.weight_pos = weight["weight_pose_estm"] if "weight_pose_estm" in weight else None #mm,deg
         self.seq_length = seq_length
         self.output_dim = output_dim
+        assert self.output_dim in [3, 6]
+        self.division=2 if self.output_dim == 3 else 3
+        print("action_dim", self.output_dim)
+
     def forward(self, pred_dict, label_dict):
         # 自定义损失计算逻辑
         inputs=pred_dict["output_tensor"]
@@ -18,8 +22,8 @@ class CustomLoss(nn.Module):
 
         inputs=inputs.view(-1,self.seq_length,self.output_dim)
         targets=targets.view(-1,self.seq_length,self.output_dim)
-        loss_tr = torch.mean((inputs[:,:,0:2] - targets[:,:,0:2]) ** 2)*self.weight_tr  # mse,平方和/(b*t*n_dim)
-        loss_rot = torch.mean((inputs[:, :, 2:] - targets[:, :, 2:]) ** 2)*self.weight_rot
+        loss_tr = torch.mean((inputs[:,:,0:self.division] - targets[:,:,0:self.division]) ** 2)*self.weight_tr  # mse,平方和/(b*t*n_dim)
+        loss_rot = torch.mean((inputs[:, :, self.division:] - targets[:, :, self.division:]) ** 2)*self.weight_rot
         loss = loss_tr+ loss_rot
         loss_dict = {
         "loss": loss,
@@ -136,6 +140,10 @@ class TCL_MSE(nn.Module):
 
         self.seq_length = seq_length
         self.output_dim = output_dim
+        assert self.output_dim in [3,6]
+        self.division = 2 if self.output_dim == 3 else 3
+
+        print("action_dim",self.output_dim)
 
     def forward(self, pred_dict, label_dict):
         # 自定义损失计算逻辑
@@ -150,8 +158,8 @@ class TCL_MSE(nn.Module):
         #act
         pred_act=pred_act.view(-1,self.seq_length,self.output_dim)
         target_act=target_act.view(-1,self.seq_length,self.output_dim)
-        loss_tr = torch.mean((pred_act[:,:,0:2] - target_act[:,:,0:2]) ** 2)*self.weight_tr  # mse,平方和/(b*t*n_dim)
-        loss_rot = torch.mean((pred_act[:, :, 2:] - target_act[:, :, 2:]) ** 2)*self.weight_rot
+        loss_tr = torch.mean((pred_act[:,:,0:self.division] - target_act[:,:,0:self.division]) ** 2)*self.weight_tr                   # mse,平方和/(b*t*n_dim)
+        loss_rot = torch.mean((pred_act[:, :, self.division:] - target_act[:, :, self.division:]) ** 2)*self.weight_rot
 
         #tcl
         pred_act_aug = pred_act_aug.view(-1, self.seq_length, self.output_dim)
