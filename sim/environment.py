@@ -56,6 +56,7 @@ class Environment(object):
                     "offset_z": 0
                 },
             }
+        self.third_view_camera = third_view_camera if dof == 6 else False
 
         #cam1
         cwT = np.array([[-1., 0, 0, 0],  # 左上角c右下角w，前三列是c系在w系中的表示,按列排列，最后一列是从c的原点指向w的原点并在c系中表示
@@ -67,33 +68,35 @@ class Environment(object):
         dTx = np.eye(4)
         dTx[0:3, 0:3] = R.from_rotvec(np.array([1, 0, 0]) * pose_and_orientations["cam1"]["rotation"] / 180 * np.pi).as_matrix()
 
-        #cam2
-        # c2wT = np.array([[1., 0, 0, 0],  # 左上角c右下角w，前三列是c系在w系中的表示,按列排列，最后一列是从c的原点指向w的原点并在c系中表示
-        #                 [0, -1., 0, 0],
-        #                 [0, 0, -1., 0],
-        #                 [0, 0, 0, 1.]])
-        # c2wT[0:3,3]=np.array(pose_and_orientations["cam2"]["c2wT_trans"])
-        # wc2T = np.linalg.inv(c2wT)
-        # dT2x = np.eye(4)
-        # dT2x[0:3, 0:3] = R.from_rotvec(np.array([1, 0, 0]) * pose_and_orientations["cam2"]["rotation"] / 180 * np.pi).as_matrix()
+        if not self.third_view_camera:
+            #cam2
+            c2wT = np.array([[1., 0, 0, 0],  # 左上角c右下角w，前三列是c系在w系中的表示,按列排列，最后一列是从c的原点指向w的原点并在c系中表示
+                            [0, -1., 0, 0],
+                            [0, 0, -1., 0],
+                            [0, 0, 0, 1.]])
+            c2wT[0:3,3]=np.array(pose_and_orientations["cam2"]["c2wT_trans"])
+            wc2T = np.linalg.inv(c2wT)
+            dT2x = np.eye(4)
+            dT2x[0:3, 0:3] = R.from_rotvec(np.array([1, 0, 0]) * pose_and_orientations["cam2"]["rotation"] / 180 * np.pi).as_matrix()
 
-        tmp_vec = np.array([0.4, 0, 2.05])
+        else:
+            tmp_vec = np.array([0.4, 0, 2.05])
 
-        rz=np.array([-tmp_vec[0], -tmp_vec[1], 1.88-tmp_vec[2]])
-        rx=np.array([rz[1], -rz[0], 0.])
-        ry=np.cross(rz.copy(), rx.copy())
-        rx /= np.linalg.norm(rx)
-        ry /= np.linalg.norm(ry)
-        rz /= np.linalg.norm(rz)
+            rz=np.array([-tmp_vec[0], -tmp_vec[1], 1.88-tmp_vec[2]])
+            rx=np.array([rz[1], -rz[0], 0.])
+            ry=np.cross(rz.copy(), rx.copy())
+            rx /= np.linalg.norm(rx)
+            ry /= np.linalg.norm(ry)
+            rz /= np.linalg.norm(rz)
 
-        rot=np.array([[rx[0], ry[0], rz[0]] , # 左上角c右下角w，前三列是c系在w系中的表示,按列排列，最后一列是从c的原点指向w的原点并在c系中表示
-                         [rx[1], ry[1], rz[1]],
-                         [rx[2], ry[2], rz[2]]])
-        rot=rot@R.from_rotvec(np.array([0,0,np.pi])).as_matrix()
-        wc2T=np.eye(4)
-        wc2T[0:3, 0:3]=rot
-        wc2T[0:3, 3] = tmp_vec
-        dT2x = np.eye(4)
+            rot=np.array([[rx[0], ry[0], rz[0]] , # 左上角c右下角w，前三列是c系在w系中的表示,按列排列，最后一列是从c的原点指向w的原点并在c系中表示
+                             [rx[1], ry[1], rz[1]],
+                             [rx[2], ry[2], rz[2]]])
+            rot=rot@R.from_rotvec(np.array([0,0,np.pi])).as_matrix()
+            wc2T=np.eye(4)
+            wc2T[0:3, 0:3]=rot
+            wc2T[0:3, 3] = tmp_vec
+            dT2x = np.eye(4)
 
         #determine grip startpos
         self.gripStartPos = [0, 0, 0]   #it is for determining hand-eye, not actual goal position,which should be obtained by adding to offset
@@ -102,7 +105,6 @@ class Environment(object):
         #others
         self.dof = dof
         assert self.dof in [3,6]
-        self.third_view_camera = third_view_camera if dof == 6 else False
 
         self.angle_eps = angle_eps  # degree
         self.dist_eps = dist_eps  # m

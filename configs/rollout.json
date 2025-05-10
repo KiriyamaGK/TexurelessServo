@@ -13,15 +13,15 @@
         "fov": 60
     },
 
-    "logs_dir":  "trained_models/trial/2025-04-28_12-55-41/config.json",
-    "ckpts_dir": "all",
+    "logs_dir":  "trained_models/trial/2025-05-09_11-32-07/config.json",
+    "ckpts_dir": [219],
     "objs_descriptor": 20,
-    "eval_epoch_num": 10,
+    "eval_epoch_num": 20,
     "bgr2rgb": false,
     "time_threshold": 30,
     "cv2_visualize": true,
     "expert_motion_type": "trans_first",
-    "third_view_camera": false,
+    "third_view_camera": true,
     "record_video": true,
     "random_light": false,
 

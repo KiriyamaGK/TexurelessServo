@@ -468,8 +468,8 @@ class Transformer(NetworkBase):
 
         if self.encoder_name == 'ResNet18':
             for _ in range(self.num_cameras):
-                resnet18 = models.resnet18() if not self.using_depth else rgbd_resnet.FusionEnhancedNet()
-                resnet18_goal = models.resnet18() if not self.using_depth else rgbd_resnet.FusionEnhancedNet()
+                resnet18 = models.resnet18(pretrained=True) if not self.using_depth else rgbd_resnet.FusionEnhancedNet()
+                resnet18_goal = models.resnet18(pretrained=True) if not self.using_depth else rgbd_resnet.FusionEnhancedNet()
                 self.img_encs.append(torch.nn.Sequential(*(list(resnet18.children())[:-2])) if not self.using_depth else resnet18_goal)
                 self.img_enc_goals.append(torch.nn.Sequential(*(list(resnet18_goal.children())[:-2])) if not self.using_depth else resnet18_goal)
                 self.spatial_softmaxs.append(SpatialSoftmax(self.ss_in_c,self.ss_in_h,self.ss_in_w,self.ss_num_kp))
