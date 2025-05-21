@@ -19,6 +19,7 @@
         "fov": 60
     },
     "overall_setting": {
+        "base_dir": "/home/user0/dataset",
         "file_name": "25.04.30",
         "demo_total_num": 6000,
         "objs_descriptor": 14,
@@ -32,7 +33,7 @@
         "random_light_dir": true,
         "use_random_light_img_key": true,
         "depth": {
-            "utilized": true,
+            "utilized": false,
             "normalize_scaler": 1
         },
         "record_pose": true,

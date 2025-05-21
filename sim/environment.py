@@ -191,6 +191,7 @@ class Environment(object):
         if not hasattr(self, "client"):
             # self.client = p.connect(p.SHARED_MEMORY)
             self.client=p.connect(p.GUI)
+            # self.client = p.connect(p.DIRECT)
             print("[INFO] Client (id = {}) initialized".format(self.client))
         p.resetDebugVisualizerCamera(cameraDistance=1, cameraYaw=10, cameraPitch=-45, cameraTargetPosition=self.objStartPos)
         p.setRealTimeSimulation(0, physicsClientId=self.client) #用于设置仿真是否实时进行。参数 0 表示关闭实时仿真
@@ -344,7 +345,7 @@ class Environment(object):
                 print("angle:",ang)
                 dT[0:3, 0:3] = R.from_rotvec(ang * np.pi / 180).as_matrix()
             #trans
-            trans_dev=self.init_horizon_trans if self.use_max_trans else self.init_horizon_trans*random.uniform(0, 1)
+            trans_dev=self.init_horizon_trans if self.use_max_trans else np.sqrt(random.uniform(0, self.init_horizon_trans**2))
             dT[0:3,3]=np.array([cos(ori)*trans_dev, sin(ori)*trans_dev,-self.init_vertical_trans])
 
             if self.using_max_v_trans:

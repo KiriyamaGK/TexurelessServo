@@ -63,6 +63,8 @@ if __name__ == '__main__':
         config = json.load(j)
 
     #overall setting
+    base_dir = return_disc_route("One Touch")
+    # base_dir = config['overall_setting']["base_dir"]
     objs_descriptor=config['overall_setting']['objs_descriptor']
     current_date=config['overall_setting']['file_name']
     demo_total_num = config['overall_setting']['demo_total_num']
@@ -105,8 +107,6 @@ if __name__ == '__main__':
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
     env=Environment(camera_config=camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,use_high_proportion_x=use_high_proportion_x,init_rot=init_rot,init_transform_frame=init_transform_frame,dof=dof,angle_eps=angle_eps,dist_eps=dist_eps,depth_info=depth_info,pose_and_orientations=pose_and_orientations,_is_collect=True,conditioned_sampling=conditioned_sampling,trans_vel=trans_vel["value"],rot_vel=rot_vel["value"],third_view_camera=third_view_camera)
     env.init()
-
-    base_dir = return_disc_route("One Touch")
 
     database_dir = os.path.join(base_dir, 'AlignAnything', current_date, 'hdf5')
     ensure_dir(database_dir)
