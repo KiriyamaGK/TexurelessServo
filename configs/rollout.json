@@ -24,9 +24,42 @@
     "third_view_camera": false,
     "record_video": true,
     "random_light": true,
-
+    
     "dof": 6,
+
     "init": {
+        "uniform_evaluation": {
+            "freq_per_pos": 3,
+            "utilized": true,
+            "trans": {
+                "x":{
+                    "range": [0.005, 0.005],
+                    "inteval":0.005
+                },
+                "y": {
+                    "range": [0.005, 0.005],
+                    "inteval":0.005
+                },
+                "z": {
+                    "range": [0, 0.005],
+                    "inteval":0.005
+                }
+            },
+            "rot": {
+                "rx":{
+                    "range": [5, 5],
+                    "inteval":2
+                },
+                "ry":{
+                    "range": [5, 5],
+                    "inteval":2
+                },
+                "rz": {
+                    "range": [10,10],
+                    "inteval":5
+                }
+            }
+    },
         "init_transform_frame": "grip",
         "init_horizon_trans": {
             "value": 0.005,
@@ -47,8 +80,8 @@
         "utilized": true,
         "success_rate": {
             "utilized": true,
-            "trans_threshold": 0.003,
-            "rot_threshold": 2
+            "trans_threshold": 0.001,
+            "rot_threshold": 0.5
         },
         "error_curve":{
             "utilized": true

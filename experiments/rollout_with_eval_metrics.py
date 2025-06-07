@@ -24,6 +24,7 @@ def cleanup():
     if eval_metrics["success_rate"]["utilized"]:
         calculate_success_rate(success_list, os.path.join(save_base_pth, "success_rate.json"))
     visualize_final_error(final_error_list, os.path.join(save_base_pth, "final_error.json"))
+    np.save(os.path.join(save_base_pth, "even_distributed_successrate.npy"),np.array(success_even_distributed_list))
     plot_time(time_list,save_base_pth,show=False)
 
 # 注册退出时的回调函数
@@ -70,6 +71,37 @@ def _setup_model(model_config: dict):
         **model_config["algorithm"]["policy"]["params"]
     )#**动态传参，字典中的键与函数参数名完全匹配
 
+def compute_uniform_evaluation(cfg):
+    x_inteval = cfg["trans"]["x"]["inteval"]
+    x_min = cfg["trans"]["x"]["range"][0]
+    x_max = cfg["trans"]["x"]["range"][1]
+
+    y_inteval = cfg["trans"]["y"]["inteval"]
+    y_min = cfg["trans"]["y"]["range"][0]
+    y_max = cfg["trans"]["y"]["range"][1]
+
+    z_inteval = cfg["trans"]["z"]["inteval"]
+    z_min = cfg["trans"]["z"]["range"][0]
+    z_max = cfg["trans"]["z"]["range"][1]
+
+    rx_inteval = cfg["rot"]["rx"]["inteval"]
+    rx_min = cfg["rot"]["rx"]["range"][0]
+    rx_max = cfg["rot"]["rx"]["range"][1]
+
+    ry_inteval = cfg["rot"]["ry"]["inteval"]
+    ry_min = cfg["rot"]["ry"]["range"][0]
+    ry_max = cfg["rot"]["ry"]["range"][1]
+
+    rz_inteval = cfg["rot"]["rz"]["inteval"]
+    rz_min = cfg["rot"]["rz"]["range"][0]
+    rz_max = cfg["rot"]["rz"]["range"][1]
+    x_res=(x_max-x_min)//x_inteval+1
+    y_res=(y_max-y_min)//y_inteval+1
+    z_res=(z_max-z_min)//z_inteval+1
+    rx_res=(rx_max-rx_min)//rx_inteval+1
+    ry_res=(ry_max-ry_min)//ry_inteval+1
+    rz_res=(rz_max-rz_min)//rz_inteval+1
+    return int(x_res*y_res*z_res*rx_res*ry_res*rz_res)
 if __name__ == '__main__':
     config_dir= "../configs/rollout.json"
 
@@ -93,7 +125,9 @@ if __name__ == '__main__':
     ckpt_base = os.path.dirname(logs_dir)
     ckpts_dirs=determine_ckpt_dirs(config["ckpts_dir"],ckpt_base)
 
-    eval_epoch_num = config['eval_epoch_num']
+    freq_per_pos=config["init"]["uniform_evaluation"]["freq_per_pos"] if (config["init"]["uniform_evaluation"]["utilized"]) else 0
+    eval_epoch_num = config['eval_epoch_num'] if (not config["init"]["uniform_evaluation"]["utilized"]) else compute_uniform_evaluation(config["init"]["uniform_evaluation"])*freq_per_pos
+    print(eval_epoch_num)
     if isinstance(config['objs_descriptor'],list):
         if eval_epoch_num<len(config['objs_descriptor']):
             objs_descriptor=config['objs_descriptor'][:eval_epoch_num]
@@ -126,6 +160,7 @@ if __name__ == '__main__':
     use_max_trans = config["init"]['init_horizon_trans']["use_max_trans"]
     use_max_rot = config["init"]['init_rot']['use_max_rot']
     init_transform_frame = config["init"]['init_transform_frame'] if 'init_transform_frame' in config["init"] else "grip"
+    uniform_evaluation=config["init"]['uniform_evaluation']
 
     expert_motion_type=config['expert_motion_type']
     record_video=config['record_video']
@@ -143,7 +178,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = _setup_model(model_config)
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env = Environment(camera_config=camera_intrinsic, objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,init_transform_frame=init_transform_frame,using_max_v_trans=using_max_v_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof,depth_info=depth_info,pose_and_orientations=pose_and_orientations,conditioned_sampling=True,trans_vel=[0.00012,0.0012],rot_vel=0.5,third_view_camera=third_view_camera)
+    env = Environment(camera_config=camera_intrinsic, objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,init_transform_frame=init_transform_frame,uniform_evaluation=uniform_evaluation,using_max_v_trans=using_max_v_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,dof=dof,depth_info=depth_info,pose_and_orientations=pose_and_orientations,conditioned_sampling=True,trans_vel=[0.00012,0.0012],rot_vel=0.5,third_view_camera=third_view_camera)
     # env = Environment(camera_config=camera_intrinsic, objs_descriptor=objs_descriptor, use_max_rot=use_max_rot,
     #                   use_max_trans=use_max_trans, init_horizon_trans=init_horizon_trans,
     #                   init_vertical_trans=init_vertical_trans, init_transform_frame=init_transform_frame,
@@ -163,10 +198,13 @@ if __name__ == '__main__':
         model.to(device).eval()
 
         # cv2.namedWindow('Images', cv2.WINDOW_NORMAL)
+        success_even_distributed_list = []
         success_list = []
         final_error_list = []
         time_list = []
         for idx in range(eval_epoch_num):
+            # print("=========================")
+            # print(idx)
             final_error_info_dict = {}
             model.buffer=[]
             error_rot_lst=[]
@@ -270,7 +308,7 @@ if __name__ == '__main__':
                 env.action(dT)
                 env.determine_vel_in_threshold(vel_tr=np.linalg.norm(vel_tr), vel_rot=abs(vel_rot) if dof == 3 else np.linalg.norm(vel_rot))
                 # time.sleep(0.1)
-                rtn_dict=env.reinit_eval()
+                rtn_dict=env.reinit_eval(all_epochs_num=eval_epoch_num,cur_epoch=idx,freq_per_pos=freq_per_pos)
                 trans_error=rtn_dict['dist']
                 rot_error=rtn_dict['angle']
                 z_error=rtn_dict["z_error"]
@@ -289,7 +327,6 @@ if __name__ == '__main__':
 
                 if rtn_dict["need_reinit"]:
                     use_time=time.time()-t_0
-
                     #eval metrics
                     if eval_metrics["error_curve"]["utilized"] and use_eval_metrics:
                         error_pth = os.path.join(obj_pth, "error_curve")
@@ -311,6 +348,23 @@ if __name__ == '__main__':
                     if eval_metrics["success_rate"]["utilized"] and use_eval_metrics:
                         success=1 if (error_rot_lst[-1]<=succ_rot and error_trans_lst[-1]<=succ_tr*1000) else 0
                         success_list.append([obj_id,success])
+                        #均匀分布绘图
+                        if idx % freq_per_pos == 0:
+                            tmp_dict = env.all_even_poses[env.evenly_posid]
+                            tmp_dict['success'] = success
+                            tmp_dict["error_trans"]=[error_trans_lst[-1]]
+                            tmp_dict["error_transz"] = [z_error_lst[-1]]
+                            tmp_dict["error_transxy"] = [np.sqrt(error_trans_lst[-1]**2-z_error_lst[-1]**2)]
+                            tmp_dict["error_rot"]=[error_rot_lst[-1]]
+                            success_even_distributed_list.append(tmp_dict)
+
+                        else:
+                            success_even_distributed_list[-1]["success"] += success
+                            success_even_distributed_list[-1]["error_trans"].append(error_trans_lst[-1])
+                            success_even_distributed_list[-1]["error_transz"].append(z_error_lst[-1])
+                            success_even_distributed_list[-1]["error_transxy"].append(np.sqrt(error_trans_lst[-1]**2-z_error_lst[-1]**2))
+                            success_even_distributed_list[-1]["error_rot"].append(error_rot_lst[-1])
+
                     if eval_metrics["trajectory"]["utilized"] and use_eval_metrics:
                         traj_pth=os.path.join(obj_pth, "traj")
                         os.makedirs(traj_pth, exist_ok=True)
