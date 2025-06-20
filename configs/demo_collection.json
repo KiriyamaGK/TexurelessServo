@@ -19,7 +19,7 @@
         "fov": 60
     },
     "overall_setting": {
-        "base_dir": "/home/user0/dataset",
+        "dataset_base_dir": "/home/user0/dataset",
         "file_name": "25.04.30",
         "demo_total_num": 6000,
         "objs_descriptor": 14,
@@ -90,7 +90,7 @@
             "angle_eps": 0.5,
             "dist_eps": 0.001
         }
-    },
+    }  ,
     "post_process": {
         "disturb_abs_rot": {
             "utilized": false

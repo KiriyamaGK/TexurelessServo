@@ -1,43 +1,80 @@
 {
-      "hardware":{
-          "robot_address": "192.168.58.2",
-          "camera": {
-              "w": 640,
-              "h": 480,
-              "fps": 30,
-              "cam_devices": {
-                 "wrist":"215222073421"
-              },
-              "use_devices_type": ["wrist"]
-             }
-      },
-      "overall_setting":{
-          "file_name": "25.03.111",
-          "cir_num":40,
-          "desire_pt_change_cycle":130,
-          "replace_existed_hdf5": false,
-          "delete_last_demo": false
-      },
-      "demo_collection":{
-          "freq": 7,
-          "ac_dim": 3,
-          "absolute_cmd": false,
-          "img": {
+    "hardware":{
+        "robot_address": "192.168.58.2",
+        "camera": {
+            "w": 640,
+            "h": 480,
+            "fps": 30,
+            "cam_devices": {
+               "wrist":"215222073421"
+            },
+            "use_devices_type": ["wrist"]
+        }
+    },
+    "overall_setting":{
+        "dataset_base_dir": "/home/user0/dataset",
+        "file_name": "25.03.111",
+        "cir_num":40,
+        "desire_pt_change_cycle":130,
+        "replace_existed_hdf5": false,
+        "delete_last_demo": false
+    },
+    "demo_collection":{
+        "env": {
+            "dof": 6,
+            "down_to_grasp_distance": 45,
+            "init": {
+                "conditioned_sampling": true,
+                "init_horizon_trans": {
+                    "value": 0.005,
+                    "use_max_h_trans": false
+                },
+                "init_vertical_trans": {
+                    "value": 0.05,
+                    "using_max_v_trans": false,
+                    "using_minus": true
+                },
+                "init_rot": {
+                    "value": [8, 8, 40],
+                    "use_max_rot": false
+                }
+            },
+            "stop_policy":{
+                "angle_eps": 0.5,
+                "dist_eps": 0.001
+            },
+            "velocity": {
+                "trans_vel": {
+                    "value": [0.0006,0.0006]
+                },
+                "rot_vel": {
+                    "value": 0.5
+                }
+            }
+        },
+
+        "data_collect_freq": 7,
+        "img": {
             "save_type": "rgb",
             "size": 220
-          },
-          "distances": {
-              "trans_thres":60,
-              "rot_thres":  60 ,
-              "down_dis":45
-          },
-          "velocity": {
-              "vel_tr_norm":0.4,
-              "vel_rot_norm":0.1
-          },
-          "stop_collection":{
-                "trans_dis_thres":0.5,
-                "rot_dis_thres":0.3
-          }
-      }
+        },
+        "record_pose": true,
+        "post_process": {
+            "disturb_abs_rot": {
+                "utilized": false
+            },
+            "portion_last_episode":{
+                "utilized": true,
+                "portion_last_num":3
+            },
+            "add_end_episode":{
+                "utilized": false,
+                "add_num":5
+            },
+            "add_medium_episode":{
+                "utilized": false,
+                "add_num":2
+            }
+        }
+    }
 }

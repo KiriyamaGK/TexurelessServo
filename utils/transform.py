@@ -125,11 +125,11 @@ def euler2rot(rpy):
         [r31, r32, r33]])
 
 def euler2Matrix(Euler):
-    "末端位姿，欧拉角转齐次变换矩阵，输入mm，角度,输出m"
+    "末端位姿，欧拉角转齐次变换矩阵，输入角度"
     Matrix = np.zeros((4, 4))
-    Matrix[0, 3] = Euler[0] / 1000
-    Matrix[1, 3] = Euler[1] / 1000
-    Matrix[2, 3] = Euler[2] / 1000
+    Matrix[0, 3] = Euler[0]
+    Matrix[1, 3] = Euler[1]
+    Matrix[2, 3] = Euler[2]
     Matrix[3, 0] = 0
     Matrix[3, 1] = 0
     Matrix[3, 2] = 0
@@ -139,7 +139,7 @@ def euler2Matrix(Euler):
 
 def rmat2euler_degree(Matrix: np.array):
     '''旋转矩阵转欧拉角
-    依次绕定轴x,y,z旋转
+    依次绕定轴x,y,z动轴z,y,x旋转/
     输出角度制'''
     pi = np.pi
     Euler = [0, 0, 0]

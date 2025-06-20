@@ -68,17 +68,6 @@ class Camera(object):
                 return None
         return frame_dict
 
-    # def get_frame(self):
-    #     align_to = rs.stream.color  # rs.align允许我们执行深度帧与其他帧的对齐
-    #     align = rs.align(align_to)  # “align_to”是我们计划对齐深度帧的流类型。
-    #
-    #     color_frames_1 = self.pipeline.wait_for_frames()  # 获得frame (包括彩色，深度图)
-    #     aligned_frames_1 = align.process(color_frames_1)
-    #     allgned_color_frame_1 = aligned_frames_1.get_color_frame()
-    #     color_image_1 = np.asanyarray(allgned_color_frame_1.get_data())
-    #
-    #     return {"wrist":color_image_1}
-
     def release(self):
         for type,device in self.devices.items():
             self.pipelines[device].stop()

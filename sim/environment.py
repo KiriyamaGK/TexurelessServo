@@ -639,6 +639,7 @@ class Environment(object):
             "angle":angle,
             "z_error":z_error,
         }
+
     def determine_vel_in_threshold(self,vel_tr,vel_rot): #self.vel_in_threshold_flag = True当且仅当速度在误差内
         if not self.vel_in_threshold_flag:
             if vel_tr<=self.trans_vel_threshold and vel_rot<=self.rot_vel_threshold:

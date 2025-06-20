@@ -5,12 +5,12 @@ import numpy as np
 import time
 import random
 from math import pi,sin,cos
-from utils.transform import make_an_angle_in_180
+from utils.transform import make_an_angle_in_180, euler2Matrix, rmat2euler_degree
 from scipy.spatial.transform import Rotation as R
+from itertools import product
 
 class Environment:
-    def __init__(self,robot_address,w,h,fps,cam_devices,use_devices_type,trans_thres,rot_thres,down_dis):
-
+    def __init__(self,robot_address,w,h,fps,cam_devices,use_devices_type,dof,down_to_grasp_distance,init,stop_policy,velocity,uniform_evaluation=None):
         self.robot_ins=FR_Robot(robot_address)
         self.camera=Camera(devices=cam_devices,use_devices_type=use_devices_type,width=w, height=h, fps=fps)
         self.gripper=Gripper()
@@ -23,26 +23,62 @@ class Environment:
         self.y_max = max(self.corner_1[1], self.corner_2[1])
         self.y_min = min(self.corner_1[1], self.corner_2[1])
 
-        self.trans_thres = trans_thres #最大平移距离，mm
-        self.rot_thres = rot_thres  #最大rz，°
-        self.down_dis = down_dis    #夹爪下移距离，mm
+        self.down_dis = down_to_grasp_distance  # 夹爪下移距离，mm
+
+        self.dof = dof
+        assert self.dof in [3, 6]
+
+        self.angle_eps = stop_policy["angle_eps"]  # degree
+        self.dist_eps = stop_policy["dist_eps"]  # mm
+        self.trans_vel = velocity["trans_vel"]
+        self.rot_vel = velocity["rot_vel"]
+
+        self.init_horizon_trans = init["init_horizon_trans"]["value"]                             #最大平移距离，mm
+        self.init_vertical_trans = init["init_vertical_trans"]["value"] if self.dof==6 else 0     #mm
+        init_rot = init["init_rot"]["value"]                                                      #最大旋转偏差（axis-angle，deg）
+        self.uniform_eval_settings = uniform_evaluation
+
+        if self.dof == 3:
+            assert isinstance(init_rot,(int, float))
+            self.init_rot = np.array([0,0,init_rot]) # degree
+        else:
+            assert isinstance(init_rot, list) and len(init_rot) == 3
+            self.init_rot = np.array(init_rot)  # degree
+
+        self.use_max_rot = init["init_rot"]["use_max_rot"]
+        self.use_max_trans = init["init_horizon_trans"]["use_max_trans"]
+        self.using_max_v_trans = init["init_vertical_trans"]["using_max_v_trans"]
+        self.using_minus_vertical = init["init_vertical_trans"]["using_minus"]
+        self.conditioned_sampling = init["conditioned_sampling"]
+
+        if self.conditioned_sampling:
+            assert (not self.use_max_rot) and (not self.use_max_trans) and (not self.using_max_v_trans)
+            assert self.dof == 6
+            self.max_transxy_points = int(self.init_horizon_trans / self.trans_vel[0])
+            self.max_transz_points = int(self.init_vertical_trans / self.trans_vel[1])
+            self.max_rot_points = int(np.linalg.norm(self.init_rot) / self.rot_vel)
+            print("==================================================================")
+            print("max_xy_points:",self.max_transxy_points)
+            print("max_z_points:",self.max_transz_points)
+            print("max_rot_points:",self.max_rot_points)
+            self.demo_cond_p=0
+
+        self.init_flag = False
+        self.vel_in_threshold_flag = False
 
         self.task_timer = time.time()
         self.vel_timer = time.time()
-        self.vel_in_threshold_flag = False
+
+        if self.uniform_eval_settings["utilized"]:
+            self.return_evenly_distributed_poses()
+            self.evenly_posid=0
+
+        self.wgT_tar=None
+        self.gwT_tar=None
+        self.wgT=None
+        self.gwT=None
+
         print("environment initialized")
-
-    def init(self):
-        # if self.obj_idx_pointer>=len(self.obj_idxs):
-        #     self.obj_idx_pointer=0
-        # self.obj_idx=self.obj_idxs[self.obj_idx_pointer]
-        # self.sample_init_pos()
-        # self.gen_scene()
-        # self.obj_idx_pointer+=1
-        self.task_timer=time.time()
-        self.vel_timer=time.time()
-
-
 
     def place(self,p_0):
         '''
@@ -84,81 +120,282 @@ class Environment:
         self.robot_ins.move_l(p_1, tool=1, user=0, vel=10)
         return p_1
 
-    def generate_motion_paras(self,desire_pt):
-        '''
-        给定目标位置生成运动参数，包括theta（xy方位），alpha（rz）,生成的起始点start_pt.要确保目标位姿的rz的绝对值在120°-180°，否则可能位姿无法到达
-        :param desire_pt: 目标位姿
-        :param rot_thres: 最大rz旋转角（°）
-        :param trans_thres: 最大平移量(mm)
-        :return: start_pt,alpha（°）,theta(rad)
-        '''
-        for i in range(100):
-            theta = random.uniform(-2 * pi, 2 * pi)
-            alpha = random.uniform(10, self.rot_thres) * (random.randint(0, 1) - 0.5) * 2
-            assert self.rot_thres < 85
-            if alpha > 0:  # 逆时针转
-                if desire_pt[5] > 0:  # 腕部相机在desire_pt向left_cam偏
-                    assert desire_pt[5] > 120 and desire_pt[5] <= 180
-                if desire_pt[5] < 0:  # 腕部相机在desire_pt向right_cam偏
-                    assert desire_pt[5] < -120 and desire_pt[5] >= -180
-                    alpha = min(alpha, -120 - desire_pt[5])
-            elif alpha < 0:  # 顺时针转
-                if desire_pt[5] > 0:  # 腕部相机在desire_pt向left_cam偏
-                    assert desire_pt[5] > 120 and desire_pt[5] <= 180
-                    alpha = -1 * min(-alpha, desire_pt[5] - 120)
-                if desire_pt[5] < 0:  # 腕部相机在desire_pt向right_cam偏
-                    assert desire_pt[5] < -120 and desire_pt[5] >= -180
+    def cond_sample_init_pos_algo(self):
+        if self.demo_cond_p == 0:
+            trans_xy_points = random.randint(int(0.8 * self.max_transxy_points), self.max_transxy_points)
+            trans_z_points = random.randint(int(0.8 * min(trans_xy_points, self.max_transz_points)),
+                                            min(trans_xy_points, self.max_transz_points))
+            rot_points = random.randint(int(0.8 * min(trans_xy_points, self.max_rot_points)),
+                                        min(trans_xy_points, self.max_rot_points))
+            self.demo_cond_p += 1
+        elif self.demo_cond_p == 1:
+            trans_z_points = random.randint(int(0.8 * self.max_transz_points), self.max_transz_points)
+            trans_xy_points = random.randint(int(0.8 * min(trans_z_points, self.max_transxy_points)),
+                                             min(trans_z_points, self.max_transxy_points))
+            rot_points = random.randint(int(0.8 * min(trans_z_points, self.max_rot_points)),
+                                        min(trans_z_points, self.max_rot_points))
+            self.demo_cond_p += 1
+        else:
+            rot_points = random.randint(int(0.8 * self.max_rot_points), self.max_rot_points)
+            trans_xy_points = random.randint(int(0.8 * min(rot_points, self.max_transxy_points)),
+                                             min(rot_points, self.max_transxy_points))
+            trans_z_points = random.randint(int(0.8 * min(rot_points, self.max_transz_points)),
+                                            min(rot_points, self.max_transz_points))
+            self.demo_cond_p = 0
+        print("===============================================")
+        print("trans_xy_points:", trans_xy_points)
+        print("trans_z_points:", trans_z_points)
+        print("rot_points:", rot_points)
+        return trans_xy_points, trans_z_points, rot_points
 
-            delta = [self.trans_thres * cos(theta), self.trans_thres * sin(theta)]
-            start_pt = np.array(desire_pt.copy()) + np.array([delta[0], delta[1], 0, 0, 0, alpha])
-            start_pt[5]=make_an_angle_in_180(start_pt[5])
-            print("start_pt", start_pt[5])
-            print('desire_pt', desire_pt[5])
-            print("alpha", alpha)
-            assert abs(start_pt[5]) >= 120 and abs(start_pt[5]) <= 180
-            ret = self.robot_ins.robot.GetInverseKin(0, start_pt, config=-1)
-            if isinstance(ret, tuple) and ret[0] == 0: #如果能求出逆解
-                return theta, alpha, start_pt
-            else:
-                continue
+    def return_evenly_distributed_poses(self):
+        # 生成示例数据
+        x_inteval=self.uniform_eval_settings["trans"]["x"]["inteval"]
+        x_min=self.uniform_eval_settings["trans"]["x"]["range"][0]
+        x_max=self.uniform_eval_settings["trans"]["x"]["range"][1]
 
-    def setup_stop_policy(self,metrics:dict):
-        self.rot_vel_threshold=metrics["rot_vel_threshold"]  #deg
-        self.trans_vel_threshold=metrics["trans_vel_threshold"] #m
-        self.time_up_bound = metrics["use_time_upperbound"] #maximum used time during a rollout
-        self.in_threshold_range_time = metrics["in_threshold_range_time"] #maximum time stay in error threshold before entering the next rollout
+        y_inteval = self.uniform_eval_settings["trans"]["y"]["inteval"]
+        y_min = self.uniform_eval_settings["trans"]["y"]["range"][0]
+        y_max = self.uniform_eval_settings["trans"]["y"]["range"][1]
 
-    def setup_desire_pt(self,desire_pt):
-        self.desire_pt=np.array(desire_pt)
+        z_inteval = self.uniform_eval_settings["trans"]["z"]["inteval"]
+        z_min = self.uniform_eval_settings["trans"]["z"]["range"][0]
+        z_max = self.uniform_eval_settings["trans"]["z"]["range"][1]
 
-    def need_reinit_eval(self):
-        err_dict=self.compute_error()
-        if time.time()-self.task_timer>=self.time_up_bound:
-            return {"need_reinit": True,
-                    "dist": err_dict["dist"],
-                    "angle": err_dict["angle"]
-                    }
+        rx_inteval = self.uniform_eval_settings["rot"]["rx"]["inteval"]
+        rx_min = self.uniform_eval_settings["rot"]["rx"]["range"][0]
+        rx_max = self.uniform_eval_settings["rot"]["rx"]["range"][1]
+
+        ry_inteval = self.uniform_eval_settings["rot"]["ry"]["inteval"]
+        ry_min = self.uniform_eval_settings["rot"]["ry"]["range"][0]
+        ry_max = self.uniform_eval_settings["rot"]["ry"]["range"][1]
+
+        rz_inteval = self.uniform_eval_settings["rot"]["rz"]["inteval"]
+        rz_min = self.uniform_eval_settings["rot"]["rz"]["range"][0]
+        rz_max = self.uniform_eval_settings["rot"]["rz"]["range"][1]
+
+        translations = list(product(
+            np.arange(x_min, x_max+0.1*x_inteval, x_inteval),  # x
+            np.arange(y_min, y_max+0.1*y_inteval, y_inteval),  # y
+            np.arange(z_min, z_max+0.1*z_inteval, z_inteval)  # z
+        ))
+        rotations = list(product(
+            np.arange(rx_min, rx_max+0.1*rx_inteval, rx_inteval),  # rx
+            np.arange(ry_min, ry_max+0.1*ry_inteval, ry_inteval),  # ry
+            np.arange(rz_min, rz_max+0.1*rz_inteval, rz_inteval)  # rz
+        ))
+
+        self.all_even_poses = []
+        for tx, ty, tz in translations:
+            for rx, ry, rz in rotations:
+                dT=np.eye(4)
+                dRx=R.from_rotvec(np.array([rx/180*np.pi, 0, 0])).as_matrix()
+                dRy=R.from_rotvec(np.array([0, ry/180*np.pi, 0])).as_matrix()
+                dRz=R.from_rotvec(np.array([0, 0, rz/180*np.pi])).as_matrix()
+                dT[0:3,0:3]=dRz @ dRy @ dRx
+                self.all_even_poses.append({
+                    'x': tx, 'y': ty, 'z': tz,
+                    'rx': rx, 'ry': ry, 'rz': rz,
+                    'dT': dT
+                })
+
+    def sample_init_pos(self):
+        # print("===============================")
+        # print(self.evenly_posid)
+        if self.uniform_eval_settings["utilized"]:
+            dT=self.all_even_poses[self.evenly_posid]["dT"]
+            x = self.all_even_poses[self.evenly_posid]["x"]
+            y = self.all_even_poses[self.evenly_posid]["y"]
+            z = self.all_even_poses[self.evenly_posid]["z"]
+            rx=self.all_even_poses[self.evenly_posid]["rx"]
+            ry=self.all_even_poses[self.evenly_posid]["ry"]
+            rz=self.all_even_poses[self.evenly_posid]["rz"]
+            print("------------------------------------")
+            print(x, y, z, rx, ry, rz)
+            print("------------------------------------")
 
         else:
-            if time.time()-self.vel_timer>=self.in_threshold_range_time and self.vel_in_threshold_flag:
-                return {"need_reinit": True,
-                        "dist": err_dict["dist"],
-                        "angle": err_dict["angle"]
-                        }
-            else:
-                return {"need_reinit": False,
-                        "dist": err_dict["dist"],
-                        "angle": err_dict["angle"]
-                        }
+            dT = np.eye(4)
+            ori = random.uniform(0, np.pi * 2)
 
-    def compute_error(self):
-        current_pos=np.array(self.robot_ins.get_gripper_TCP_pose())
-        angle = make_an_angle_in_180(current_pos.copy()[-1] - self.desire_pt[-1])
-        angle=abs(angle)
-        dist = np.linalg.norm(current_pos.copy()[0:3] - self.desire_pt[0:3])
+            if not self.conditioned_sampling:
+                #rot
+                if (self.init_rot==np.array([0,0,0])).all():
+                    dT[0:3,0:3]=np.eye(3)
+                else:
+                    if not self.use_max_rot:
+                        if random.uniform(0, 1) < 0.95:
+                            ang = np.array([random.uniform(0, self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+                        else:
+                            ang = np.array([self.init_rot[i] * (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+                    else:
+                        ang =np.array([self.init_rot[i]* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+                    print("angle:",ang)
+                    dT[0:3, 0:3] = R.from_rotvec(ang * np.pi / 180).as_matrix()
+                #trans
+                trans_dev=self.init_horizon_trans if self.use_max_trans else np.sqrt(random.uniform(0, self.init_horizon_trans**2))
+                dT[0:3,3]=np.array([cos(ori)*trans_dev, sin(ori)*trans_dev,-self.init_vertical_trans])
+
+                if self.using_max_v_trans:
+                    dT[2, 3]*=random.uniform(0, 1)
+                if self.using_minus_vertical:
+                    if random.randint(0,1)>0.65:
+                        dT[2,3]=dT[2,3]*(-1)*random.uniform(0.6, 1)
+            else:
+                # print("1")
+                trans_xy_points, trans_z_points, rot_points = self.cond_sample_init_pos_algo()
+                trans_dev = trans_xy_points*self.trans_vel[0]
+                vertical_dev=trans_z_points*self.trans_vel[1]
+                if self.using_minus_vertical:
+                    if random.uniform(0,1)>0.65:
+                        vertical_dev=vertical_dev*(-1)
+                # dr = np.array([random.uniform(0, 5) for _ in range(3)])#TODO:记得注释这四行
+                # rot_dev_mat = R.from_rotvec(self.init_rot * np.pi / 180).as_matrix() @ R.from_rotvec(
+                #     dr * np.pi / 180).as_matrix()
+                # rot_dev_vec = R.from_matrix(rot_dev_mat).as_rotvec()
+                # rot_dev_vec /= np.linalg.norm(rot_dev_vec) / (rot_points * self.rot_vel)
+
+                rot_dev_vec = np.array([random.uniform(0.5*self.init_rot[i], self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+                rot_dev_vec/=np.linalg.norm(rot_dev_vec)/(rot_points*self.rot_vel) #TODO:记得解注释这两行
+                print("trans_dev:",trans_dev)
+                print("vertical_dev:",vertical_dev)
+                print("rot_dev_vec:",rot_dev_vec)
+
+                dT[0:3, 0:3] = R.from_rotvec(rot_dev_vec * np.pi / 180).as_matrix()
+                dT[0:3, 3] = np.array([cos(ori) * trans_dev, sin(ori) * trans_dev, -vertical_dev])
+
+        self.wgT=self.wgT_tar@dT #绕夹爪系
+        self.gwT=np.linalg.inv(self.wgT)
+
+    def set_target_coordinate(self,pos=None,use_cur=True):  ##TODO: new
+        """
+        :param pos: mm ,deg
+        :param use_cur:
+        :return: pos:mm ,deg
+        """
+        if pos is None and not use_cur:
+            raise ValueError("set target coordinate error")
+
+        if use_cur:
+            self.update_state_matrix()
+            self.wgT_tar = self.wgT
+            self.gwT_tar = self.gwT
+        else:
+            self.wgT_tar =  euler2Matrix(pos)
+            self.gwT_tar = np.linalg.inv(self.wgT_tar)
+
+    def update_state_matrix(self):
+        #update wgT and gwT using current TCP POSE
+        cur_pos = np.array(self.robot_ins.get_gripper_TCP_pose())
+        self.wgT = euler2Matrix(cur_pos)
+        self.gwT = np.linalg.inv(self.wgT)
+
+    def tcp_frame_dT_to_command(self,dT):                  ##TODO: new
+        """
+
+        :param dT: gstart_gendT
+        :return: cmd=[dx,dy,dz,drx,dry,drz] in start tcp frame,rotation euler sequence is z,y,x(tcp frame)
+        """
+        cmd = np.zeros(6)
+        cmd[0:3] = dT[0:3,3]                      ##mm
+        cmd[3:6] = rmat2euler_degree(dT[0:3,0:3]) ##deg
+        return cmd
+
+    def absolute_T_to_pose(self,T):
+        pose = np.zeros(6)
+        pose[0:3] = T[0:3, 3]                       ##mm
+        pose[3:6] = rmat2euler_degree(T[0:3, 0:3])  ##deg
+        return pose
+
+    def init(self):
+        self.sample_init_pos()
+        self.init_flag = True
+        self.task_timer = time.time()
+        self.vel_timer = time.time()
+
+    def observation(self):
+        return self.camera.get_frame()
+
+    def act_to_goal(self):
+        self.action_abs_T(self.wgT_tar)
+
+    def act_with_abs_dict(self,pos:dict):
+        # 更新矩阵,dT是对于世界坐标系下的变化量
+        self.action_abs_T(pos["wgT"])
+
+    def action_wgT(self):
+        return self.action_abs_T(self.wgT)
+
+    def action_abs_T(self,T):
+        """
+        基类action方法1：根据绝对齐次变换矩阵T进行运动，并且运动完后更新wgT,gwT
+        """
+        tar_pose = self.absolute_T_to_pose(T)
+        self.robot_ins.move_cart(pose=tar_pose, tool=1, user=0, vel=40)  ##servo cart is a blocked-type cmd
+        self.update_state_matrix()
+
+    def action_dT(self, dT,update_state=True):
+        """
+        基类action方法2：根据相对齐次变换矩阵dT(工具坐标系下的相对运动描述)进行运动
+        """
+        cmd = self.tcp_frame_dT_to_command(dT)
+        self.robot_ins.servo_cart(desc_pos=cmd, mode=2, vel=10.0)
+        if update_state:
+            self.update_state_matrix()
+
+    def reinit(self):
+        if  self.need_reinit():
+            self.init()
+        else:
+            self.init_flag=False
+        return self.init_flag
+
+    def reinit_eval(self,all_epochs_num=None,cur_epoch=None,freq_per_pos=None):
+        rtn_dict=self.need_reinit_eval()
+        need_reinit=rtn_dict["need_reinit"]
+        if need_reinit:
+            if self.uniform_eval_settings["utilized"] and (1+cur_epoch) % freq_per_pos == 0 and cur_epoch<all_epochs_num-1:
+                self.evenly_posid += 1
+            self.init()
+        else:
+            self.init_flag=False
+        return rtn_dict
+
+    def need_reinit(self):
+        err_dict = self.compute_error(self.wgT_tar, self.wgT) #demo stage,to determine demo termination,it doesn't matter whether dT = g_tar,gT or g,g_tar T
+        if err_dict["close_enough"]:
+            return True
+        else:
+            return False
+
+    def need_reinit_eval(self):
+        err_dict = self.compute_error(self.wgT_tar, self.wgT) #eval stage,to get accurate z_zrror,compute dT = g_tar,gT is more acceptable
+
+        if time.time()-self.task_timer>=self.time_up_bound:
+            need_reinit=True
+        else:
+            if time.time()-self.vel_timer>=self.in_threshold_range_time and self.vel_in_threshold_flag:
+                need_reinit=True
+            else:
+                need_reinit=False
+
+        err_dict["need_reinit"]=need_reinit
+        return err_dict
+
+    def compute_error(self, T0, T1):
+        # print("======================================")
+        dT = np.linalg.inv(T0) @ T1
+        angle = np.linalg.norm(R.from_matrix(dT[:3, :3]).as_rotvec()) / np.pi * 180
+        dist = np.linalg.norm(dT[:3, 3])
+        z_error=abs(dT[2, 3])
+        self.close_enough_flag=(angle < self.angle_eps) and (dist < self.dist_eps)
+        # print("angle:",angle)
+        # print("dist:",dist)
         return {
+            "close_enough":self.close_enough_flag,
             "dist":dist,
             "angle":angle,
+            "z_error":z_error,
         }
 
     def determine_vel_in_threshold(self,vel_tr,vel_rot): #self.vel_in_threshold_flag = True当且仅当速度在误差内
@@ -171,9 +408,25 @@ class Environment:
             if vel_tr>self.trans_vel_threshold or vel_rot>self.rot_vel_threshold:
                 self.vel_in_threshold_flag = False
 
-    def reinit_eval(self):
-        rtn_dict=self.need_reinit_eval()
-        need_reinit=rtn_dict["need_reinit"]
-        if need_reinit:
-            self.init()
+    def setup_stop_policy(self,metrics:dict):
+        self.rot_vel_threshold=metrics["rot_vel_threshold"]  #deg
+        self.trans_vel_threshold=metrics["trans_vel_threshold"] #m
+        self.time_up_bound = metrics["use_time_upperbound"] #maximum used time during a rollout
+        self.in_threshold_range_time = metrics["in_threshold_range_time"] #maximum time stay in error threshold before entering the next rollout
+
+    def return_cur_pos_info(self):
+        rtn_dict={
+            'wgT':self.wgT,
+            'gwT':self.gwT,
+            }
         return rtn_dict
+
+    def return_tar_pos_info(self):
+        rtn_dict ={
+        'wgT_tar':self.wgT_tar,
+        'gwT_tar':self.gwT_tar,
+        }
+        return rtn_dict
+
+    def setup_desire_pt(self,desire_pt):                       ##TODO:outdated
+        self.desire_pt=np.array(desire_pt)

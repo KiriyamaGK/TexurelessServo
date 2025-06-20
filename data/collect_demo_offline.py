@@ -64,7 +64,7 @@ if __name__ == '__main__':
 
     #overall setting
     base_dir = return_disc_route("One Touch")
-    # base_dir = config['overall_setting']["base_dir"]
+    # base_dir = config['overall_setting']["dataset_base_dir"]
     objs_descriptor=config['overall_setting']['objs_descriptor']
     current_date=config['overall_setting']['file_name']
     demo_total_num = config['overall_setting']['demo_total_num']

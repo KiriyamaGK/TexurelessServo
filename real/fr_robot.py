@@ -20,7 +20,7 @@ class FR_Robot:
         if ret != 0:
             raise RuntimeError('point cannot arrive,error code:',ret)
 
-    def get_gripper_TCP_pose(self):
+    def get_gripper_TCP_pose(self):  ##degree
         ret = self.robot.GetActualTCPPose()
         if ret[0]==0:
             return ret[1]

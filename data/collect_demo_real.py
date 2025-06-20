@@ -61,7 +61,7 @@ if __name__=='__main__':
     with open(config_dir, "r") as j:
         config = json.load(j)
 
-    env=Environment(robot_address=config["hardware"]["robot_address"],**config["demo_collection"]["distances"],**config["hardware"]["camera"])
+    env=Environment(robot_address=config["hardware"]["robot_address"],**config["demo_collection"]["env"],**config["hardware"]["camera"])
     cam=env.camera
     robot_ins=env.robot_ins
 
@@ -90,7 +90,7 @@ if __name__=='__main__':
     absolute_cmd=config["demo_collection"]["absolute_cmd"]
 
     #收集数据频率
-    data_collect_freq=config["demo_collection"]["freq"]
+    data_collect_freq=config["demo_collection"]["data_collect_freq"]
 
     ac_dim=config["demo_collection"]["ac_dim"]
 
