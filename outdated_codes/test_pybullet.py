@@ -42,7 +42,7 @@ p.resetBasePositionAndOrientation(gripId[0], gripStartPos, gripStartOrientation)
 
 projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, near, far)
 
-cwT=np.array([[-1,0,0,0],  #外参，左上角c右下角w，前三列是c系在w系中的表示,按列排列，最后一列是从c的原点指向w的原点并在c系中表示
+cwT=np.array([[-1,0,0,0],  #外参，# 左上角c右下角w，第i(i<=3)列是坐标系w三个轴的单位矢量在坐标系c的i轴的投影,最后一列是从c的原点指向w的原点并在c系中表示,即w系的原点在c系下的坐标
               [0,1,0,-0.02],
               [0,0,-1,2.2],
               [0,0,0,1]])
