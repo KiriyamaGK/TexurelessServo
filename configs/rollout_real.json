@@ -13,40 +13,90 @@
             ]
         }
     },
-    "distances": {
-        "trans_thres":40,
-        "rot_thres":30 ,
-        "down_dis":45
-    },
     "logs_dir": "trained_models/trial/2025-03-17_13-04-57/config.json",
     "ckpts_dir": "all",
     "eval_epoch_num": 5,
     "bgr2rgb": false,
     "cv2_visualize": true,
+    "expert_motion_type": "trans_first",
     "record_video": true,
     "motion_scalar": 1,
     "obj_id": 1,
+
+    "dof": 6,
+
+    "init": {
+        "uniform_evaluation": {
+            "freq_per_pos": 3,
+            "utilized": true,
+            "trans": {
+                "x":{
+                    "range": [0.005, 0.005],
+                    "inteval":0.005
+                },
+                "y": {
+                    "range": [0.005, 0.005],
+                    "inteval":0.005
+                },
+                "z": {
+                    "range": [0, 0.005],
+                    "inteval":0.005
+                }
+            },
+            "rot": {
+                "rx":{
+                    "range": [5, 5],
+                    "inteval":2
+                },
+                "ry":{
+                    "range": [5, 5],
+                    "inteval":2
+                },
+                "rz": {
+                    "range": [10,10],
+                    "inteval":5
+                }
+            }
+    },
+        "init_horizon_trans": {
+            "value": 0.005,
+            "use_max_h_trans": false
+        },
+        "init_vertical_trans": {
+            "value":0.05,
+            "using_max_v_trans": false,
+            "using_minus": false
+        },
+        "init_rot": {
+            "value":[8,8,40],
+            "use_max_rot": false
+        }
+    },
+
     "eval_metrics": {
         "utilized": true,
         "success_rate": {
             "utilized": true,
-            "trans_threshold": 5,
-            "rot_threshold": 3
+            "trans_threshold": 0.001,
+            "rot_threshold": 0.5
         },
-        "error_curve": {
+        "error_curve":{
             "utilized": true
         },
-        "trajectory": {
+        "error_delta_pose":{
             "utilized": false
         },
+        "trajectory": {
+             "utilized": false
+        },
         "velocity": {
-            "utilized": true
+             "utilized": true
         }
     },
     "stop_policy": {
-        "trans_vel_threshold": 0.04,
-        "rot_vel_threshold": 0.01,
-        "in_threshold_range_time": 1,
-        "use_time_upperbound": 20
+        "trans_vel_threshold": 0.0001,
+        "rot_vel_threshold": 0.05,
+        "in_threshold_range_time":1,
+        "use_time_upperbound":20
     }
 }

@@ -7,54 +7,33 @@ import threading
 import json
 from utils.paths import return_disc_route
 from utils.file import ensure_dir
-from real.perception import Camera
-from real.fr_robot import FR_Robot
-from real.gripper import Gripper
-from math import pi,sin,cos
-from utils.transform import euler2rot,rmat2quat
+from utils.policy import get_expert_policy
 from utils.hdf5 import add_useless_things, split_train_val_from_hdf5, add_env_meta, compute_num_samples, add_config
 import h5py
 from utils.input_process import clip_image
 from real.environment import Environment
-from utils.transform import make_an_angle_in_180,rot_angle_normalization
+from data.process_hdf5 import _disturb_abs_rot,_portion_last_episode,_add_end_episode,_add_medium_episode,insert_imgs
 
 
-def unit_transform(pose):
-    pose[0] = pose[0] / 1000
-    pose[1] = pose[1] / 1000
-    pose[2] = pose[2] / 1000
-    pose[3] = pose[3] / 180 * pi
-    pose[4] = pose[4] / 180 * pi
-    pose[5] = pose[5] / 180 * pi
-    return pose
+def filter_translation(input,thres):
+    assert thres>0
+    input=np.array(input)
+    return np.where(np.abs(input) < thres, 0, input)
 
-def filter_action(x:np.array):
-    assert len(x.shape)==1 and x.shape[0] in [3,6]
-    if x.shape[0] == 6:
-        for i in range(3):
-            if x[i] >= -1e-2 and x[i] <= 1e-2:
-                x[i] = 0
-            if x[i+3] >= -1e-3 and x[i+3] <= 1e-3:
-                x[i+3] = 0
-    else:
-        for i in range(3):
-            if i<2:
-                if x[i] >= -1e-2 and x[i] <= 1e-2:
-                    x[i] = 0
-            else:
-                if x[i] >= -1e-3 and x[i] <= 1e-3:
-                    x[i] = 0
-    return x
+def get_goal_info(env):
+    env.act_to_goal()
+    rtn_dict = env.observation()
+    img = rtn_dict['img_1']
+    img2 = rtn_dict['img_2'] if 'img_2' in rtn_dict else None
 
-def unit_ang(ang):
-    assert len(ang)==6
-    for i in range(len(ang)):
-        ang[i] = ang[i] * pi / 180
-    return ang
+    return {"img_goal": img, "img_goal2": img2}
+
 
 
 
 if __name__=='__main__':
+    ##TODO:数据采集和测试阶段一共算了四种类型的dT，其中env.sample_init_pos算了g_tar_gT；get_action算了g_gtar(和缩短后的dT)；need_init和need_init_eval在compute_error的时候各自算了一次（见env相关函数）
+
     current_pt_desire=True
 
     config_dir = "../configs/demo_collection_real.json"
@@ -64,11 +43,8 @@ if __name__=='__main__':
     env=Environment(robot_address=config["hardware"]["robot_address"],**config["demo_collection"]["env"],**config["hardware"]["camera"])
     cam=env.camera
     robot_ins=env.robot_ins
-
-    init_pos=robot_ins.get_gripper_TCP_pose()
-    init_pos[3]=-180
-    init_pos[4]=0
-    in_desire_pt =init_pos if current_pt_desire else [-533.3317260742188, 49, 150, -180, 0, 163.76220703125]
+    env.set_target_coordinate(use_cur=True)
+    env.init()
 
     # overall setting
     base_dir = return_disc_route("One Touch")
@@ -78,15 +54,29 @@ if __name__=='__main__':
     replace_existed_hdf5 = config["overall_setting"]["replace_existed_hdf5"]  # TODO:remember to use
     delete_last_demo = config["overall_setting"]["delete_last_demo"]
 
+    #velocity
+    trans_vel = config["demo_collection"]["env"]["velocity"]['trans_vel']  # mm
+    rot_vel = config["demo_collection"]["env"]["velocity"]['rot_vel']  # deg
+    uniform_vel = config["demo_collection"]["env"]["velocity"]['uniform_vel']
+
     #demo_collection:
       ##收集数据频率
     data_collect_freq = config["demo_collection"]["data_collect_freq"]
+
       ##img相关
     img_save_type = config["demo_collection"]["img"]["save_type"]
     assert img_save_type in ["rgb", "bgr"]
     img_size = config["demo_collection"]["img"]["size"]
+
       ##record pose
     record_pose = config["demo_collection"]['record_pose']
+
+      ##post process
+    disturb_abs_rot = config["demo_collection"]['post_process']['disturb_abs_rot']
+    portion_last_episode = config["demo_collection"]['post_process']['portion_last_episode']
+    add_end_episode = config["demo_collection"]['post_process']['add_end_episode']
+    add_medium_episode = config["demo_collection"]['post_process']['add_medium_episode']
+    assert (not portion_last_episode["utilized"]) or (not add_end_episode["utilized"])
 
     database_dir = os.path.join(base_dir, 'AlignAnything_real', current_date, 'hdf5')
     ensure_dir(database_dir)
@@ -101,6 +91,12 @@ if __name__=='__main__':
             new_f_out = h5py.File(dataset_dir, "w")
 
     existed_demo_num=0
+
+    init_pos = robot_ins.get_gripper_TCP_pose()
+    init_pos[3] = -180
+    init_pos[4] = 0
+    in_desire_pt = init_pos
+
     for uu in range(demo_total_num):
         print("=====================collecting demo_{}=====================".format(uu))
         #preprocess
@@ -124,198 +120,176 @@ if __name__=='__main__':
             action_path = 'data/demo_{}/actions'.format(uu)
             pos_path = 'data/demo_{}/delta_pos_curgoal'.format(uu)
 
-        if uu==0:
-            desire_pt=in_desire_pt
-            robot_ins.move_cart(desire_pt, tool=1, user=0, vel=40)
+        if uu == 0:
+            desire_pt = in_desire_pt
         elif uu % desire_pt_change_cycle == 0:
-            desire_pt=env.place(p_0=desire_pt)
-
-        theta, alpha, start_pt=env.generate_motion_paras(desire_pt)
-        robot_ins.move_cart(start_pt, tool=1, user=0, vel=40)
+            desire_pt = env.place(p_0=desire_pt)
+            env.set_target_coordinate(use_cur=True)  #TODO: 这部分和sample init pos配合逻辑有些问题
 
         action_list = []
-        img_dict = {}
-        abs_rz_list = []
-        tcp_list=[]
+        img_lst=[]
+        img2_lst = []
+        rz_list=[]
+        delta_pose_list=[]
 
         quit = False
         flag_tr = False
         flag_rot = False
 
-        tcp = robot_ins.get_gripper_TCP_pose()
+        # move to initial T,and get info
+        env.action_abs_T(env.wgT_tar@env.g_tar_g_init_T)
+        init_transform_dict = env.return_cur_pos_info()
+
+        # get goal info
+        goal_dict = get_goal_info(env)
+
+        # action back to init T
+        env.action_abs_T(init_transform_dict["wgT"])
+
 
         def robo_operator():
             #global
-            global robot_ins
-            global tcp
-            global absolute_cmd
-            global desire_pt
-
-            # velocity
-            global vel_tr_norm
-            global vel_rot_norm
-
-            #judge whether demo done
-            global flag_tr
-            global flag_rot
+            global env
+            global trans_vel
+            global rot_vel
+            global uniform_vel
             global quit
 
-            #distance
-            global trans_dis_thres
-            global rot_dis_thres
-            '''
-            pos_init:单次servocart点动前的初始位姿
-            desc_pos:单次servocart点动后的目标位姿
-            '''
-            t_0 = time.time()
-            pos_init = robot_ins.get_gripper_TCP_pose().copy()
-            desc_pos=np.array(pos_init.copy())
-            p_1 = np.array(desire_pt.copy()[0:2])
-            p_0 = np.array(pos_init[0:2])
-            v = vel_tr_norm * (p_1 - p_0) / np.linalg.norm(p_1 - p_0)  # *d/400   #速度大小正比于tcp和目标物体的距离
-            delta_rot=desire_pt[5]-pos_init[5]
-
-            delta_rot=make_an_angle_in_180(delta_rot)
-            vrz=vel_rot_norm * (delta_rot)/abs(delta_rot)
-
             while not quit:
-                # print('delta rot: ',delta_rot)
-                # print('alpha: ',alpha)
-                # print('actual_ctrl_period(ms):', 1000 * (time.time() - t_0))
-                # print('actual_ctrl_freq(hz):', 1 / (time.time() - t_0))
-                t_0 = time.time()
-                tcp = robot_ins.get_gripper_TCP_pose()
-                rela_vel_vec = np.array(desire_pt[0:2])-np.array(tcp[0:2])
-                d = np.linalg.norm(rela_vel_vec)
-
-                print("==========================distance:{}======================".format(d))
-                if d > trans_dis_thres and np.dot(rela_vel_vec, v) > 0:
-                    translation=[v[0],v[1],0,0,0,0]
-                    if absolute_cmd:
-                        desc_pos+=np.array(translation)
-                        robot_ins.servo_cart(desc_pos=desc_pos, mode=0, vel=10.0)
-                    else:
-                        robot_ins.servo_cart(desc_pos=translation, mode=1, vel=10.0)
-
-                if d <= trans_dis_thres or np.dot(rela_vel_vec, v) <= 0:
-                    flag_tr = True
-
-                cur_del_rot=tcp[5]-desire_pt[5]
-                cur_del_rot=make_an_angle_in_180(cur_del_rot)
-                if not (abs(cur_del_rot))<abs(delta_rot)+2:
-                    raise RuntimeError("cur_del_rot:{},delta_rot:{}".format(cur_del_rot, delta_rot))
-
-                if flag_tr and abs(cur_del_rot) >rot_dis_thres:
-                    rotation=[0,0,0,0,0,vrz]
-                    if absolute_cmd:
-                        desc_pos+=np.array(rotation)
-                        robot_ins.servo_cart(desc_pos=desc_pos, mode=0, vel=10.0)
-                    else:
-                        robot_ins.servo_cart(desc_pos=rotation, mode=1, vel=10.0)
-                    print('==================delrot:{}======================'.format(cur_del_rot))
-
-                if abs(cur_del_rot) <=rot_dis_thres:
-                    flag_rot=True
-                if flag_tr and flag_rot:
-                    quit = True
-                    break
+                act_dict = get_expert_policy(wgT_tar=env.wgT_tar, wgT=env.wgT, trans_vel=trans_vel, rot_vel=rot_vel,
+                                             uniform_vel=uniform_vel, dist_eps=env.dist_eps, angle_eps=env.angle_eps,
+                                             motion_type="simultaneously", dof=6, need_trans_unit_transform=False)
+                env.action_dT(act_dict["dT"])
                 time.sleep(0.008)
 
         # robo_operator()
-        operate = threading.Thread(target=robo_operator, daemon=True)
+        operate = threading.Thread(target=robo_operator, daemon=False)
         operate.start()
+        quit = False
         tt = time.time()
 
-        grip_op = 0
-        grip_cls = 0
         t0 = time.time()
-        t_1 = time.time()
         flag_flag = False  # 表示平动刚完成
         flag_flag_flag = False
         # gkkk=0
 
         while True:
-            frame_dict={}
             if time.time() - t0 > 1/data_collect_freq:    #此程序运行约0.01s（10hz）,因此循环频率需要低于10hz
                 # print("camera circulation_time:", time.time() - t0)
                 t0 = time.time()
                 # 读取图像帧，包括RGB图
-                tcp_high = tcp.copy()
-                if flag_tr and (not flag_flag) and (not flag_flag_flag):  # 平动刚完成,flag_flag_flag用来确保此if只进入一次
-                    flag_flag = True
-                    flag_flag_flag = True
-                if (not flag_tr) or flag_flag:  # 平动未或刚完成
-                    tcp_high[5] = start_pt[5]
-                    flag_flag = False  # 确保平动完成后不进入此if分支，rz会变化
-                frame_dict = cam.get_frame()
-                assert frame_dict is not None
+                rtn_dict = env.observation()
+                img = rtn_dict['img_1']
+                img2 = rtn_dict['img_2'] if 'img_2' in rtn_dict else None
 
-                for type,img in frame_dict.items():
-                    cv2.imshow(type, img)
-                    cv2.waitKey(1)
-                    if img_save_type=="rgb":
-                        img=img[:,:,::-1]
-                    img=clip_image(img,img_size)
+                wgT_tar = env.wgT_tar
+                wgT = env.wgT
+                act_dict = get_expert_policy(wgT_tar=wgT_tar, wgT=wgT, trans_vel=trans_vel, rot_vel=rot_vel,
+                                             uniform_vel=uniform_vel, dist_eps=env.dist_eps, angle_eps=env.angle_eps,
+                                             motion_type="simultaneously", dof=6,need_trans_unit_transform=False)  ##TODO:need to be reused in robo_operator
 
-                    if type not in img_dict.keys():
-                        img_dict[type]=[img.copy()]   #很奇怪，要用到.copy()才行
-                    else:
-                        img_dict[type].append(img.copy())
+                vel_tr = filter_translation(act_dict['vel_tr'], thres=1e-5)
+                vel_rot = act_dict['vel_rot']  # 3dof:绕世界系 6dof:绕夹爪系
+                dT = act_dict["dT"]
+                action_list.append(np.concatenate((vel_tr, vel_rot)))
 
-                # 收集位姿
-                tcp_high[5] = rot_angle_normalization(tcp_high[5])  # 轉換到0-360之間，-180和180之間有間斷點，不方便學習
-                abs_rz_list.append(tcp_high[5])      #°
-                tcp_list.append(np.array(tcp_high))  #mm,°
-                # print('use time:', time.time() - t0)
+            if record_pose:
+                delta_pose_list.append(act_dict['cur_goal_delta_pose'])
 
-            if quit:
+            # postprocess
+            img_vis = img.copy()
+            img = clip_image(img, img_size)
+            if img_save_type == "rgb":
+                img = img[:, :, ::-1]
+            img_lst.append(img)
+
+            if img2 is not None:
+                img2_vis = img2.copy()
+                img2 = clip_image(img2, img_size)
+                if img_save_type == "rgb":
+                    img2 = img2[:, :, ::-1]
+                img2_lst.append(img2)
+
+                combined_img = np.hstack((img_vis, img2_vis))
+            else:
+                combined_img = img_vis
+
+            cv2.imshow("Combined Image", combined_img)
+            cv2.waitKey(1)
+
+            #env.action_dT(dT) ##TODO:应该在robo_operator被使用
+
+            if env.reinit():
                 operate.join()
-                quit = False
-                tcp_list_1 = tcp_list.copy()
-
+                quit = True
                 cv2.destroyAllWindows()
                 print('...录制结束，数据处理中...')
 
-                # 对位姿指令进行处理
-                epi_length = len(abs_rz_list)
-                for i in range(epi_length):
-                    action = tcp_list_1[i + 1] - tcp_list[i].copy() if i < epi_length - 1 else np.array([0, 0, 0, 0, 0, 0])
-                    action=filter_action(action)
-                    action_list.append(
-                            np.array([action[0], action[1], 0, 0, 0, action[5]])
-                            if ac_dim==6 else np.array([action[0], action[1], action[5]]))
+                action_list.append(np.array([0, 0, 0, 0, 0, 0]))
 
-                print("action list:", action_list)
+                img_goal = clip_image(goal_dict["img_goal"], img_size)
+                img_lst.append(img_goal)
 
-                if not len(action_list)==len(img_dict["wrist"]):
-                    print("len act:",len(action_list))
-                    print("len img:", len(img_dict["wrist"]))
-                assert len(action_list)==len(abs_rz_list)
+                if goal_dict["img_goal2"] is not None:
+                    im_goal2 = clip_image(goal_dict["img_goal2"], img_size)
+                    img2_lst.append(im_goal2)
+                if record_pose:
+                    delta_pose_list.append(np.zeros(6))
 
-                del_rot_list = np.array(action_list.copy())[:, -1]
+                    # post process
+                    if disturb_abs_rot["utilized"]:
+                        rz_list, _ = _disturb_abs_rot(rz_list, action_list)
 
-                for gk in range(epi_length):
-                    if abs(del_rot_list[gk]) > 10 or del_rot_list[
-                        gk] * alpha > 0:  # start_pt=desire_pt+alpha，故正常情况下alpha与delta_rot异号
-                        print('alpha(°):', alpha)
-                        print('theta(rad):', theta)
-                        print('action list(mm,°):', action_list)
-                        print('abs_rot_list(°):', abs_rz_list)
-                        print('del_rot_list(°):', np.array(del_rot_list).copy()[:][-1])
-                        print("total rotation:", np.array(del_rot_list).sum())
-                        raise RuntimeError('action rz error')
-                if existed_demo_num>=1:
-                    if delete_last_demo:
-                        add_useless_things(new_f_out=new_f_out,demo_ind=uu+existed_demo_num-1,epi_len=epi_length)
+                    if portion_last_episode["utilized"]:
+                        action_list, _ = _portion_last_episode(action_list, portion_last_episode["portion_last_num"],
+                                                               ac_dim=6)
+
+                    if add_end_episode["utilized"]:
+                        pick_id = len(img_lst) - 1
+                        insert_id = len(img_lst) - 1
+                        add_num = add_end_episode["add_num"]
+
+                        rz_list, action_list, delta_pose_list = _add_end_episode(add_num=add_num,
+                                                                                 disturb_abs_rot=disturb_abs_rot[
+                                                                                     "utilized"], abs_rot_list=rz_list,
+                                                                                 act_lst=action_list,
+                                                                                 pose_list=delta_pose_list)
+                        img_lst = insert_imgs(img_lst, pick_id, insert_id, add_num)
+                        if len(img2_lst) != 0:
+                            img2_lst = insert_imgs(img2_lst, pick_id, insert_id, add_num)
+
+                    if add_medium_episode["utilized"]:
+                        action_list, rz_list, delta_pose_list, need_add_medium, trans_id, rot_id = _add_medium_episode(
+                            act_lst=action_list, abs_rot_list=rz_list, ac_dim=6,
+                            add_num=add_medium_episode["add_num"], pose_list=delta_pose_list)
+                        if need_add_medium:
+                            print("+++++++++++++++++++++++++++++++++++++++++")
+                            pick_id = trans_id + 1
+                            insert_id = rot_id
+                            add_num = add_medium_episode["add_num"]
+
+                            img_lst = insert_imgs(img_lst, pick_id, insert_id, add_num)
+                            if len(img2_lst) != 0:
+                                img2_lst = insert_imgs(img2_lst, pick_id, insert_id, add_num)
+
+                    # save hdf5
+                    epi_length = len(img_lst)
+                    assert epi_length == len(action_list)
+                    if existed_demo_num >= 1:
+                        add_useless_things(new_f_out=new_f_out, demo_ind=uu + existed_demo_num, epi_len=epi_length)
                     else:
-                        add_useless_things(new_f_out=new_f_out,demo_ind=uu+existed_demo_num,epi_len=epi_length)
-                else:
-                    add_useless_things(new_f_out=new_f_out, demo_ind=uu, epi_len=epi_length)
+                        add_useless_things(new_f_out=new_f_out, demo_ind=uu, epi_len=epi_length)
+                    new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image', data=img_lst)
 
-                if "wrist" in img_dict:
-                    new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image', data=img_dict["wrist"])
-                new_f_out.create_dataset(obs_path + '/abs_rot', data=abs_rz_list)
-                new_f_out.create_dataset(action_path, data=action_list)
+                    if len(img2_lst) != 0:
+                        new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image_2', data=img2_lst)
+
+                    if len(delta_pose_list) != 0:
+                        new_f_out.create_dataset(pos_path, data=delta_pose_list)
+
+                    new_f_out.create_dataset(action_path, data=action_list)
+                    print("action_lst-1:", action_list[-1])
+                    print("[INFO] demo_{} collected successfully.".format(uu))
                 break
 
     cam.release()

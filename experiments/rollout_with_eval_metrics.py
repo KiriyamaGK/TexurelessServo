@@ -318,7 +318,7 @@ if __name__ == '__main__':
                     z_error_lst.append(z_error*1000) #m to mm
 
                 vel_tr_lst.append(np.linalg.norm(vel_tr)*1000) #mm
-                vel_rot_lst.append(abs(vel_rot))
+                vel_rot_lst.append(abs(vel_rot) if dof == 3 else np.linalg.norm(vel_rot))
                 wgT_list.append(wgT)
                 if delta_pos is not None:
                     delta_pos_gt=get_cur_goal_deltapos(wgT,wgT_tar)["delta_pose"] #mm,deg

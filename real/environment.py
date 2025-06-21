@@ -49,7 +49,7 @@ class Environment:
         self.use_max_trans = init["init_horizon_trans"]["use_max_trans"]
         self.using_max_v_trans = init["init_vertical_trans"]["using_max_v_trans"]
         self.using_minus_vertical = init["init_vertical_trans"]["using_minus"]
-        self.conditioned_sampling = init["conditioned_sampling"]
+        self.conditioned_sampling = init["conditioned_sampling"] if "conditioned_sampling" in init else False
 
         if self.conditioned_sampling:
             assert (not self.use_max_rot) and (not self.use_max_trans) and (not self.using_max_v_trans)
@@ -405,7 +405,7 @@ class Environment:
 
     def setup_stop_policy(self,metrics:dict):
         self.rot_vel_threshold=metrics["rot_vel_threshold"]  #deg
-        self.trans_vel_threshold=metrics["trans_vel_threshold"] #m
+        self.trans_vel_threshold=metrics["trans_vel_threshold"] #mm
         self.time_up_bound = metrics["use_time_upperbound"] #maximum used time during a rollout
         self.in_threshold_range_time = metrics["in_threshold_range_time"] #maximum time stay in error threshold before entering the next rollout
 
