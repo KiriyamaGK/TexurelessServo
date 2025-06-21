@@ -200,6 +200,9 @@ class Environment:
                 })
 
     def sample_init_pos(self):
+        """
+        get delta_T : g_tar_g_T
+        """
         # print("===============================")
         # print(self.evenly_posid)
         if self.uniform_eval_settings["utilized"]:
@@ -264,8 +267,7 @@ class Environment:
                 dT[0:3, 0:3] = R.from_rotvec(rot_dev_vec * np.pi / 180).as_matrix()
                 dT[0:3, 3] = np.array([cos(ori) * trans_dev, sin(ori) * trans_dev, -vertical_dev])
 
-        self.wgT=self.wgT_tar@dT #绕夹爪系
-        self.gwT=np.linalg.inv(self.wgT)
+        self.g_tar_g_init_T = dT
 
     def set_target_coordinate(self,pos=None,use_cur=True):  ##TODO: new
         """
@@ -294,7 +296,7 @@ class Environment:
         """
 
         :param dT: gstart_gendT
-        :return: cmd=[dx,dy,dz,drx,dry,drz] in start tcp frame,rotation euler sequence is z,y,x(tcp frame)
+        :return: cmd=[dx,dy,dz,drx,dry,drz] in start tcp frame,rotation euler sequence is z,y,x(tcp frame)/x ,y ,z(base frame)
         """
         cmd = np.zeros(6)
         cmd[0:3] = dT[0:3,3]                      ##mm
@@ -318,13 +320,6 @@ class Environment:
 
     def act_to_goal(self):
         self.action_abs_T(self.wgT_tar)
-
-    def act_with_abs_dict(self,pos:dict):
-        # 更新矩阵,dT是对于世界坐标系下的变化量
-        self.action_abs_T(pos["wgT"])
-
-    def action_wgT(self):
-        return self.action_abs_T(self.wgT)
 
     def action_abs_T(self,T):
         """

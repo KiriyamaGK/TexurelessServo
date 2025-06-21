@@ -6,15 +6,15 @@
             "h": 480,
             "fps": 30,
             "cam_devices": {
-               "wrist":"215222073421"
+               "img_1":"215222073421"
             },
-            "use_devices_type": ["wrist"]
+            "use_devices_type": ["img_1"]
         }
     },
     "overall_setting":{
         "dataset_base_dir": "/home/user0/dataset",
         "file_name": "25.03.111",
-        "cir_num":40,
+        "demo_total_num":40,
         "desire_pt_change_cycle":130,
         "replace_existed_hdf5": false,
         "delete_last_demo": false
@@ -49,6 +49,10 @@
                 },
                 "rot_vel": {
                     "value": 0.5
+                },
+                "uniform_vel": {
+                    "utilized":false,
+                    "value": 3
                 }
             }
         },
@@ -56,7 +60,7 @@
         "data_collect_freq": 7,
         "img": {
             "save_type": "rgb",
-            "size": 220
+            "size": 300
         },
         "record_pose": true,
         "post_process": {

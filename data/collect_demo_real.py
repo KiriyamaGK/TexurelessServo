@@ -70,36 +70,25 @@ if __name__=='__main__':
     init_pos[4]=0
     in_desire_pt =init_pos if current_pt_desire else [-533.3317260742188, 49, 150, -180, 0, 163.76220703125]
 
-    #img相关
-    img_save_type=config["demo_collection"]["img"]["save_type"]
-    assert img_save_type in ["rgb","bgr"]
-    img_size=config["demo_collection"]["img"]["size"]
-
-    #demo数量和目标位姿变化周期
-    cir_num = config["overall_setting"]["cir_num"]
-    desire_pt_change_cycle= config["overall_setting"]["desire_pt_change_cycle"]
-    file_name=config["overall_setting"]["file_name"]
-
-    #运动速度
-    vel_tr_norm=config["demo_collection"]["velocity"]["vel_tr_norm"]
-    vel_rot_norm=config["demo_collection"]["velocity"]["vel_rot_norm"]
-
-    #位姿偏差，判定demo结束
-    trans_dis_thres=config["demo_collection"]["stop_collection"]["trans_dis_thres"]
-    rot_dis_thres=config["demo_collection"]["stop_collection"]["rot_dis_thres"]
-    absolute_cmd=config["demo_collection"]["absolute_cmd"]
-
-    #收集数据频率
-    data_collect_freq=config["demo_collection"]["data_collect_freq"]
-
-    ac_dim=config["demo_collection"]["ac_dim"]
-
-    replace_existed_hdf5=config["overall_setting"]["replace_existed_hdf5"]
-    delete_last_demo=config["overall_setting"]["delete_last_demo"]
-
+    # overall setting
     base_dir = return_disc_route("One Touch")
+    desire_pt_change_cycle=config["overall_setting"]["desire_pt_change_cycle"]
+    current_date = config['overall_setting']['file_name']
+    demo_total_num = config['overall_setting']['demo_total_num']
+    replace_existed_hdf5 = config["overall_setting"]["replace_existed_hdf5"]  # TODO:remember to use
+    delete_last_demo = config["overall_setting"]["delete_last_demo"]
 
-    database_dir = os.path.join(base_dir, 'AlignAnything_real', file_name, 'hdf5')
+    #demo_collection:
+      ##收集数据频率
+    data_collect_freq = config["demo_collection"]["data_collect_freq"]
+      ##img相关
+    img_save_type = config["demo_collection"]["img"]["save_type"]
+    assert img_save_type in ["rgb", "bgr"]
+    img_size = config["demo_collection"]["img"]["size"]
+      ##record pose
+    record_pose = config["demo_collection"]['record_pose']
+
+    database_dir = os.path.join(base_dir, 'AlignAnything_real', current_date, 'hdf5')
     ensure_dir(database_dir)
     dataset_dir=os.path.join(database_dir, 'mimic.hdf5')
 
@@ -112,7 +101,7 @@ if __name__=='__main__':
             new_f_out = h5py.File(dataset_dir, "w")
 
     existed_demo_num=0
-    for uu in range(cir_num):
+    for uu in range(demo_total_num):
         print("=====================collecting demo_{}=====================".format(uu))
         #preprocess
         if uu==0:
@@ -125,12 +114,15 @@ if __name__=='__main__':
             if delete_last_demo:
                 obs_path = 'data/demo_{}/obs'.format(uu+existed_demo_num-1)
                 action_path = 'data/demo_{}/actions'.format(uu+existed_demo_num-1)
+                pos_path = 'data/demo_{}/delta_pos_curgoal'.format(uu+existed_demo_num-1)
             else:
                 obs_path = 'data/demo_{}/obs'.format(uu+existed_demo_num)
                 action_path = 'data/demo_{}/actions'.format(uu+existed_demo_num)
+                pos_path = 'data/demo_{}/delta_pos_curgoal'.format(uu + existed_demo_num)
         else:
             obs_path = 'data/demo_{}/obs'.format(uu)
             action_path = 'data/demo_{}/actions'.format(uu)
+            pos_path = 'data/demo_{}/delta_pos_curgoal'.format(uu)
 
         if uu==0:
             desire_pt=in_desire_pt

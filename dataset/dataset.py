@@ -373,6 +373,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             seq_length=self.seq_length,
             prefix="obs"
         )
+
         meta["obs"]=input_dict_preprocess(meta["obs"],bgr2rgb=self.bgr2rgb,img_size=self.img_size)
         if self.load_next_obs:
             meta["next_obs"] = self.get_obs_sequence_from_demo(

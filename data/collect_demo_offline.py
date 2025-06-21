@@ -149,7 +149,6 @@ if __name__ == '__main__':
 
         #get goal info
         init_transform_dict = env.return_cur_pos_info()
-        env.act_to_goal()
         goal_dict=get_goal_info(env)
         env.act_with_abs_dict(init_transform_dict)
 
