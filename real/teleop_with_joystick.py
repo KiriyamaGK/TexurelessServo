@@ -39,7 +39,7 @@ class Teleop:
         self.allow_teleop=allow_teleop
         if self.allow_teleop:
             self.robo_ins=FR_Robot(robot_address)
-        self.gripper_ins=Gripper()
+        # self.gripper_ins=Gripper()
         self.trans_coeff=trans_coeff
         self.rot_coeff=rot_coeff
         self.use_rxry=use_rxry
@@ -191,14 +191,14 @@ class Teleop:
                     if grip_op == 1 and time.time()-t_op>1:
                         try:
                             t_op=time.time()
-                            self.gripper_ins.move_gripper(0,60,60)
+                            # self.gripper_ins.move_gripper(0,60,60)
                         except Exception:
                             continue
 
                     if grip_cls == 1 and time.time()-t_cls>1:
                         try:
                             t_cls=time.time()
-                            self.gripper_ins.move_gripper(1000,60,60)
+                            # self.gripper_ins.move_gripper(1000,60,60)
                         except Exception:
                             continue
 

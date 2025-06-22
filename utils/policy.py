@@ -16,7 +16,7 @@ def get_cur_goal_deltapos(wgT,wgT_tar,need_trans_unit_transform=True):
     delta_pose[3:] = R.from_matrix(del_T[:3, :3]).as_rotvec() / np.pi * 180  # deg
     return {"del_T": del_T, "delta_pose": delta_pose}
 
-def get_expert_policy(wgT_tar,wgT,trans_vel,rot_vel,uniform_vel,dist_eps,angle_eps,motion_type,dof,need_trans_unit_transform=True):
+def get_expert_policy(wgT_tar,wgT,trans_vel,rot_vel,uniform_vel,dist_eps,angle_eps,motion_type,dof,need_trans_unit_transform=True,fine_print=False,real=False):
     if uniform_vel["utilized"]:
         assert (not trans_vel["utilized"]) and (not rot_vel["utilized"])
     else:
@@ -71,6 +71,8 @@ def get_expert_policy(wgT_tar,wgT,trans_vel,rot_vel,uniform_vel,dist_eps,angle_e
         abs_del_tr = np.linalg.norm(v) #m/mm
         # print("==================================")
         abs_del_angle = np.linalg.norm(w) / np.pi * 180  # degree
+        # if fine_print:
+        #     print(f"policy abs_del_tr:{abs_del_tr}, abs_del_angle:{abs_del_angle}")
         if not uniform_vel["utilized"]:
             if isinstance(trans_vel_norm, (int, float)):
                 vel_tr = v /  np.linalg.norm(v) * trans_vel_norm if trans_vel_norm < abs_del_tr else v #m/mm
@@ -82,7 +84,7 @@ def get_expert_policy(wgT_tar,wgT,trans_vel,rot_vel,uniform_vel,dist_eps,angle_e
                 # print("abs_del_tr_xy", abs_del_tr_xy)
                 # print("abs_del_tr_z", abs_del_tr_z)
                 if  trans_vel_norm[0] >= abs_del_tr_xy:
-                    if not 0.1 * trans_vel_norm[0] >= abs_del_tr_xy:
+                    if 0.1 * trans_vel_norm[0] < abs_del_tr_xy:
                         vel_tr_xy = v[0:2]
                     else:
                         vel_tr_xy = np.array([0, 0])
@@ -90,7 +92,7 @@ def get_expert_policy(wgT_tar,wgT,trans_vel,rot_vel,uniform_vel,dist_eps,angle_e
                     vel_tr_xy=v[0:2] / np.linalg.norm(v[0:2]) * trans_vel_norm[0]
 
                 if  trans_vel_norm[1] >= abs_del_tr_z:
-                    if not 0.1 * trans_vel_norm[1] >= abs_del_tr_z:
+                    if 0.1 * trans_vel_norm[1] < abs_del_tr_z:
                         vel_tr_z = v[2:]
                     else:
                         vel_tr_z = np.array([0])
@@ -102,13 +104,35 @@ def get_expert_policy(wgT_tar,wgT,trans_vel,rot_vel,uniform_vel,dist_eps,angle_e
                 # if vel_tr_xy[0]!=0:
                     # print(vel_tr_xy[1]/vel_tr_xy[0])
                 vel_tr=np.concatenate((vel_tr_xy,vel_tr_z),axis=0)
-            if rot_vel_norm >= abs_del_angle:
-                if not 0.5*rot_vel_norm >= abs_del_angle:
-                    vel_rot = w/ np.pi * 180
+            if fine_print:
+                print(f"rot_vel_norm:{rot_vel_norm},abs_del_angle:{abs_del_angle}")
+
+            if not real:
+                if rot_vel_norm >= abs_del_angle:
+                    if not 0.5*rot_vel_norm >= abs_del_angle:
+                        vel_rot = w/ np.pi * 180
+                    else:
+                        vel_rot=np.array([0, 0,0])
                 else:
-                    vel_rot=np.array([0, 0,0])
+                    vel_rot = w / np.linalg.norm(w) * rot_vel_norm
+
             else:
-                vel_rot = w / np.linalg.norm(w) * rot_vel_norm
+                # vel_rot = np.array([0, 0, 0])
+                if abs_del_angle<min(0.8*angle_eps,rot_vel_norm):
+                    vel_rot = np.array([0, 0, 0])
+                    if fine_print:
+                        print(1)
+                else:
+                    if abs_del_angle>max(angle_eps,rot_vel_norm):
+                        vel_rot = w / np.linalg.norm(w) * rot_vel_norm
+                        if fine_print:
+                            print(2)
+                    else:
+                        vel_rot = w / np.linalg.norm(w) * min(rot_vel_norm,0.5*angle_eps)
+                        if fine_print:
+                            print(3)
+
+
         else:
             assert isinstance(trans_vel_norm, (int, float))
             if need_trans_unit_transform:  ##vel_tr start with m

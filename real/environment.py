@@ -10,10 +10,10 @@ from scipy.spatial.transform import Rotation as R
 from itertools import product
 
 class Environment:
-    def __init__(self,robot_address,w,h,fps,cam_devices,use_devices_type,dof,down_to_grasp_distance,init,stop_policy,velocity,uniform_evaluation=None):
+    def __init__(self,robot_address,w,h,fps,cam_devices,use_devices_type,dof,down_to_grasp_distance,init,stop_policy,velocity):
         self.robot_ins=FR_Robot(robot_address)
         self.camera=Camera(devices=cam_devices,use_devices_type=use_devices_type,width=w, height=h, fps=fps)
-        self.gripper=Gripper()
+        # self.gripper=Gripper()
 
         self.corner_1 = [-405.3097229003906, 199.8372497558593]  # 工作区域左上角点
         self.corner_2 = [-707.1678466796875, -249.3986206054687]  # 工作区域右下角点
@@ -30,13 +30,13 @@ class Environment:
 
         self.angle_eps = stop_policy["angle_eps"]  # degree
         self.dist_eps = stop_policy["dist_eps"]  # mm
-        self.trans_vel = velocity["trans_vel"]
-        self.rot_vel = velocity["rot_vel"]
+        self.trans_vel = velocity["trans_vel"]["value"]
+        self.rot_vel = velocity["rot_vel"]["value"]
 
         self.init_horizon_trans = init["init_horizon_trans"]["value"]                             #最大平移距离，mm
         self.init_vertical_trans = init["init_vertical_trans"]["value"] if self.dof==6 else 0     #mm
         init_rot = init["init_rot"]["value"]                                                      #最大旋转偏差（axis-angle，deg）
-        self.uniform_eval_settings = uniform_evaluation
+        self.uniform_eval_settings = init["uniform_evaluation"]
 
         if self.dof == 3:
             assert isinstance(init_rot,(int, float))
@@ -46,7 +46,7 @@ class Environment:
             self.init_rot = np.array(init_rot)  # degree
 
         self.use_max_rot = init["init_rot"]["use_max_rot"]
-        self.use_max_trans = init["init_horizon_trans"]["use_max_trans"]
+        self.use_max_trans = init["init_horizon_trans"]["use_max_h_trans"]
         self.using_max_v_trans = init["init_vertical_trans"]["using_max_v_trans"]
         self.using_minus_vertical = init["init_vertical_trans"]["using_minus"]
         self.conditioned_sampling = init["conditioned_sampling"] if "conditioned_sampling" in init else False
@@ -77,8 +77,6 @@ class Environment:
         self.gwT_tar=None
         self.wgT=None
         self.gwT=None
-
-        print("environment initialized")
 
     def place(self,p_0):
         '''
@@ -241,9 +239,9 @@ class Environment:
 
                 if self.using_max_v_trans:
                     dT[2, 3]*=random.uniform(0, 1)
-                if self.using_minus_vertical:
+                if self.using_minus_vertical:    #TODO:对z轴从下往上做了限制
                     if random.randint(0,1)>0.65:
-                        dT[2,3]=dT[2,3]*(-1)*random.uniform(0.6, 1)
+                        dT[2,3]=max(dT[2,3],-10)*(-1)
             else:
                 # print("1")
                 trans_xy_points, trans_z_points, rot_points = self.cond_sample_init_pos_algo()
@@ -251,7 +249,7 @@ class Environment:
                 vertical_dev=trans_z_points*self.trans_vel[1]
                 if self.using_minus_vertical:
                     if random.uniform(0,1)>0.65:
-                        vertical_dev=vertical_dev*(-1)
+                        vertical_dev=min(10,vertical_dev)*(-1)    #TODO:对z轴从下往上做了限制
                 # dr = np.array([random.uniform(0, 5) for _ in range(3)])#TODO:记得注释这四行
                 # rot_dev_mat = R.from_rotvec(self.init_rot * np.pi / 180).as_matrix() @ R.from_rotvec(
                 #     dr * np.pi / 180).as_matrix()
@@ -314,6 +312,7 @@ class Environment:
         self.init_flag = True
         self.task_timer = time.time()
         self.vel_timer = time.time()
+        print("environment initialized")
 
     def observation(self):
         return self.camera.get_frame()
@@ -325,6 +324,7 @@ class Environment:
         """
         基类action方法1：根据绝对齐次变换矩阵T进行运动，并且运动完后更新wgT,gwT
         """
+        # print("actioned")
         tar_pose = self.absolute_T_to_pose(T)
         self.robot_ins.move_cart(pose=tar_pose, tool=1, user=0, vel=40)  ##servo cart is a blocked-type cmd
         self.update_state_matrix()
@@ -333,6 +333,7 @@ class Environment:
         """
         基类action方法2：根据相对齐次变换矩阵dT(工具坐标系下的相对运动描述)进行运动
         """
+        dT[0:3,0:3]=dT[0:3,0:3]
         cmd = self.tcp_frame_dT_to_command(dT)
         self.robot_ins.servo_cart(desc_pos=cmd, mode=2, vel=10.0)
         if update_state:
@@ -382,6 +383,7 @@ class Environment:
         dT = np.linalg.inv(T0) @ T1
         angle = np.linalg.norm(R.from_matrix(dT[:3, :3]).as_rotvec()) / np.pi * 180
         dist = np.linalg.norm(dT[:3, 3])
+        # print(f"compute_error_res--------trans:{dist},rot:{angle}")
         z_error=abs(dT[2, 3])
         self.close_enough_flag=(angle < self.angle_eps) and (dist < self.dist_eps)
         # print("angle:",angle)

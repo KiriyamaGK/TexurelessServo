@@ -5,8 +5,8 @@ import os
 from utils.paths import return_disc_route
 
 if __name__ == '__main__':
-    # hdf_pth=return_disc_route('One Touch/AlignAnything_real/25.03.11/hdf5/mimic.hdf5')
-    hdf_pth = return_disc_route('One Touch/AlignAnything/25.04.144/hdf5/mimic.hdf5')
+    hdf_pth=return_disc_route('One Touch/AlignAnything_real/25.06.22/hdf5/mimic.hdf5')
+    # hdf_pth = return_disc_route('One Touch/AlignAnything/25.04.144/hdf5/mimic.hdf5')
     # temp_dir='/media/kiriyamagk/One Touch/AlignAnything/25.01.17/hdf5/temp'
     hdf_base=os.path.dirname(hdf_pth)
     fps=30
@@ -14,8 +14,8 @@ if __name__ == '__main__':
     only_rot_caption=False
     color_channel_inverse = False
 
-    img_wrist_vis=False
-    img_wrist_light_vis=True
+    img_wrist_vis=True
+    img_wrist_light_vis=False
     goal_image=False
 
     hdf = h5py.File(hdf_pth, 'r')

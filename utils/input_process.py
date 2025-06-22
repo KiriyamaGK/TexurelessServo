@@ -6,14 +6,21 @@ import torchvision.transforms
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-def clip_image(img,img_size):
+def clip_image(img,img_size,keep_right=False):
     height,width = img.shape[0],img.shape[1]
     # 确定裁剪区域
     if width > height:
-        left = (width - height) // 2
-        top = 0
-        right = (width + height) // 2
-        bottom = height
+        if not keep_right:
+            left = (width - height) // 2
+            top = 0
+            right = (width + height) // 2
+            bottom = height
+        else:
+            left =  width- height
+            right = width
+            top = 0
+            bottom = height
+
     else:
         left = 0
         top = (height - width) // 2

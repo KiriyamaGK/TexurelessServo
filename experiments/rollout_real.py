@@ -114,7 +114,7 @@ def get_goal_info(env):
     return {"img_1": img, "img_2": img2}
 
 if __name__ == '__main__':
-    config_dir= "../configs/rollout.json"
+    config_dir= "../configs/rollout_real.json"
 
     fps = 30
     vis_h, vis_w = 480, 640
@@ -147,7 +147,6 @@ if __name__ == '__main__':
     dof = config["dof"]
     motion_scaler=config["motion_scaler"]
     init=config['init']
-    uniform_evaluation=config["init"]['uniform_evaluation']
 
     expert_motion_type=config['expert_motion_type']
     record_video=config['record_video']
@@ -164,7 +163,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = _setup_model(model_config)
 
-    env = Environment(robot_address=config["hardware"]["robot_address"], dof=dof,down_to_grasp_distance=None,init=init,stop_policy=stop_policy,velocity=None,uniform_evaluation=uniform_evaluation,
+    env = Environment(robot_address=config["hardware"]["robot_address"], dof=dof,down_to_grasp_distance=None,init=init,stop_policy=stop_policy,velocity=None,
                       **config["hardware"]["camera"])
     cam = env.camera
     robot_ins = env.robot_ins
@@ -203,10 +202,6 @@ if __name__ == '__main__':
             diff_list=[]
             video_flag = False
 
-            # move to initial T,and get info
-            env.action_abs_T(env.wgT_tar @ env.g_tar_g_init_T)
-            init_transform_dict = env.return_cur_pos_info()
-
             # get goal info
             im_goal_dict = get_goal_info(env)
 
@@ -219,7 +214,7 @@ if __name__ == '__main__':
             img_goal=conditioned_clip_and_resize(img=img_goal, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size)[:,:,::-1]
             img_goal2 = conditioned_clip_and_resize(img=img_goal2, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size)[:,:,::-1] if img_goal2 is not None else None
 
-            env.action_abs_T(init_transform_dict["wgT"])
+            env.action_abs_T(env.wgT_tar@env.g_tar_g_init_T)
 
             print("==============================")
             print("[INFO] start rollout_{}...".format(idx))
