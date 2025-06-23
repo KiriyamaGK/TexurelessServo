@@ -27,7 +27,7 @@
     },
     "demo_collection": {
         "dof": 6,
-        "third_view_camera": true,
+        "third_view_camera": false,
         "trans_and_rot_type": "simultaneously",
         "conditioned_sampling": true,
         "random_light_dir": true,

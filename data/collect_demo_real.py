@@ -13,7 +13,7 @@ import h5py
 from utils.input_process import clip_image
 from real.environment import Environment
 from data.process_hdf5 import _disturb_abs_rot,_portion_last_episode,_add_end_episode,_add_medium_episode,insert_imgs
-
+import atexit
 
 def filter_translation(input,thres):
     assert thres>0
@@ -33,6 +33,17 @@ def filter_pos(pos):
         if abs(pos[i])<1e-10:
             pos[i]=0
     return pos
+
+def cleanup():
+    cam.release()
+    add_env_meta(new_f_out)
+    add_config(new_f_out, config)
+    new_f_out.close()
+    compute_num_samples(dataset_dir)
+    split_train_val_from_hdf5(dataset_dir, val_ratio=0.1)
+
+##TODO : Python的atexit注册的函数会在主线程退出且仅剩守护线程时触发,因此必须要让其他线程设置为守护线程（daemon = True）
+atexit.register(cleanup)
 
 
 
@@ -143,10 +154,6 @@ if __name__=='__main__':
         flag_tr = False
         flag_rot = False
 
-        # # move to initial T,and get info
-        # env.action_abs_T(env.wgT_tar@env.g_tar_g_init_T)
-        # init_transform_dict = env.return_cur_pos_info()
-
         # get goal info
         goal_dict = get_goal_info(env)
 
@@ -174,13 +181,13 @@ if __name__=='__main__':
             # operate.join()
 
         # robo_operator()
-        operate = threading.Thread(target=robo_operator, daemon=False)
+        operate = threading.Thread(target=robo_operator, daemon = True)
+        ##TODO daemon = True的含义为：设置target为守护线程，即主程序中断，robo_operator也会中断。此处设置daemon=True是必须的，因为这么做是为了配合atexit()函数(参见atexit注释)
+
         operate.start()
         tt = time.time()
 
         t0 = time.time()
-        flag_flag = False  # 表示平动刚完成
-        flag_flag_flag = False
         # gkkk=0
 
         while True:
@@ -247,69 +254,62 @@ if __name__=='__main__':
                     if record_pose:
                         delta_pose_list.append(np.zeros(6))
 
-                        # post process
-                        if disturb_abs_rot["utilized"]:
-                            rz_list, _ = _disturb_abs_rot(rz_list, action_list)
+                    # post process
+                    if disturb_abs_rot["utilized"]:
+                        rz_list, _ = _disturb_abs_rot(rz_list, action_list)
 
-                        if portion_last_episode["utilized"]:
-                            action_list, _ = _portion_last_episode(action_list, portion_last_episode["portion_last_num"],
-                                                                   ac_dim=6)
+                    if portion_last_episode["utilized"]:
+                        action_list, _ = _portion_last_episode(action_list, portion_last_episode["portion_last_num"],
+                                                               ac_dim=6)
 
-                        if add_end_episode["utilized"]:
-                            pick_id = len(img_lst) - 1
-                            insert_id = len(img_lst) - 1
-                            add_num = add_end_episode["add_num"]
+                    if add_end_episode["utilized"]:
+                        pick_id = len(img_lst) - 1
+                        insert_id = len(img_lst) - 1
+                        add_num = add_end_episode["add_num"]
 
-                            rz_list, action_list, delta_pose_list = _add_end_episode(add_num=add_num,
-                                                                                     disturb_abs_rot=disturb_abs_rot[
-                                                                                         "utilized"], abs_rot_list=rz_list,
-                                                                                     act_lst=action_list,
-                                                                                     pose_list=delta_pose_list)
+                        rz_list, action_list, delta_pose_list = _add_end_episode(add_num=add_num,
+                                                                                 disturb_abs_rot=disturb_abs_rot[
+                                                                                     "utilized"], abs_rot_list=rz_list,
+                                                                                 act_lst=action_list,
+                                                                                 pose_list=delta_pose_list)
+                        img_lst = insert_imgs(img_lst, pick_id, insert_id, add_num)
+                        if len(img2_lst) != 0:
+                            img2_lst = insert_imgs(img2_lst, pick_id, insert_id, add_num)
+
+                    if add_medium_episode["utilized"]:
+                        action_list, rz_list, delta_pose_list, need_add_medium, trans_id, rot_id = _add_medium_episode(
+                            act_lst=action_list, abs_rot_list=rz_list, ac_dim=6,
+                            add_num=add_medium_episode["add_num"], pose_list=delta_pose_list)
+                        if need_add_medium:
+                            print("+++++++++++++++++++++++++++++++++++++++++")
+                            pick_id = trans_id + 1
+                            insert_id = rot_id
+                            add_num = add_medium_episode["add_num"]
+
                             img_lst = insert_imgs(img_lst, pick_id, insert_id, add_num)
                             if len(img2_lst) != 0:
                                 img2_lst = insert_imgs(img2_lst, pick_id, insert_id, add_num)
 
-                        if add_medium_episode["utilized"]:
-                            action_list, rz_list, delta_pose_list, need_add_medium, trans_id, rot_id = _add_medium_episode(
-                                act_lst=action_list, abs_rot_list=rz_list, ac_dim=6,
-                                add_num=add_medium_episode["add_num"], pose_list=delta_pose_list)
-                            if need_add_medium:
-                                print("+++++++++++++++++++++++++++++++++++++++++")
-                                pick_id = trans_id + 1
-                                insert_id = rot_id
-                                add_num = add_medium_episode["add_num"]
+                    # save hdf5
+                    epi_length = len(img_lst)
+                    assert epi_length == len(action_list)
+                    if existed_demo_num >= 1:
+                        add_useless_things(new_f_out=new_f_out, demo_ind=uu + existed_demo_num, epi_len=epi_length)
+                    else:
+                        add_useless_things(new_f_out=new_f_out, demo_ind=uu, epi_len=epi_length)
+                    new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image', data=img_lst)
 
-                                img_lst = insert_imgs(img_lst, pick_id, insert_id, add_num)
-                                if len(img2_lst) != 0:
-                                    img2_lst = insert_imgs(img2_lst, pick_id, insert_id, add_num)
+                    if len(img2_lst) != 0:
+                        new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image_2', data=img2_lst)
 
-                        # save hdf5
-                        epi_length = len(img_lst)
-                        assert epi_length == len(action_list)
-                        if existed_demo_num >= 1:
-                            add_useless_things(new_f_out=new_f_out, demo_ind=uu + existed_demo_num, epi_len=epi_length)
-                        else:
-                            add_useless_things(new_f_out=new_f_out, demo_ind=uu, epi_len=epi_length)
-                        new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image', data=img_lst)
+                    if len(delta_pose_list) != 0:
+                        new_f_out.create_dataset(pos_path, data=delta_pose_list)
 
-                        if len(img2_lst) != 0:
-                            new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image_2', data=img2_lst)
-
-                        if len(delta_pose_list) != 0:
-                            new_f_out.create_dataset(pos_path, data=delta_pose_list)
-
-                        new_f_out.create_dataset(action_path, data=action_list)
-                        print("action_lst-1:", action_list[-1])
-                        print("[INFO] demo_{} collected successfully.".format(uu))
+                    new_f_out.create_dataset(action_path, data=action_list)
+                    print("action_lst-1:", action_list[-1])
+                    print("[INFO] demo_{} collected successfully.".format(uu))
                     break
 
-    cam.release()
-
-    add_env_meta(new_f_out)
-    add_config(new_f_out,config)
-    new_f_out.close()
-    compute_num_samples(dataset_dir)
-    split_train_val_from_hdf5(dataset_dir, val_ratio=0.1)
 
 
 

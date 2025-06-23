@@ -14,8 +14,8 @@
     },
     "overall_setting":{
         "dataset_base_dir": "/home/user0/dataset",
-        "file_name": "25.06.22",
-        "demo_total_num": 2000,
+        "file_name": "25.06.2222",
+        "demo_total_num": 10,
         "desire_pt_change_cycle":130000,
         "replace_existed_hdf5": true,
         "delete_last_demo": false
