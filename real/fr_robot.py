@@ -1,5 +1,8 @@
 import numpy as np
 import Robot
+import random
+import time
+
 
 class FR_Robot:
     def __init__(self,address='192.168.58.2'):
@@ -55,8 +58,26 @@ class FR_Robot:
                 return [0,0,0,0,0,0]
         else:
             raise RuntimeError('point cannot arrive finally when rotating')
+
+    def rectify_angle(self,pos):
+        start_id = 3 if pos.shape[0]==6 else 0
+        for i,p in enumerate(pos):
+            if i>=start_id:
+                if p>180:
+                    pos[i]-=180
+                elif p<-180:
+                    pos[i]+=180
+        return pos
+
 if __name__ == '__main__':
     fr_robot = FR_Robot()
-    fr_robot.move_cart([-580.7462158203125, -91.12007141113281, 106.64298248291016, 179.99981689453125, -0.00024279687204398215, 171.9166717529297],tool=1,user=0,vel=40)
-    pos=fr_robot.get_gripper_TCP_pose()
-    print(pos)
+    in_pose=[-608.364013671875, -31.763967514038086, 135.91221618652344, -179.99742126464844, -0.07470376789569855,176.9801788330078]
+    fr_robot.move_cart(np.array(in_pose),tool=1,user=0,vel=40)
+    pos = fr_robot.get_gripper_TCP_pose()
+    time.sleep(1)
+    while True:
+        cur_pose = fr_robot.get_gripper_TCP_pose()
+        fr_robot.servo_cart(cur_pose,mode=0,vel=10)
+        time.sleep(1)
+        print(cur_pose)
+        time.sleep(0.1)

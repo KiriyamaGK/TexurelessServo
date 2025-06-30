@@ -134,16 +134,7 @@ def get_expert_policy(wgT_tar,wgT,trans_vel,rot_vel,uniform_vel,dist_eps,angle_e
 
 
         else:
-            assert isinstance(trans_vel_norm, (int, float))
-            if need_trans_unit_transform:  ##vel_tr start with m
-                dis=np.linalg.norm(np.array([np.linalg.norm(v)*1000, np.linalg.norm(w) / np.pi * 180])) #mm,degree
-                vel_tr = (1000*v) / dis * trans_vel_norm if trans_vel_norm < dis else 1000*v  # mm
-                vel_rot = (180*w/np.pi) / dis * rot_vel_norm if rot_vel_norm < dis else 180*w/np.pi  # degree
-                vel_tr/=1000 #mm2m
-            else:                          ##vel_tr start with mm
-                dis = np.linalg.norm(np.array([np.linalg.norm(v), np.linalg.norm(w) / np.pi * 180]))  # mm,degree
-                vel_tr = v / dis * trans_vel_norm if trans_vel_norm < dis else v  # mm
-                vel_rot = (180 * w / np.pi) / dis * rot_vel_norm if rot_vel_norm < dis else 180 * w / np.pi  # degree
+            raise RuntimeError("UNIFORM VELOCITY SHOULD NOT BE UTILIZED")
             # print("distance:", dis)
         # print("dis_tr:",abs_del_tr*1000)
         # print("dis_angle:", abs_del_angle)

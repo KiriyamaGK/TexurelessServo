@@ -31,8 +31,8 @@ def clip_image(img,img_size,keep_right=False):
     img_cropped=cv2.resize(img_cropped,(img_size,img_size))
     return img_cropped
 
-def conditioned_clip_and_resize(img,img_h,img_w,hdf5_img_size):
-    img = clip_image(img, hdf5_img_size)
+def conditioned_clip_and_resize(img,img_h,img_w,hdf5_img_size,keep_right=False):
+    img = clip_image(img, hdf5_img_size,keep_right)
     if hdf5_img_size != img_w or hdf5_img_size != img_h:
         img = cv2.resize(img, (img_w, img_h))
     return img

@@ -349,21 +349,22 @@ if __name__ == '__main__':
                         success=1 if (error_rot_lst[-1]<=succ_rot and error_trans_lst[-1]<=succ_tr*1000) else 0
                         success_list.append([obj_id,success])
                         #均匀分布绘图
-                        if idx % freq_per_pos == 0:
-                            tmp_dict = env.all_even_poses[env.evenly_posid]
-                            tmp_dict['success'] = success
-                            tmp_dict["error_trans"]=[error_trans_lst[-1]]
-                            tmp_dict["error_transz"] = [z_error_lst[-1]]
-                            tmp_dict["error_transxy"] = [np.sqrt(error_trans_lst[-1]**2-z_error_lst[-1]**2)]
-                            tmp_dict["error_rot"]=[error_rot_lst[-1]]
-                            success_even_distributed_list.append(tmp_dict)
+                        if config["init"]["uniform_evaluation"]["utilized"]:
+                            if idx % freq_per_pos == 0:
+                                tmp_dict = env.all_even_poses[env.evenly_posid]
+                                tmp_dict['success'] = success
+                                tmp_dict["error_trans"]=[error_trans_lst[-1]]
+                                tmp_dict["error_transz"] = [z_error_lst[-1]]
+                                tmp_dict["error_transxy"] = [np.sqrt(error_trans_lst[-1]**2-z_error_lst[-1]**2)]
+                                tmp_dict["error_rot"]=[error_rot_lst[-1]]
+                                success_even_distributed_list.append(tmp_dict)
 
-                        else:
-                            success_even_distributed_list[-1]["success"] += success
-                            success_even_distributed_list[-1]["error_trans"].append(error_trans_lst[-1])
-                            success_even_distributed_list[-1]["error_transz"].append(z_error_lst[-1])
-                            success_even_distributed_list[-1]["error_transxy"].append(np.sqrt(error_trans_lst[-1]**2-z_error_lst[-1]**2))
-                            success_even_distributed_list[-1]["error_rot"].append(error_rot_lst[-1])
+                            else:
+                                success_even_distributed_list[-1]["success"] += success
+                                success_even_distributed_list[-1]["error_trans"].append(error_trans_lst[-1])
+                                success_even_distributed_list[-1]["error_transz"].append(z_error_lst[-1])
+                                success_even_distributed_list[-1]["error_transxy"].append(np.sqrt(error_trans_lst[-1]**2-z_error_lst[-1]**2))
+                                success_even_distributed_list[-1]["error_rot"].append(error_rot_lst[-1])
 
                     if eval_metrics["trajectory"]["utilized"] and use_eval_metrics:
                         traj_pth=os.path.join(obj_pth, "traj")

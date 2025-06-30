@@ -13,7 +13,7 @@ class CustomLoss(nn.Module):
         self.output_dim = output_dim
         assert self.output_dim in [3, 6]
         self.division=2 if self.output_dim == 3 else 3
-        print("action_dim", self.output_dim)
+        # print("action_dim", self.output_dim)
 
     def forward(self, pred_dict, label_dict):
         # 自定义损失计算逻辑
@@ -143,7 +143,7 @@ class TCL_MSE(nn.Module):
         assert self.output_dim in [3,6]
         self.division = 2 if self.output_dim == 3 else 3
 
-        print("action_dim",self.output_dim)
+        # print("action_dim",self.output_dim)
 
     def forward(self, pred_dict, label_dict):
         # 自定义损失计算逻辑

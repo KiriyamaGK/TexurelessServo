@@ -65,6 +65,6 @@ if __name__=='__main__':
     gripper=Gripper()
     # a=gripper.read_current_low_position()
     # print(a)
-    # gripper.move_gripper(1000,60,60)
+    gripper.move_gripper(0,60,60)
     a = gripper.read_current_low_position()
     print(a)

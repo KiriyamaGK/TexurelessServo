@@ -155,111 +155,31 @@ def insert_imgs(img_lst:np.array,insert_id,pick_id,insert_num):
         return np.concatenate((img_lst[:insert_id],np.repeat(img[np.newaxis, :], insert_num, axis=0), img_lst[insert_id:]))
 
 if __name__ == '__main__':
-    date='25.03.27'
-    fn=os.path.join(return_disc_route('One Touch/AlignAnything'),date,'hdf5/mimic.hdf5')
-
-    disturb_abs_rot=False
-
-    portion_last_episode=False
-    portion_last_num=10
-
-    add_end_episode=False
-    add_end_num = 5
-
-    add_medium_episode = True
-    add_medium_num=2
+    date='25.06.22'
+    fn=os.path.join(return_disc_route('One Touch/AlignAnything_real'),date,'hdf5/mimic.hdf5')
 
     f = h5py.File(fn, "r+")
-    ac_dim=3 if len(f['data/demo_0/actions'][0])==3 else 6
+    for ep in f["data"]:
+        print("processing {}".format(ep))
 
-    assert (not portion_last_episode) or (not add_end_episode)
+        im_key=f"data/{ep}/obs/robot0_eye_in_hand_image"
+        img_lst=f[im_key][:].copy()
+        length=len(img_lst)
+        goal=img_lst[-1:].copy()
+        goal=goal[:,:,:,::-1]
+        img_lst = np.concatenate((img_lst[0:length-1],goal),axis=0)
+        del f[im_key]
+        f.create_dataset(im_key, data=img_lst)
 
-    if disturb_abs_rot:               #机器人绕末端z轴旋转时，把记录的绝对欧拉角rz替换成随机噪声 #TODO:还没有根据ac_dim==6修改
-        assert 'abs_rot' in f['data/demo_0/obs']
-        for ep in f['data']:
-            print("disturbing abs rot:", ep)
-            abs_rot_list=f['data/{}/obs/abs_rot'.format(ep)][:].tolist()
-            action_list=f['data/{}/actions'.format(ep)][:].tolist()
-            abs_rot_list,need_disturb=_disturb_abs_rot(abs_rot_list,action_list)
-            if need_disturb:
-                del f['data/{}/obs/abs_rot'.format(ep)]
-                f['data/{}/obs/abs_rot'.format(ep)] = abs_rot_list
+        im_key2 = f"data/{ep}/obs/robot0_eye_in_hand_image_2"
+        img_lst2 = f[im_key2][:].copy()
+        length2 = len(img_lst2)
+        goal2 = img_lst2[-1:].copy()
+        goal2 = goal2[:, :, :, ::-1]
+        img_lst2 = np.concatenate((img_lst2[0:length2 - 1], goal2), axis=0)
+        del f[im_key2]
+        f.create_dataset(im_key2, data=img_lst2)
 
-    if portion_last_episode:    #把最后portion_last_num个数据的action_rot按比例衰减
-        for ep in f['data']:
-            print('portioning last episode:', ep)
-            action_list=f['data/{}/actions'.format(ep)][:].tolist()
-            action_list,need_portion=_portion_last_episode(action_list,portion_last_num,ac_dim)
-            if need_portion:
-                del f['data/{}/actions'.format(ep)]
-                f['data/{}/actions'.format(ep)]=action_list
-
-    if add_end_episode:  #把最后一帧数据复制add_end_num帧
-        add_num=add_end_num
-        for ep in f['data']:
-            print("adding end episode:", ep)
-            num = len(f['data/{}/obs/robot0_eye_in_hand_image'.format(ep)])
-
-            row_1 = num + add_num
-
-            act_lst = f['data/{}/actions'.format(ep)][:].tolist()
-            abs_rot_list=None
-            if 'abs_rot' in f['data/{}/obs'.format(ep)]:
-                abs_rot_list=f['data/{}/obs/abs_rot'.format(ep)][:].tolist()
-
-            abs_rot_list,act_lst=_add_end_episode(add_num,disturb_abs_rot,abs_rot_list,act_lst)
-
-            delete_useless_things(f, ep)
-            add_useless_things(f, row_1, ep)
-
-            del f['data/{}/actions'.format(ep)]
-            f['data/{}/actions'.format(ep)] = act_lst
-
-            if 'abs_rot' in f['data/{}/obs'.format(ep)]:
-                del f['data/{}/obs/abs_rot'.format(ep)]
-                f['data/{}/obs/abs_rot'.format(ep)] = abs_rot_list
-
-            ep_key = 'data/{}/obs'.format(ep)
-            if 'robot0_eye_in_hand_image' in f[ep_key]:
-                hdf_insert_images_for_end(f,ep_key,'robot0_eye_in_hand_image')
-            if 'robot0_eye_in_hand_image_light' in f[ep_key]:
-                hdf_insert_images_for_end(f,ep_key,'robot0_eye_in_hand_image_light')
-            if 'robot0_eye_in_hand_image_2' in f[ep_key]:
-                hdf_insert_images_for_end(f,ep_key,'robot0_eye_in_hand_image_2')
-            if 'robot0_eye_in_hand_image_2_light' in f[ep_key]:
-                hdf_insert_images_for_end(f,ep_key,'robot0_eye_in_hand_image_2_light')
-
-
-    if add_medium_episode:         #增加过渡数据集add_medium_num帧，每帧action平移量、旋转量各取一半
-        add_num=add_medium_num
-        for ep in f['data']:
-            print("adding medium episode:", ep)
-            act_lst = f['data/{}/actions'.format(ep)][:]
-            abs_rot_list = f['data/{}/obs/abs_rot'.format(ep)][:] if 'abs_rot' in f['data/{}/obs'.format(ep)] else None
-            act_lst, abs_rot_list, need_add,trans_id, rot_id=_add_medium_episode(act_lst,abs_rot_list,ac_dim, add_num)
-            if need_add:
-                row_1 = num + add_num
-
-                delete_useless_things(f, ep)
-                add_useless_things(f, row_1, ep)
-
-                del f['data/{}/actions'.format(ep)]
-                f['data/{}/actions'.format(ep)] = act_lst
-
-                if 'abs_rot' in f['data/{}/obs'.format(ep)]:
-                    del f['data/{}/obs/abs_rot'.format(ep)]
-                    f['data/{}/obs/abs_rot'.format(ep)] = abs_rot_list
-
-                ep_key = 'data/{}/obs'.format(ep)
-
-                if 'robot0_eye_in_hand_image' in f[ep_key]:
-                    hdf_insert_images_for_medium(f, ep_key, 'robot0_eye_in_hand_image', trans_id, rot_id, add_num, row_1)
-                if 'robot0_eye_in_hand_image_light' in f[ep_key]:
-                    hdf_insert_images_for_medium(f, ep_key, 'robot0_eye_in_hand_image_light', trans_id, rot_id, add_num, row_1)
-                if 'gaussian_img_kpt' in f[ep_key]:
-                    hdf_insert_images_for_medium(f, ep_key, 'gaussian_img_kpt', trans_id, rot_id, add_num, row_1)
-                if 'gaussian_img_ct' in f[ep_key]:
-                    hdf_insert_images_for_medium(f, ep_key, 'gaussian_img_ct', trans_id, rot_id, add_num, row_1)
     f.close()
     compute_num_samples(fn)
     split_train_val_from_hdf5(fn)

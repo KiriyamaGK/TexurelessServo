@@ -190,6 +190,7 @@ class Environment:
                 dRx=R.from_rotvec(np.array([rx/180*np.pi, 0, 0])).as_matrix()
                 dRy=R.from_rotvec(np.array([0, ry/180*np.pi, 0])).as_matrix()
                 dRz=R.from_rotvec(np.array([0, 0, rz/180*np.pi])).as_matrix()
+                dT[0:3,3] = tx, ty, tz
                 dT[0:3,0:3]=dRz @ dRy @ dRx
                 self.all_even_poses.append({
                     'x': tx, 'y': ty, 'z': tz,
@@ -237,7 +238,7 @@ class Environment:
                 trans_dev=self.init_horizon_trans if self.use_max_trans else np.sqrt(random.uniform(0, self.init_horizon_trans**2))
                 dT[0:3,3]=np.array([cos(ori)*trans_dev, sin(ori)*trans_dev,-self.init_vertical_trans])
 
-                if self.using_max_v_trans:
+                if not self.using_max_v_trans:
                     dT[2, 3]*=random.uniform(0, 1)
                 if self.using_minus_vertical:    #TODO:对z轴从下往上做了限制
                     if random.randint(0,1)>0.65:

@@ -1,8 +1,9 @@
 import os
 import numpy as np
 import json
+import threading
 
-from PyQt5.QtWidgets.QScroller import velocity
+from sympy.physics.units import velocity
 
 from real.environment import Environment
 from utils.transform import rotation_matrix_z,rmat2euler_rz_degree,compute_pos_error,error_pos_transform
@@ -19,7 +20,8 @@ from utils.policy import get_cur_goal_deltapos
 import atexit
 from utils.paths import path_completion,PROJECT_ROOT_DIR,determine_ckpt_dirs
 from scipy.spatial.transform import Rotation as R
-
+from real.teleop_with_joystick import Teleop
+from pynput import keyboard
 
 def cleanup():
     # print("success list:",success_list)
@@ -113,7 +115,67 @@ def get_goal_info(env):
 
     return {"img_1": img, "img_2": img2}
 
+def _on_key_press(key):
+    global global_start  # 声明修改全局变量
+    try:
+        if key.char == 's':
+            print("============teleosperation started,press F for finish==========")
+            global_start = True
+            time.sleep(0.1)
+
+    except AttributeError:
+        pass
+
+def teleop_and_pic(img_gt_1, img_gt_2,img_size):
+    global global_start  # 声明使用全局变量
+    global_start = False  # 重置状态
+
+    Teleop_ins = Teleop(robot_ins, trans_coeff=0.2, rot_coeff=0.1, use_rxry=True, use_z=True, use_camera=False,
+                        ctrl_freq=100, listen_finish=True)
+
+    print("============teleoperation process,print S for start============")
+    keyboard_listener = keyboard.Listener(on_press=_on_key_press)
+    keyboard_listener.start()
+
+    while not global_start:
+        pass
+    print("started")
+    keyboard_listener.stop()
+
+    teleop_thread = threading.Thread(target=Teleop_ins.operation, daemon=True)
+    teleop_thread.start()
+    while not Teleop_ins.stop_teleop:
+        rtn_dict = env.observation()
+        img = rtn_dict['img_1']
+        img2 = rtn_dict['img_2'] if 'img_2' in rtn_dict else None
+
+        # postprocess
+        img = clip_image(img, img_size, keep_right=True)
+        new_img=(0.5*img+0.5*img_gt_1).astype(np.uint8)
+        if img2 is not None:
+            img2 = clip_image(img2, img_size, keep_right=True)
+            new_img2 = (0.5 * img2 + 0.5 * img_gt_2).astype(np.uint8)
+            combined_img = np.hstack((new_img, new_img2))
+
+        else:
+            combined_img = new_img
+        cv2.imshow("Combined Image", combined_img)
+        cv2.waitKey(1)
+
+    time.sleep(0.1)
+    teleop_thread.join()
+
 if __name__ == '__main__':
+    #===================================manually_set_info===================================
+    initial_teleop = False
+    init_pos = np.array(
+        [-510.449,-106.808,147.588,-179.2,-0.534,-162.46])
+    goal_img_base_dir = "/media/kiriyamagk/One Touch/AlignAnything_real/25.06.22/hdf5/goal_images"
+    goal_idx = 1999
+    origin_color_type = "bgr"
+    # ===================================manually_set_info===================================
+
+
     config_dir= "../configs/rollout_real.json"
 
     fps = 30
@@ -145,11 +207,12 @@ if __name__ == '__main__':
     succ_rot = eval_metrics['success_rate']['rot_threshold']
 
     dof = config["dof"]
-    motion_scaler=config["motion_scaler"]
+    motion_scaler=config["motion_scalar"]
     init=config['init']
 
     expert_motion_type=config['expert_motion_type']
     record_video=config['record_video']
+
 
     rgb_key = [n for n in model_config["dataset"]['specific_obs_keys'] if ('image' in n or "img" in n)]
     low_dim_key = [n for n in model_config["dataset"]['specific_obs_keys'] if n not in rgb_key]
@@ -162,12 +225,21 @@ if __name__ == '__main__':
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = _setup_model(model_config)
+    velocity_dict ={"trans_vel": {"value": [0,0]},"rot_vel": {"value": 0}}
 
-    env = Environment(robot_address=config["hardware"]["robot_address"], dof=dof,down_to_grasp_distance=None,init=init,stop_policy=stop_policy,velocity=None,
+    env = Environment(robot_address=config["hardware"]["robot_address"], dof=dof,down_to_grasp_distance=None,init=init,stop_policy={"angle_eps":0,"dist_eps":0},velocity=velocity_dict,
                       **config["hardware"]["camera"])
     cam = env.camera
     robot_ins = env.robot_ins
 
+    if not initial_teleop:
+        # init_pos = robot_ins.get_gripper_TCP_pose()
+        in_desire_pt = init_pos
+        env.robot_ins.move_cart(in_desire_pt,tool=1, user=0, vel=40)
+    else:
+        img_1_gt = cv2.imread(os.path.join(goal_img_base_dir,"img1", f"{goal_idx}.png"))
+        img_2_gt = cv2.imread(os.path.join(goal_img_base_dir,"img2", f"{goal_idx}.png"))  # /255
+        teleop_and_pic(img_1_gt, img_2_gt,hdf5_img_size)
     env.set_target_coordinate(use_cur=True)
     env.init()
     env.setup_stop_policy(stop_policy)
@@ -211,8 +283,8 @@ if __name__ == '__main__':
             if cv2_visualize:
                 img_goal_vis = img_goal.copy()if img_goal2 is None else np.vstack((img_goal.copy(), img_goal2.copy()))
 
-            img_goal=conditioned_clip_and_resize(img=img_goal, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size)[:,:,::-1]
-            img_goal2 = conditioned_clip_and_resize(img=img_goal2, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size)[:,:,::-1] if img_goal2 is not None else None
+            img_goal=conditioned_clip_and_resize(img=img_goal, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size,keep_right=True)[:,:,::-1]
+            img_goal2 = conditioned_clip_and_resize(img=img_goal2, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size,keep_right=True)[:,:,::-1] if img_goal2 is not None else None
 
             env.action_abs_T(env.wgT_tar@env.g_tar_g_init_T)
 
@@ -248,17 +320,17 @@ if __name__ == '__main__':
                     if cv2.waitKey(1) & 0xFF == ord('q'):     #1ms
                         env.init()
                         break
-                img = conditioned_clip_and_resize(img=img, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size)[:,:,::-1]
-                img2 = conditioned_clip_and_resize(img=img2, img_h=img_h, img_w=img_w,hdf5_img_size=hdf5_img_size)[:,:,::-1] if img2 is not None else None
+                img = conditioned_clip_and_resize(img=img, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size,keep_right=True)[:,:,::-1]
+                img2 = conditioned_clip_and_resize(img=img2, img_h=img_h, img_w=img_w,hdf5_img_size=hdf5_img_size,keep_right=True)[:,:,::-1] if img2 is not None else None
 
                 obs_dict={
-                    "robot0_eye_in_hand_image": img,
-                    "robot0_eye_in_hand_image_goal": img_goal
+                    "robot0_eye_in_hand_image": img[:, :, ::-1],
+                    "robot0_eye_in_hand_image_goal": img_goal[:, :, ::-1]
                 }
 
                 if img2 is not None:
-                    obs_dict["robot0_eye_in_hand_image_2"]=img2
-                    obs_dict["robot0_eye_in_hand_image_2_goal"]=img_goal2
+                    obs_dict["robot0_eye_in_hand_image_2"]=img2[:, :, ::-1]
+                    obs_dict["robot0_eye_in_hand_image_2_goal"]=img_goal2[:, :, ::-1]
 
                 obs_dict=input_dict_preprocess(obs_dict,rollout=True)
                 pred=model(obs_dict)
@@ -320,21 +392,22 @@ if __name__ == '__main__':
                         success=1 if (error_rot_lst[-1]<=succ_rot and error_trans_lst[-1]<=succ_tr) else 0
                         success_list.append([obj_id,success])
                         #均匀分布绘图
-                        if idx % freq_per_pos == 0:
-                            tmp_dict = env.all_even_poses[env.evenly_posid]
-                            tmp_dict['success'] = success
-                            tmp_dict["error_trans"]=[error_trans_lst[-1]]
-                            tmp_dict["error_transz"] = [z_error_lst[-1]]
-                            tmp_dict["error_transxy"] = [np.sqrt(error_trans_lst[-1]**2-z_error_lst[-1]**2)]
-                            tmp_dict["error_rot"]=[error_rot_lst[-1]]
-                            success_even_distributed_list.append(tmp_dict)
+                        if config["init"]["uniform_evaluation"]["utilized"]:
+                            if idx % freq_per_pos == 0:
+                                tmp_dict = env.all_even_poses[env.evenly_posid]
+                                tmp_dict['success'] = success
+                                tmp_dict["error_trans"]=[error_trans_lst[-1]]
+                                tmp_dict["error_transz"] = [z_error_lst[-1]]
+                                tmp_dict["error_transxy"] = [np.sqrt(error_trans_lst[-1]**2-z_error_lst[-1]**2)]
+                                tmp_dict["error_rot"]=[error_rot_lst[-1]]
+                                success_even_distributed_list.append(tmp_dict)
 
-                        else:
-                            success_even_distributed_list[-1]["success"] += success
-                            success_even_distributed_list[-1]["error_trans"].append(error_trans_lst[-1])
-                            success_even_distributed_list[-1]["error_transz"].append(z_error_lst[-1])
-                            success_even_distributed_list[-1]["error_transxy"].append(np.sqrt(error_trans_lst[-1]**2-z_error_lst[-1]**2))
-                            success_even_distributed_list[-1]["error_rot"].append(error_rot_lst[-1])
+                            else:
+                                success_even_distributed_list[-1]["success"] += success
+                                success_even_distributed_list[-1]["error_trans"].append(error_trans_lst[-1])
+                                success_even_distributed_list[-1]["error_transz"].append(z_error_lst[-1])
+                                success_even_distributed_list[-1]["error_transxy"].append(np.sqrt(error_trans_lst[-1]**2-z_error_lst[-1]**2))
+                                success_even_distributed_list[-1]["error_rot"].append(error_rot_lst[-1])
 
                     if eval_metrics["trajectory"]["utilized"] and use_eval_metrics:
                         traj_pth=os.path.join(obj_pth, "traj")
