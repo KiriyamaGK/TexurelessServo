@@ -14,12 +14,12 @@ if __name__ == '__main__':
     only_rot_caption=False
     color_channel_inverse = False
 
-    img_wrist_vis=False
+    img_wrist_vis = True
     img2_wrist_vis = False
     img_wrist_light_vis=False
-    goal_image = True
-    goal_image2 = True
-    save_goal=True
+    goal_image = False
+    goal_image2 = False
+    save_goal = False
 
     hdf = h5py.File(hdf_pth, 'r')
     mp4=cv2.VideoWriter_fourcc(*'mp4v')
