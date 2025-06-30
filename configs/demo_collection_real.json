@@ -6,16 +6,17 @@
             "h": 480,
             "fps": 30,
             "cam_devices": {
-               "img_1":"215222073421"
+               "img_1":"215222073421",
+                "img_2": "233622076143"
             },
-            "use_devices_type": ["img_1"]
+            "use_devices_type": ["img_1","img_2"]
         }
     },
     "overall_setting":{
         "dataset_base_dir": "/home/user0/dataset",
-        "file_name": "25.03.111",
-        "demo_total_num":40,
-        "desire_pt_change_cycle":130,
+        "file_name": "25.06.23",
+        "demo_total_num": 500,
+        "desire_pt_change_cycle":10000,
         "replace_existed_hdf5": false,
         "delete_last_demo": false
     },
@@ -24,31 +25,36 @@
             "dof": 6,
             "down_to_grasp_distance": 45,
             "init": {
-                "conditioned_sampling": true,
+                "uniform_evaluation": {
+                    "utilized": false
+                },
+                "conditioned_sampling": false,
                 "init_horizon_trans": {
-                    "value": 0.005,
+                    "value": 20,
                     "use_max_h_trans": false
                 },
                 "init_vertical_trans": {
-                    "value": 0.05,
-                    "using_max_v_trans": false,
+                    "value": 20,
+                    "using_max_v_trans": true,
                     "using_minus": true
                 },
                 "init_rot": {
-                    "value": [8, 8, 40],
+                    "value": [8, 8, 8],
                     "use_max_rot": false
                 }
             },
             "stop_policy":{
-                "angle_eps": 0.5,
-                "dist_eps": 0.001
+                "angle_eps": 0.2,
+                "dist_eps": 0.2
             },
             "velocity": {
                 "trans_vel": {
-                    "value": [0.0006,0.0006]
+                    "utilized":true,
+                    "value": [0.1,0.1]
                 },
                 "rot_vel": {
-                    "value": 0.5
+                    "utilized": true,
+                    "value": 0.2
                 },
                 "uniform_vel": {
                     "utilized":false,
@@ -58,6 +64,8 @@
         },
 
         "data_collect_freq": 7,
+        "ctrl_freq": 20,
+
         "img": {
             "save_type": "rgb",
             "size": 300

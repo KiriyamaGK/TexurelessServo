@@ -12,8 +12,10 @@ from utils.hdf5 import add_useless_things, split_train_val_from_hdf5, add_env_me
 import h5py
 from utils.input_process import clip_image
 from real.environment import Environment
+from real.teleop_with_joystick import Teleop
 from data.process_hdf5 import _disturb_abs_rot,_portion_last_episode,_add_end_episode,_add_medium_episode,insert_imgs
-
+import atexit
+from pynput import keyboard
 
 def filter_translation(input,thres):
     assert thres>0
@@ -28,21 +30,110 @@ def get_goal_info(env):
 
     return {"img_goal": img, "img_goal2": img2}
 
+def filter_pos(pos):
+    for i in range(6):
+        if abs(pos[i])<1e-10:
+            pos[i]=0
+    return pos
+
+def cleanup():
+    cam.release()
+    add_env_meta(new_f_out)
+    add_config(new_f_out, config)
+    new_f_out.close()
+    compute_num_samples(dataset_dir)
+    split_train_val_from_hdf5(dataset_dir, val_ratio=0.1)
+
+##TODO : Python的atexit注册的函数会在主线程退出且仅剩守护线程时触发,因此必须要让其他线程设置为守护线程（daemon = True）
+atexit.register(cleanup)
+
+global_start = False  # 全局变量
+
+
+def _on_key_press(key):
+    global global_start  # 声明修改全局变量
+    try:
+        if key.char == 's':
+            print("============teleosperation started,press F for finish==========")
+            global_start = True
+            time.sleep(0.1)
+
+    except AttributeError:
+        pass
+
+def teleop_and_pic(img_gt_1, img_gt_2,img_size):
+    global global_start  # 声明使用全局变量
+    global_start = False  # 重置状态
+
+    Teleop_ins = Teleop(robot_ins, trans_coeff=0.2, rot_coeff=0.1, use_rxry=True, use_z=True, use_camera=False,
+                        ctrl_freq=100, listen_finish=True)
+
+    print("============teleoperation process,print S for start============")
+    keyboard_listener = keyboard.Listener(on_press=_on_key_press)
+    keyboard_listener.start()
+
+    while not global_start:
+        pass
+    print("started")
+    keyboard_listener.stop()
+
+    teleop_thread = threading.Thread(target=Teleop_ins.operation, daemon=True)
+    teleop_thread.start()
+    while not Teleop_ins.stop_teleop:
+        rtn_dict = env.observation()
+        img = rtn_dict['img_1']
+        img2 = rtn_dict['img_2'] if 'img_2' in rtn_dict else None
+
+        # postprocess
+        img = clip_image(img, img_size, keep_right=True)
+        new_img=(0.5*img+0.5*img_gt_1).astype(np.uint8)
+        if img2 is not None:
+            img2 = clip_image(img2, img_size, keep_right=True)
+            new_img2 = (0.5 * img2 + 0.5 * img_gt_2).astype(np.uint8)
+            combined_img = np.hstack((new_img, new_img2))
+
+        else:
+            combined_img = new_img
+        cv2.imshow("Combined Image", combined_img)
+        cv2.waitKey(1)
+
+    time.sleep(0.1)
+    teleop_thread.join()
+
+
 
 
 
 if __name__=='__main__':
     ##TODO:数据采集和测试阶段一共算了四种类型的dT，其中env.sample_init_pos算了g_tar_gT；get_action算了g_gtar(和缩短后的dT)；need_init和need_init_eval在compute_error的时候各自算了一次（见env相关函数）
+    # ===================================manually_set_info===================================
+    initial_teleop = True
+    init_pos = np.array(
+        [-510.449,-106.808,147.588,-179.2,-0.534,-162.46])
+    goal_img_base_dir = "/media/kiriyamagk/One Touch/AlignAnything_real/25.06.22/hdf5/goal_images"
+    goal_idx=1999
+    origin_color_type = "bgr"
+    # ===================================manually_set_info===================================
 
-    current_pt_desire=True
 
     config_dir = "../configs/demo_collection_real.json"
     with open(config_dir, "r") as j:
         config = json.load(j)
 
     env=Environment(robot_address=config["hardware"]["robot_address"],**config["demo_collection"]["env"],**config["hardware"]["camera"])
+
     cam=env.camera
     robot_ins=env.robot_ins
+
+    if not initial_teleop:
+        # init_pos = robot_ins.get_gripper_TCP_pose()
+        in_desire_pt = init_pos
+        env.robot_ins.move_cart(filter_pos(in_desire_pt),tool=1, user=0, vel=40)
+    else:
+        img_1_gt = cv2.imread(os.path.join(goal_img_base_dir,"img1", f"{goal_idx}.png"))
+        img_2_gt = cv2.imread(os.path.join(goal_img_base_dir,"img2", f"{goal_idx}.png"))  # /255
+        teleop_and_pic(img_1_gt, img_2_gt,config["demo_collection"]["img"]["size"])
+
     env.set_target_coordinate(use_cur=True)
     env.init()
 
@@ -54,6 +145,7 @@ if __name__=='__main__':
     replace_existed_hdf5 = config["overall_setting"]["replace_existed_hdf5"]  # TODO:remember to use
     delete_last_demo = config["overall_setting"]["delete_last_demo"]
 
+
     #velocity
     trans_vel = config["demo_collection"]["env"]["velocity"]['trans_vel']  # mm
     rot_vel = config["demo_collection"]["env"]["velocity"]['rot_vel']  # deg
@@ -62,6 +154,7 @@ if __name__=='__main__':
     #demo_collection:
       ##收集数据频率
     data_collect_freq = config["demo_collection"]["data_collect_freq"]
+    ctrl_freq = config["demo_collection"]["ctrl_freq"]
 
       ##img相关
     img_save_type = config["demo_collection"]["img"]["save_type"]
@@ -92,11 +185,6 @@ if __name__=='__main__':
 
     existed_demo_num=0
 
-    init_pos = robot_ins.get_gripper_TCP_pose()
-    init_pos[3] = -180
-    init_pos[4] = 0
-    in_desire_pt = init_pos
-
     for uu in range(demo_total_num):
         print("=====================collecting demo_{}=====================".format(uu))
         #preprocess
@@ -120,11 +208,9 @@ if __name__=='__main__':
             action_path = 'data/demo_{}/actions'.format(uu)
             pos_path = 'data/demo_{}/delta_pos_curgoal'.format(uu)
 
-        if uu == 0:
-            desire_pt = in_desire_pt
-        elif uu % desire_pt_change_cycle == 0:
-            desire_pt = env.place(p_0=desire_pt)
-            env.set_target_coordinate(use_cur=True)  #TODO: 这部分和sample init pos配合逻辑有些问题
+        if uu!=0 and uu % desire_pt_change_cycle == 0:
+            teleop_and_pic(img_lst[-1], img2_lst[-1],img_size)
+            env.set_target_coordinate(use_cur=True)
 
         action_list = []
         img_lst=[]
@@ -136,15 +222,11 @@ if __name__=='__main__':
         flag_tr = False
         flag_rot = False
 
-        # move to initial T,and get info
-        env.action_abs_T(env.wgT_tar@env.g_tar_g_init_T)
-        init_transform_dict = env.return_cur_pos_info()
-
         # get goal info
         goal_dict = get_goal_info(env)
 
         # action back to init T
-        env.action_abs_T(init_transform_dict["wgT"])
+        env.action_abs_T(env.wgT_tar@env.g_tar_g_init_T)
 
 
         def robo_operator():
@@ -154,23 +236,30 @@ if __name__=='__main__':
             global rot_vel
             global uniform_vel
             global quit
+            global ctrl_freq
 
             while not quit:
+                tt=time.time()
                 act_dict = get_expert_policy(wgT_tar=env.wgT_tar, wgT=env.wgT, trans_vel=trans_vel, rot_vel=rot_vel,
                                              uniform_vel=uniform_vel, dist_eps=env.dist_eps, angle_eps=env.angle_eps,
-                                             motion_type="simultaneously", dof=6, need_trans_unit_transform=False)
+                                             motion_type="simultaneously", dof=6, need_trans_unit_transform=False,fine_print=False,real=True)
+                # print("vel_rot: ",act_dict["vel_rot"])
+                # print("vel_trans: ",act_dict["vel_tr"])
+                # print("delta_pos: ",act_dict["cur_goal_delta_pose"])
                 env.action_dT(act_dict["dT"])
-                time.sleep(0.008)
+                dt=time.time()-tt
+                time.sleep(max(0,1/ctrl_freq-dt))
+                # print("actual_ctrl_freq: ",1/(time.time()-tt))
+            # operate.join()
 
         # robo_operator()
-        operate = threading.Thread(target=robo_operator, daemon=False)
+        operate = threading.Thread(target=robo_operator, daemon = True)
+        ##TODO daemon = True的含义为：设置target为守护线程，即主程序中断，robo_operator也会中断。此处设置daemon=True是必须的，因为这么做是为了配合atexit()函数(参见atexit注释)
+
         operate.start()
-        quit = False
         tt = time.time()
 
         t0 = time.time()
-        flag_flag = False  # 表示平动刚完成
-        flag_flag_flag = False
         # gkkk=0
 
         while True:
@@ -182,59 +271,64 @@ if __name__=='__main__':
                 img = rtn_dict['img_1']
                 img2 = rtn_dict['img_2'] if 'img_2' in rtn_dict else None
 
+
                 wgT_tar = env.wgT_tar
                 wgT = env.wgT
                 act_dict = get_expert_policy(wgT_tar=wgT_tar, wgT=wgT, trans_vel=trans_vel, rot_vel=rot_vel,
                                              uniform_vel=uniform_vel, dist_eps=env.dist_eps, angle_eps=env.angle_eps,
-                                             motion_type="simultaneously", dof=6,need_trans_unit_transform=False)  ##TODO:need to be reused in robo_operator
+                                             motion_type="simultaneously", dof=6,need_trans_unit_transform=False,fine_print=False,real=True)  ##TODO:need to be reused in robo_operator
 
                 vel_tr = filter_translation(act_dict['vel_tr'], thres=1e-5)
                 vel_rot = act_dict['vel_rot']  # 3dof:绕世界系 6dof:绕夹爪系
                 dT = act_dict["dT"]
                 action_list.append(np.concatenate((vel_tr, vel_rot)))
 
-            if record_pose:
-                delta_pose_list.append(act_dict['cur_goal_delta_pose'])
-
-            # postprocess
-            img_vis = img.copy()
-            img = clip_image(img, img_size)
-            if img_save_type == "rgb":
-                img = img[:, :, ::-1]
-            img_lst.append(img)
-
-            if img2 is not None:
-                img2_vis = img2.copy()
-                img2 = clip_image(img2, img_size)
-                if img_save_type == "rgb":
-                    img2 = img2[:, :, ::-1]
-                img2_lst.append(img2)
-
-                combined_img = np.hstack((img_vis, img2_vis))
-            else:
-                combined_img = img_vis
-
-            cv2.imshow("Combined Image", combined_img)
-            cv2.waitKey(1)
-
-            #env.action_dT(dT) ##TODO:应该在robo_operator被使用
-
-            if env.reinit():
-                operate.join()
-                quit = True
-                cv2.destroyAllWindows()
-                print('...录制结束，数据处理中...')
-
-                action_list.append(np.array([0, 0, 0, 0, 0, 0]))
-
-                img_goal = clip_image(goal_dict["img_goal"], img_size)
-                img_lst.append(img_goal)
-
-                if goal_dict["img_goal2"] is not None:
-                    im_goal2 = clip_image(goal_dict["img_goal2"], img_size)
-                    img2_lst.append(im_goal2)
                 if record_pose:
-                    delta_pose_list.append(np.zeros(6))
+                    delta_pose_list.append(act_dict['cur_goal_delta_pose'])
+
+                # postprocess
+                img_vis = img.copy()
+                img = clip_image(img, img_size,keep_right=True)
+                if img_save_type == "rgb":
+                    img = img[:, :, ::-1]
+                img_lst.append(img)
+
+                if img2 is not None:
+                    img2_vis = img2.copy()
+                    img2 = clip_image(img2, img_size,keep_right=True)
+                    if img_save_type == "rgb":
+                        img2 = img2[:, :, ::-1]
+                    img2_lst.append(img2)
+
+                    combined_img = np.hstack((img_vis, img2_vis))
+                else:
+                    combined_img = img_vis
+
+                cv2.imshow("Combined Image", combined_img)
+                cv2.waitKey(1)
+
+                #env.action_dT(dT) ##TODO:应该在robo_operator被使用
+
+                if env.reinit():
+                    quit = True
+                    operate.join()
+                    cv2.destroyAllWindows()
+                    print('...录制结束，数据处理中...')
+
+                    action_list.append(np.array([0, 0, 0, 0, 0, 0]))
+
+                    img_goal = clip_image(goal_dict["img_goal"], img_size,keep_right=True)
+                    if img_save_type == "rgb":
+                        img_goal = img_goal[:, :, ::-1]
+                    img_lst.append(img_goal)
+
+                    if goal_dict["img_goal2"] is not None:
+                        im_goal2 = clip_image(goal_dict["img_goal2"], img_size,keep_right=True)
+                        if img_save_type == "rgb":
+                            im_goal2 = im_goal2[:, :, ::-1]
+                        img2_lst.append(im_goal2)
+                    if record_pose:
+                        delta_pose_list.append(np.zeros(6))
 
                     # post process
                     if disturb_abs_rot["utilized"]:
@@ -276,7 +370,10 @@ if __name__=='__main__':
                     epi_length = len(img_lst)
                     assert epi_length == len(action_list)
                     if existed_demo_num >= 1:
-                        add_useless_things(new_f_out=new_f_out, demo_ind=uu + existed_demo_num, epi_len=epi_length)
+                        if delete_last_demo:
+                            add_useless_things(new_f_out=new_f_out, demo_ind=uu + existed_demo_num-1, epi_len=epi_length)
+                        else:
+                            add_useless_things(new_f_out=new_f_out, demo_ind=uu + existed_demo_num, epi_len=epi_length)
                     else:
                         add_useless_things(new_f_out=new_f_out, demo_ind=uu, epi_len=epi_length)
                     new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image', data=img_lst)
@@ -290,15 +387,8 @@ if __name__=='__main__':
                     new_f_out.create_dataset(action_path, data=action_list)
                     print("action_lst-1:", action_list[-1])
                     print("[INFO] demo_{} collected successfully.".format(uu))
-                break
+                    break
 
-    cam.release()
-
-    add_env_meta(new_f_out)
-    add_config(new_f_out,config)
-    new_f_out.close()
-    compute_num_samples(dataset_dir)
-    split_train_val_from_hdf5(dataset_dir, val_ratio=0.1)
 
 
 

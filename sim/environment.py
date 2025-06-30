@@ -375,6 +375,7 @@ class Environment(object):
                 dRy=R.from_rotvec(np.array([0, ry/180*np.pi, 0])).as_matrix()
                 dRz=R.from_rotvec(np.array([0, 0, rz/180*np.pi])).as_matrix()
                 dT[0:3,0:3]=dRz @ dRy @ dRx
+                dT[0:3,3] = tx, ty, tz
                 self.all_even_poses.append({
                     'x': tx, 'y': ty, 'z': tz,
                     'rx': rx, 'ry': ry, 'rz': rz,
@@ -425,7 +426,7 @@ class Environment(object):
                 trans_dev=self.init_horizon_trans if self.use_max_trans else np.sqrt(random.uniform(0, self.init_horizon_trans**2))
                 dT[0:3,3]=np.array([cos(ori)*trans_dev, sin(ori)*trans_dev,-self.init_vertical_trans])
 
-                if self.using_max_v_trans:
+                if self.using_max_v_trans: #TODO:这条分支是错的
                     dT[2, 3]*=random.uniform(0, 1)
                 if self.using_minus_vertical:
                     if random.randint(0,1)>0.65:

@@ -6,16 +6,15 @@
             "h": 480,
             "fps": 30,
             "cam_devices": {
-                "wrist": "215222073421"
+               "img_1":"215222073421",
+                "img_2": "233622076143"
             },
-            "use_devices_type": [
-                "wrist"
-            ]
+            "use_devices_type": ["img_1","img_2"]
         }
     },
-    "logs_dir": "trained_models/trial/2025-03-17_13-04-57/config.json",
-    "ckpts_dir": "all",
-    "eval_epoch_num": 5,
+    "logs_dir": "trained_models/trial/2025-06-29_01-02-25/config.json",
+    "ckpts_dir": [150],
+    "eval_epoch_num": 50,
     "bgr2rgb": false,
     "cv2_visualize": true,
     "expert_motion_type": "trans_first",
@@ -28,47 +27,47 @@
     "init": {
         "uniform_evaluation": {
             "freq_per_pos": 3,
-            "utilized": true,
+            "utilized": false,
             "trans": {
                 "x":{
-                    "range": [0.005, 0.005],
-                    "inteval":0.005
+                    "range": [-5, 5],
+                    "inteval":5
                 },
                 "y": {
-                    "range": [0.005, 0.005],
-                    "inteval":0.005
+                    "range": [-5, 5],
+                    "inteval":5
                 },
                 "z": {
-                    "range": [0, 0.005],
-                    "inteval":0.005
+                    "range": [0,25],
+                    "inteval":5
                 }
             },
             "rot": {
                 "rx":{
-                    "range": [5, 5],
+                    "range": [-5, 5],
                     "inteval":2
                 },
                 "ry":{
-                    "range": [5, 5],
+                    "range": [-5, 5],
                     "inteval":2
                 },
                 "rz": {
-                    "range": [10,10],
+                    "range": [-10,10],
                     "inteval":5
                 }
             }
     },
         "init_horizon_trans": {
-            "value": 0.005,
+            "value": 5,
             "use_max_h_trans": false
         },
         "init_vertical_trans": {
-            "value":0.05,
+            "value": 20,
             "using_max_v_trans": false,
             "using_minus": false
         },
         "init_rot": {
-            "value":[8,8,40],
+            "value":[8,8,25],
             "use_max_rot": false
         }
     },
@@ -77,7 +76,7 @@
         "utilized": true,
         "success_rate": {
             "utilized": true,
-            "trans_threshold": 0.001,
+            "trans_threshold": 1,
             "rot_threshold": 0.5
         },
         "error_curve":{
@@ -94,8 +93,8 @@
         }
     },
     "stop_policy": {
-        "trans_vel_threshold": 0.0001,
-        "rot_vel_threshold": 0.05,
+        "trans_vel_threshold": 0.02,
+        "rot_vel_threshold": 0.02,
         "in_threshold_range_time":1,
         "use_time_upperbound":20
     }
