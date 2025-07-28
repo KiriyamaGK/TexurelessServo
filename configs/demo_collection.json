@@ -37,6 +37,16 @@
             "normalize_scaler": 1
         },
         "record_pose": true,
+        "dagger": {
+            "utilized": false,
+            "start_episode": 10,
+            "frequency": 5,
+            "episodes_per_dagger": 3,
+            "position_threshold": 0.01,
+            "check_frame_interval": 5,
+            "model_path": null,
+            "train_frequency": 5
+        },
 
         "init": {
             "init_transform_frame": "grip",

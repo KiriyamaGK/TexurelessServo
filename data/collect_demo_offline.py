@@ -16,6 +16,11 @@ import cv2
 from utils.input_process import clip_image
 from utils.policy import get_expert_policy
 from data.process_hdf5 import _disturb_abs_rot,_portion_last_episode,_add_end_episode,_add_medium_episode,insert_imgs
+from utils.dagger import compute_position_distance, load_policy_model, get_policy_action, aggregate_dataset, train_policy
+import torch
+from networks.helpers import get_loss_fn, get_optimizer_cls, get_network_cls
+from torch.utils.data import DataLoader
+from dataset.dataset import dataset_factory
 
 def filter_translation(input,thres):
     assert thres>0
@@ -53,6 +58,82 @@ def get_goal_info(env):
 
     return {"img_goal":img,"img_goal2":img2,"img_light_goal":img_light,"img_light_goal2":img2_light,"img_dep_goal":im_dep,"img_dep_goal2":im_dep2}
 
+def prepare_observation_for_policy(img, img_goal, img2=None, img2_goal=None, img_h=220, device=None):
+    """
+    准备输入给策略模型的观察数据
+    """
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # 裁剪和处理图像
+    img = clip_image(img, img_h)
+    img_goal = clip_image(img_goal, img_h)
+    
+    # 转换为张量
+    img_tensor = torch.FloatTensor(img).permute(2, 0, 1).unsqueeze(0) / 255.0  # 归一化并调整维度
+    img_goal_tensor = torch.FloatTensor(img_goal).permute(2, 0, 1).unsqueeze(0) / 255.0
+    
+    obs_dict = {
+        "robot0_eye_in_hand_image": img_tensor,
+        "robot0_eye_in_hand_image_goal": img_goal_tensor
+    }
+    
+    # 如果有第二个相机视角，也处理
+    if img2 is not None and img2_goal is not None:
+        img2 = clip_image(img2, img_h)
+        img2_goal = clip_image(img2_goal, img_h)
+        img2_tensor = torch.FloatTensor(img2).permute(2, 0, 1).unsqueeze(0) / 255.0
+        img2_goal_tensor = torch.FloatTensor(img2_goal).permute(2, 0, 1).unsqueeze(0) / 255.0
+        
+        obs_dict["robot0_eye_in_hand_image_2"] = img2_tensor
+        obs_dict["robot0_eye_in_hand_image_2_goal"] = img2_goal_tensor
+    
+    return obs_dict
+
+def setup_policy_model(config_path="../configs/train_mlp.json", checkpoint_path=None):
+    """
+    设置策略模型
+    """
+    # 加载配置
+    with open(config_path, "r") as j:
+        config = json.load(j)
+    
+    # 设置设备
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # 设置模型
+    model_cls, need_init_params = get_network_cls(config["algorithm"]["policy"]["name"])
+    if need_init_params:
+        model = model_cls(
+            input_low_dim=config["dataset"]["input_low_dim"],
+            output_dim=config["dataset"]["output_dim"],
+            obs_keys=config["dataset"]["specific_obs_keys"],
+            batch_size=config["training"]["batch_size"],
+            seq_length=config["dataset"]["seq_length"],
+            training=False,  # 推理模式
+            **config["algorithm"]["policy"]["params"]
+        )
+    else:
+        model = model_cls()
+    
+    # 加载预训练权重
+    if checkpoint_path:
+        model = load_policy_model(checkpoint_path, model, device)
+    
+    # 设置优化器和损失函数，用于在线学习
+    optimizer = get_optimizer_cls(config["algorithm"]["optimizer"]["name"])(
+        model.parameters(), **config["algorithm"]["optimizer"]["params"]
+    )
+    
+    criterion = get_loss_fn(
+        config["algorithm"]["loss"]["name"],
+        config["algorithm"]["loss"]["weight"],
+        config["dataset"]["seq_length"],
+        config["dataset"]["output_dim"]
+    )
+    
+    return model, optimizer, criterion, config
+
 if __name__ == '__main__':
     img_w=220
     img_h=220
@@ -79,6 +160,28 @@ if __name__ == '__main__':
     depth_info=config["demo_collection"]['depth']
     record_pose=config["demo_collection"]['record_pose']
     third_view_camera=config["demo_collection"]['third_view_camera']
+
+    #================================dagger===============================
+    # dagger settings
+    use_dagger = False
+    dagger_config = {}
+    if "dagger" in config["demo_collection"]:
+        dagger_config = config["demo_collection"]["dagger"]
+        use_dagger = dagger_config["utilized"]
+    
+    # 如果使用DAgger，设置策略模型
+    policy_model = None
+    optimizer = None
+    criterion = None
+    model_config = None
+    if use_dagger:
+        policy_model, optimizer, criterion, model_config = setup_policy_model(
+            config_path="../configs/train_mlp.json",
+            checkpoint_path=dagger_config.get("model_path", None)
+        )
+        # 确保模型处于评估模式
+        policy_model.eval()
+    #================================dagger===============================
 
     trans_vel=config["demo_collection"]["velocity"]['trans_vel'] #m
     rot_vel=config["demo_collection"]["velocity"]['rot_vel']    #deg
@@ -121,8 +224,40 @@ if __name__ == '__main__':
             new_f_out = h5py.File(dataset_dir, "w")
 
     existed_demo_num = 0
+
+    #================================dagger===============================
+    # DAgger相关计数器
+    dagger_episodes_done = 0
+    non_dagger_episodes_count = 0
+    current_dagger_episodes = 0
+    
+    # 用于存储DAgger收集的新数据
+    dagger_new_data = {
+        "obs": [],
+        "actions": [],
+        "delta_pos_curgoal": []
+    }
+    #================================dagger===============================
+    
     for idx in range(demo_total_num):
         print("[INFO] start collecting demo_{} ...".format(idx))
+        
+        #================================dagger===============================
+        # 判断是否应该使用DAgger策略
+        is_dagger_episode = False
+        if use_dagger and idx >= dagger_config["start_episode"]:
+            if non_dagger_episodes_count >= dagger_config["frequency"]:
+                is_dagger_episode = True
+                current_dagger_episodes += 1
+                if current_dagger_episodes >= dagger_config["episodes_per_dagger"]:
+                    current_dagger_episodes = 0
+                    non_dagger_episodes_count = 0
+            else:
+                non_dagger_episodes_count += 1
+                
+        if is_dagger_episode:
+            print("[INFO] Using DAgger strategy for episode {}".format(idx))
+        #================================dagger===============================
 
         if idx==0:
             if 'data' in new_f_out and not replace_existed_hdf5:
@@ -138,6 +273,7 @@ if __name__ == '__main__':
             pos_path = 'data/demo_{}/delta_pos_curgoal'.format(idx)
 
         action_list=[]
+        expert_action_list=[] # 专家动作列表（用于DAgger的标签）
         img_lst=[]
         img_light_list=[]
         im_dep_lst=[]
@@ -152,7 +288,13 @@ if __name__ == '__main__':
         goal_dict=get_goal_info(env)
         env.act_with_abs_dict(init_transform_dict)
 
+        #================================dagger===============================
+        frame_counter = 0
+        #================================dagger===============================
+        
         while True:
+            frame_counter += 1
+            
             if not use_light_key:
                 rtn_dict=env.observation(random_light_dir=random_light_dir,use_prob=True) #TODO:记得修改
                 img_light = None
@@ -170,16 +312,59 @@ if __name__ == '__main__':
 
             wgT_tar=env.wgT_tar
             wgT=env.wgT
-            act_dict=get_expert_policy(wgT_tar=wgT_tar,wgT=wgT,trans_vel=trans_vel,rot_vel=rot_vel,uniform_vel=uniform_vel,dist_eps=env.dist_eps,angle_eps=env.angle_eps,motion_type=motion_type,dof=dof)
-
-            vel_tr=filter_translation(act_dict['vel_tr'],thres=1e-7)
-            vel_rot=act_dict['vel_rot'] #3dof:绕世界系 6dof:绕夹爪系
-            dT=act_dict["dT"]
-            # vel = np.concatenate((vel_tr,np.array([vel_rot]))) if not isinstance(vel_rot,np.ndarray) else  np.concatenate((vel_tr,vel_rot))
-            # print(np.concatenate((vel_tr,vel_rot)))
-            action_list.append(np.concatenate((vel_tr,vel_rot)))
+            
+            # 获取专家策略的动作（总是计算，因为DAgger需要专家标签）
+            expert_act_dict=get_expert_policy(wgT_tar=wgT_tar,wgT=wgT,trans_vel=trans_vel,rot_vel=rot_vel,uniform_vel=uniform_vel,dist_eps=env.dist_eps,angle_eps=env.angle_eps,motion_type=motion_type,dof=dof)
+            
+            vel_tr=filter_translation(expert_act_dict['vel_tr'],thres=1e-7)
+            vel_rot=expert_act_dict['vel_rot'] #3dof:绕世界系 6dof:绕夹爪系
+            expert_dT=expert_act_dict["dT"]
+            expert_action = np.concatenate((vel_tr,vel_rot))
+            
+            # 默认使用专家动作
+            dT = expert_dT
+            action = expert_action
+            
+            # 如果是DAgger策略，则使用当前策略生成动作，但保存专家标签
+            if is_dagger_episode and policy_model is not None:
+                # 准备观察数据
+                obs_dict = prepare_observation_for_policy(
+                    img, goal_dict["img_goal"], 
+                    img2, goal_dict["img_goal2"] if goal_dict["img_goal2"] is not None else None,
+                    img_h=img_h
+                )
+                
+                # 使用策略模型预测动作
+                policy_action = get_policy_action(policy_model, obs_dict)
+                
+                if isinstance(policy_action, dict) and "actions" in policy_action:
+                    policy_action = policy_action["actions"][0]  # 取批次中的第一个动作
+                
+                # 使用策略动作，但保存专家动作作为标签
+                action = policy_action
+                
+                # 从策略动作构建变换矩阵dT
+                if dof == 3:
+                    dT = np.eye(4)
+                    dT[0:2, 3] = policy_action[:2]  # 前两个元素是平移
+                    dT[0:3, 0:3] = rotation_matrix_z(policy_action[2] / 180 * np.pi)  # 最后一个元素是旋转
+                else:
+                    dT = np.eye(4)
+                    dT[0:3, 3] = policy_action[:3]  # 前三个元素是平移
+                    rot_vec = policy_action[3:] / 180 * np.pi  # 后三个元素是旋转向量
+                    from scipy.spatial.transform import Rotation as R
+                    dT[0:3, 0:3] = R.from_rotvec(rot_vec).as_matrix()
+                
+                # 打印策略动作和专家动作的差异
+                print(f"[DAgger] Policy Action: {action}, Expert Action: {expert_action}")
+            
+            # 保存动作（对于普通收集是实际执行的动作，对于DAgger是专家动作）
+            action_list.append(action)
+            if is_dagger_episode:
+                expert_action_list.append(expert_action)
+            
             if record_pose:
-                delta_pose_list.append(act_dict['cur_goal_delta_pose'])
+                delta_pose_list.append(expert_act_dict['cur_goal_delta_pose'])
 
             if dof==3:
                 rz = rmat2euler_rz_degree(wgT)
@@ -208,11 +393,26 @@ if __name__ == '__main__':
             if im_dep2 is not None:
                 im_dep2=clip_image(im_dep2,img_h)
                 im_dep2_lst.append(im_dep2[..., np.newaxis])
-            # print(iii)
-            # iii+=1
+            
+            #================================dagger===============================
+            # DAgger策略检查物体和夹爪位置
+            if is_dagger_episode and frame_counter % dagger_config["check_frame_interval"] == 0:
+                distance = compute_position_distance(wgT, wgT_tar)
+                if distance < dagger_config["position_threshold"]:
+                    print(f"[DAgger] Position threshold reached at frame {frame_counter}, distance: {distance}")
+                    break
+            #================================dagger===============================
+            
+            # 正常的移动
             env.action(dT)
             if env.reinit():
-                action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
+                if is_dagger_episode:
+                    # 对于DAgger，最后添加专家动作作为终止动作
+                    action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
+                    expert_action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
+                else:
+                    # 普通模式下添加零动作
+                    action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
 
                 img_goal = clip_image(goal_dict["img_goal"], img_h)
                 img_lst.append(img_goal)
@@ -244,6 +444,8 @@ if __name__ == '__main__':
 
                 if portion_last_episode["utilized"]:
                     action_list,_=_portion_last_episode(action_list,portion_last_episode["portion_last_num"],dof)
+                    if is_dagger_episode:
+                        expert_action_list,_=_portion_last_episode(expert_action_list,portion_last_episode["portion_last_num"],dof)
 
                 if add_end_episode["utilized"]:
                     pick_id=len(img_lst)-1
@@ -251,6 +453,10 @@ if __name__ == '__main__':
                     add_num=add_end_episode["add_num"]
 
                     rz_list, action_list,delta_pose_list=_add_end_episode(add_num=add_num,disturb_abs_rot=disturb_abs_rot["utilized"],abs_rot_list=rz_list,act_lst=action_list,pose_list=delta_pose_list)
+                    if is_dagger_episode:
+                        # 对专家动作列表也进行相同的处理
+                        _, expert_action_list, _ = _add_end_episode(add_num=add_num,disturb_abs_rot=disturb_abs_rot["utilized"],abs_rot_list=rz_list,act_lst=expert_action_list,pose_list=delta_pose_list)
+                    
                     img_lst=insert_imgs(img_lst,pick_id,insert_id,add_num)
                     if len(img_light_list) != 0:
                         img_light_list=insert_imgs(img_light_list,pick_id,insert_id,add_num)
@@ -265,6 +471,10 @@ if __name__ == '__main__':
 
                 if add_medium_episode["utilized"]:
                     action_list, rz_list, delta_pose_list,need_add_medium, trans_id, rot_id=_add_medium_episode(act_lst=action_list, abs_rot_list=rz_list, ac_dim=dof,add_num=add_medium_episode["add_num"],pose_list=delta_pose_list)
+                    if is_dagger_episode and need_add_medium:
+                        # 对专家动作列表也进行相同的处理
+                        expert_action_list, _, _, _, _, _ = _add_medium_episode(act_lst=expert_action_list, abs_rot_list=rz_list, ac_dim=dof, add_num=add_medium_episode["add_num"], pose_list=delta_pose_list)
+                    
                     if need_add_medium:
                         print("+++++++++++++++++++++++++++++++++++++++++")
                         pick_id = trans_id + 1
@@ -282,6 +492,36 @@ if __name__ == '__main__':
                             im_dep_lst = insert_imgs(im_dep_lst, pick_id, insert_id, add_num)
                         if len(im_dep2_lst) != 0:
                             im_dep2_lst = insert_imgs(im_dep2_lst, pick_id, insert_id, add_num)
+                
+                # 如果是DAgger模式，保存到临时数据中
+                if is_dagger_episode:
+                    # 创建该episode的数据字典
+                    episode_data = {
+                        "obs": {
+                            "robot0_eye_in_hand_image": np.array(img_lst)
+                        },
+                        "actions": np.array(expert_action_list),  # 使用专家动作作为标签
+                    }
+                    
+                    if len(img2_lst)!=0:
+                        episode_data["obs"]["robot0_eye_in_hand_image_2"] = np.array(img2_lst)
+                    if use_light_key:
+                        episode_data["obs"]["robot0_eye_in_hand_image_light"] = np.array(img_light_list)
+                    if len(img2_light_list)!=0:
+                        episode_data["obs"]["robot0_eye_in_hand_image_2_light"] = np.array(img2_light_list)
+                    if len(im_dep_lst)!=0:
+                        episode_data["obs"]["depth_image"] = np.array(im_dep_lst)
+                    if len(im_dep2_lst)!=0:
+                        episode_data["obs"]["depth_image_2"] = np.array(im_dep2_lst)
+                    if len(delta_pose_list)!=0:
+                        episode_data["delta_pos_curgoal"] = np.array(delta_pose_list)
+                    
+                    # 添加到DAgger数据集
+                    dagger_new_data["obs"].append(episode_data["obs"])
+                    dagger_new_data["actions"].append(episode_data["actions"])
+                    if "delta_pos_curgoal" in episode_data:
+                        dagger_new_data["delta_pos_curgoal"].append(episode_data["delta_pos_curgoal"])
+                
                 #save hdf5
                 epi_length=len(img_lst)
                 assert epi_length==len(action_list)
@@ -306,9 +546,62 @@ if __name__ == '__main__':
                 if len(delta_pose_list)!=0:
                     new_f_out.create_dataset(pos_path, data=delta_pose_list)
 
-                new_f_out.create_dataset(action_path, data=action_list)
-                print("action_lst-1:",action_list[-1])
+                # 在DAgger中，保存的动作取决于是否是DAgger模式
+                if is_dagger_episode:
+                    # DAgger模式下，保存专家动作（标签）
+                    new_f_out.create_dataset(action_path, data=expert_action_list)
+                    print("expert_action_lst-1:", expert_action_list[-1])
+                else:
+                    # 普通模式下，保存实际动作
+                    new_f_out.create_dataset(action_path, data=action_list)
+                    print("action_lst-1:", action_list[-1])
+                
                 print("[INFO] demo_{} collected successfully.".format(idx))
+                #================================dagger===============================
+                if is_dagger_episode:
+                    dagger_episodes_done += 1
+                    print(f"[DAgger] Episode completed. Total DAgger episodes: {dagger_episodes_done}")
+                    
+                    # 每完成一定数量的DAgger episodes后，进行一次在线训练
+                    if dagger_episodes_done % dagger_config.get("train_frequency", 5) == 0 and policy_model is not None:
+                        print(f"[DAgger] Training policy model after {dagger_episodes_done} episodes")
+                        
+                        # 聚合数据集并训练模型
+                        aggregate_dataset(dagger_new_data, dataset_dir)
+                        
+                        # 创建训练数据集
+                        train_set = dataset_factory(
+                            model_config["dataset"],
+                            img_size=model_config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"],
+                            filter_by_attribute='train'
+                        )
+                        
+                        train_loader = DataLoader(
+                            dataset=train_set,
+                            batch_size=model_config["training"]["batch_size"],
+                            shuffle=True,
+                            num_workers=model_config["training"]["num_data_workers"],
+                            drop_last=True
+                        )
+                        
+                        # 训练模型
+                        bc_algorithm = BehaviorCloning(policy_model, optimizer, criterion)
+                        bc_algorithm.train(train_loader, num_train_steps=1000)
+                        
+                        # 保存新模型
+                        model_path = os.path.join(base_dir, 'AlignAnything', current_date, 'models')
+                        ensure_dir(model_path)
+                        model_file = os.path.join(model_path, f'dagger_model_episodes_{dagger_episodes_done}.pth')
+                        torch.save(policy_model.state_dict(), model_file)
+                        print(f"[DAgger] Model saved to {model_file}")
+                        
+                        # 清空新数据缓冲区
+                        dagger_new_data = {
+                            "obs": [],
+                            "actions": [],
+                            "delta_pos_curgoal": []
+                        }
+                #================================dagger===============================
                 break
     # add_env_meta(new_f_out,additional_itms={"pose_and_orientations":pose_and_orientations})
     add_config(new_f_out, config)

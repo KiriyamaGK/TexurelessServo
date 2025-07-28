@@ -1,205 +1,170 @@
 import numpy as np
-from typing import Callable, Tuple, List
-from collections import defaultdict
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
+import os
+from algo.bc import BehaviorCloning
+from utils.transform import rotation_matrix_z
+from utils.policy import get_expert_policy
 
+def compute_position_distance(current_pose, target_pose):
+    """
+    计算当前姿态和目标姿态之间的位置距离
+    
+    Args:
+        current_pose: 当前夹爪位姿的变换矩阵 (4x4)
+        target_pose: 目标位姿的变换矩阵 (4x4)
+        
+    Returns:
+        float: 两个位姿之间的欧氏距离
+    """
+    # 提取位置部分(平移向量)
+    current_position = current_pose[0:3, 3]
+    target_position = target_pose[0:3, 3]
+    
+    # 计算欧氏距离
+    distance = np.linalg.norm(current_position - target_position)
+    return distance
 
-class DAGGER:
-    def __init__(
-            self,
-            expert_policy: Callable[[np.ndarray], np.ndarray],
-            learner_policy: nn.Module,
-            env,
-            epochs_per_iter: int = 5,
-            batch_size: int = 32,
-            learning_rate: float = 1e-3,
-            num_iterations: int = 10,
-            rollout_steps: int = 1000,
-            device: str = "cpu"
-    ):
-        """
-        DAGGER 训练框架初始化
+def compute_orientation_distance(current_pose, target_pose):
+    """
+    计算当前姿态和目标姿态之间的方向距离
+    
+    Args:
+        current_pose: 当前夹爪位姿的变换矩阵 (4x4)
+        target_pose: 目标位姿的变换矩阵 (4x4)
+        
+    Returns:
+        float: 两个旋转矩阵之间的角度差异(弧度)
+    """
+    # 提取旋转部分
+    current_rotation = current_pose[0:3, 0:3]
+    target_rotation = target_pose[0:3, 0:3]
+    
+    # 计算旋转矩阵的差异
+    diff_rotation = np.matmul(current_rotation, target_rotation.T)
+    
+    # 从差异旋转矩阵计算角度
+    # 使用旋转矩阵的迹(trace)和余弦定理计算角度
+    trace = np.trace(diff_rotation)
+    cos_theta = (trace - 1) / 2
+    
+    # 防止数值误差导致的问题
+    cos_theta = np.clip(cos_theta, -1.0, 1.0)
+    theta = np.arccos(cos_theta)
+    
+    return theta
 
-        参数:
-            expert_policy: 专家策略函数，输入状态，返回动作
-            learner_policy: 待训练的学员策略(PyTorch模型)
-            env: 训练环境(OpenAI Gym风格)
-            epochs_per_iter: 每次迭代的训练epoch数
-            batch_size: 训练batch大小
-            learning_rate: 学习率
-            num_iterations: DAGGER迭代次数
-            rollout_steps: 每次迭代的rollout步数
-            device: 训练设备(cpu/cuda)
-        """
-        self.expert_policy = expert_policy
-        self.learner_policy = learner_policy.to(device)
-        self.env = env
-        self.epochs_per_iter = epochs_per_iter
-        self.batch_size = batch_size
-        self.learning_rate = learning_rate
-        self.num_iterations = num_iterations
-        self.rollout_steps = rollout_steps
-        self.device = device
+def load_policy_model(model_path, model, device=None):
+    """
+    加载预训练的策略模型
+    
+    Args:
+        model_path: 模型权重文件路径
+        model: 模型实例
+        device: 运行设备
+    
+    Returns:
+        加载了权重的模型
+    """
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    if not os.path.exists(model_path):
+        print(f"[警告] 模型文件不存在: {model_path}")
+        return model
+    
+    state_dict = torch.load(model_path, map_location=device)
+    model.load_state_dict(state_dict)
+    model.to(device)
+    model.eval()
+    print(f"[成功] 从 {model_path} 加载模型")
+    return model
 
-        self.criterion = nn.MSELoss()  # 假设连续动作空间
-        self.optimizer = optim.Adam(self.learner_policy.parameters(), lr=learning_rate)
+def get_policy_action(model, observation, device=None):
+    """
+    使用策略模型预测动作
+    
+    Args:
+        model: 策略模型
+        observation: 观察值(图像等)，应该已经预处理为合适的格式
+        device: 运行设备
+        
+    Returns:
+        预测的动作(numpy数组)
+    """
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # 确保模型处于评估模式
+    model.eval()
+    
+    # 将观察转换为tensor并移动到正确的设备
+    if isinstance(observation, dict):
+        # 如果是字典形式的观察，处理每个键
+        obs_tensor = {}
+        for key, value in observation.items():
+            if not isinstance(value, torch.Tensor):
+                value = torch.FloatTensor(value)
+            obs_tensor[key] = value.to(device)
+    else:
+        # 如果是单一的观察
+        if not isinstance(observation, torch.Tensor):
+            observation = torch.FloatTensor(observation)
+        obs_tensor = observation.to(device)
+    
+    # 禁用梯度计算以加速推理
+    with torch.no_grad():
+        prediction = model(obs_tensor)
+    
+    # 将结果转换为numpy数组并返回
+    if isinstance(prediction, dict):
+        # 如果结果是字典，处理每个键
+        action = {}
+        for key, value in prediction.items():
+            action[key] = value.cpu().numpy()
+    else:
+        action = prediction.cpu().numpy()
+    
+    return action
 
-        # 存储所有收集的数据
-        self.dataset = defaultdict(list)
+def aggregate_dataset(new_data, dataset_path, max_size=None):
+    """
+    将新收集的数据聚合到现有的数据集中(DAgger的核心)
+    
+    Args:
+        new_data: 新收集的数据
+        dataset_path: 现有数据集的路径
+        max_size: 数据集的最大大小，如果指定，则当数据集大小超过此值时会删除旧数据
+    
+    Returns:
+        更新后的数据集路径
+    """
+    # 这里应该实现数据聚合的具体逻辑
+    # 由于涉及到HDF5文件的具体操作，需要根据项目的数据结构进行定制
+    print(f"[DAgger] 将新数据聚合到 {dataset_path}")
+    return dataset_path
 
-    def collect_expert_data(self, num_episodes: int = 10) -> None:
-        """收集初始专家数据"""
-        states, actions = [], []
-        for _ in range(num_episodes):
-            state = self.env.reset()
-            done = False
-            while not done:
-                action = self.expert_policy(state)
-                states.append(state)
-                actions.append(action)
-                state, _, done, _ = self.env.step(action)
-
-        self.dataset["states"].extend(states)
-        self.dataset["actions"].extend(actions)
-
-    def rollout(self, policy: Callable, steps: int) -> List[Tuple]:
-        """
-        使用给定策略在环境中rollout收集数据
-
-        返回:
-            轨迹列表[(state, action, ...)]
-        """
-        trajectories = []
-        state = self.env.reset()
-        for _ in range(steps):
-            with torch.no_grad():
-                state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-                action = policy(state_tensor).cpu().numpy()[0]
-
-            next_state, _, done, _ = self.env.step(action)
-            trajectories.append((state, action))
-
-            state = next_state if not done else self.env.reset()
-        return trajectories
-
-    def train_iteration(self) -> float:
-        """执行一次训练迭代，返回平均训练loss"""
-        states = torch.FloatTensor(np.array(self.dataset["states"])).to(self.device)
-        actions = torch.FloatTensor(np.array(self.dataset["actions"])).to(self.device)
-
-        dataset = TensorDataset(states, actions)
-        loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
-
-        losses = []
-        for _ in range(self.epochs_per_iter):
-            for batch_states, batch_actions in loader:
-                self.optimizer.zero_grad()
-                pred_actions = self.learner_policy(batch_states)
-                loss = self.criterion(pred_actions, batch_actions)
-                loss.backward()
-                self.optimizer.step()
-                losses.append(loss.item())
-
-        return np.mean(losses)
-
-    def run(self) -> nn.Module:
-        """执行完整的DAGGER训练流程"""
-        # 初始专家数据收集
-        print("Collecting initial expert data...")
-        self.collect_expert_data()
-
-        for it in range(self.num_iterations):
-            print(f"\nDAGGER Iteration {it + 1}/{self.num_iterations}")
-
-            # 1. 训练学员策略
-            train_loss = self.train_iteration()
-            print(f"Training loss: {train_loss:.4f}")
-
-            # 2. 使用学员策略rollout收集新数据
-            print("Rolling out current policy...")
-            trajectories = self.rollout(self.learner_policy, self.rollout_steps)
-
-            # 3. 对新收集的状态查询专家动作
-            print("Querying expert for new data...")
-            new_states = [t[0] for t in trajectories]
-            new_actions = [self.expert_policy(s) for s in new_states]
-
-            # 4. 将新数据添加到数据集
-            self.dataset["states"].extend(new_states)
-            self.dataset["actions"].extend(new_actions)
-
-            # 可选: 评估当前策略性能
-            self.evaluate()
-
-        return self.learner_policy
-
-    def evaluate(self, num_episodes: int = 5) -> float:
-        """评估当前学员策略的性能"""
-        total_rewards = []
-        for _ in range(num_episodes):
-            state = self.env.reset()
-            done = False
-            episode_reward = 0
-
-            while not done:
-                with torch.no_grad():
-                    state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-                    action = self.learner_policy(state_tensor).cpu().numpy()[0]
-
-                state, reward, done, _ = self.env.step(action)
-                episode_reward += reward
-
-            total_rewards.append(episode_reward)
-
-        avg_reward = np.mean(total_rewards)
-        print(f"Evaluation - Average reward: {avg_reward:.2f}")
-        return avg_reward
-
-
-# 使用示例
-if __name__ == "__main__":
-    import gym
-
-    # 1. 定义环境和专家策略
-    env = gym.make("Pendulum-v1")  # 示例环境
-
-
-    def expert_policy(state):
-        """简化的专家策略示例"""
-        # 在实际应用中替换为真实的专家策略
-        return np.array([0.1])  # 固定动作
-
-
-    # 2. 定义学员策略网络
-    class LearnerPolicy(nn.Module):
-        def __init__(self, state_dim, action_dim):
-            super().__init__()
-            self.net = nn.Sequential(
-                nn.Linear(state_dim, 64),
-                nn.ReLU(),
-                nn.Linear(64, 64),
-                nn.ReLU(),
-                nn.Linear(64, action_dim)
-            )
-
-        def forward(self, x):
-            return self.net(x)
-
-
-    # 3. 初始化并运行DAGGER
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
-
-    dagger = DAGGER(
-        expert_policy=expert_policy,
-        learner_policy=LearnerPolicy(state_dim, action_dim),
-        env=env,
-        num_iterations=10,
-        rollout_steps=2000,
-        device="cuda" if torch.cuda.is_available() else "cpu"
-    )
-
-    trained_policy = dagger.run()
+def train_policy(dataset_path, model, optimizer, criterion, num_epochs=10, batch_size=16, device=None):
+    """
+    使用聚合的数据集训练策略
+    
+    Args:
+        dataset_path: 数据集路径
+        model: 策略模型
+        optimizer: 优化器
+        criterion: 损失函数
+        num_epochs: 训练轮数
+        batch_size: 批量大小
+        device: 运行设备
+        
+    Returns:
+        训练后的模型
+    """
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # 这里应该实现训练的具体逻辑
+    # 需要根据项目的训练流程进行定制
+    print(f"[DAgger] 使用数据集 {dataset_path} 训练模型")
+    
+    # 返回训练后的模型
+    return model 
