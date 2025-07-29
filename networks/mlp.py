@@ -14,7 +14,7 @@ from torch.nn import functional as F
 import torch.distributions as D
 import functools
 import operator
-from ultralytics import YOLO
+# from ultralytics import YOLO
 import warnings
 from utils.input_process import add_gaussian_spot_to_image
 

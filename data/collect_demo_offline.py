@@ -1,8 +1,5 @@
 import os
-
-from open3d.examples.reconstruction_system.opencv_pose_estimation import pose_estimation
-from sympy.strategies.branch import condition
-
+from utils.input_process import input_dict_preprocess
 from utils.hdf5 import add_useless_things, split_train_val_from_hdf5, add_env_meta, compute_num_samples, add_config
 import h5py
 import numpy as np
@@ -13,7 +10,7 @@ from utils.transform import rmat2euler_rz_degree
 from sim.perception import CameraIntrinsic
 import time
 import cv2
-from utils.input_process import clip_image
+from utils.input_process import clip_image,conditioned_clip_and_resize
 from utils.policy import get_expert_policy
 from data.process_hdf5 import _disturb_abs_rot,_portion_last_episode,_add_end_episode,_add_medium_episode,insert_imgs
 from utils.dagger import compute_position_distance, load_policy_model, get_policy_action, aggregate_dataset, train_policy
@@ -58,36 +55,25 @@ def get_goal_info(env):
 
     return {"img_goal":img,"img_goal2":img2,"img_light_goal":img_light,"img_light_goal2":img2_light,"img_dep_goal":im_dep,"img_dep_goal2":im_dep2}
 
-def prepare_observation_for_policy(img, img_goal, img2=None, img2_goal=None, img_h=220, device=None):
+def prepare_observation_for_policy(img_size, hdf_img_size,img, img_goal, img2=None, img2_goal=None):
     """
     准备输入给策略模型的观察数据
     """
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    # 裁剪和处理图像
-    img = clip_image(img, img_h)
-    img_goal = clip_image(img_goal, img_h)
-    
-    # 转换为张量
-    img_tensor = torch.FloatTensor(img).permute(2, 0, 1).unsqueeze(0) / 255.0  # 归一化并调整维度
-    img_goal_tensor = torch.FloatTensor(img_goal).permute(2, 0, 1).unsqueeze(0) / 255.0
-    
+    img = conditioned_clip_and_resize(img, img_size, img_size, hdf_img_size)
+    img_goal = conditioned_clip_and_resize(img_goal, img_size, img_size, hdf_img_size)
+    if img2 is not None:
+        img2 = conditioned_clip_and_resize(img2, img_size, img_size, hdf_img_size)
+        img2_goal = conditioned_clip_and_resize(img2_goal, img_size, img_size, hdf_img_size)  
     obs_dict = {
-        "robot0_eye_in_hand_image": img_tensor,
-        "robot0_eye_in_hand_image_goal": img_goal_tensor
+        "robot0_eye_in_hand_image": img,
+        "robot0_eye_in_hand_image_goal": img_goal
     }
+    if img2 is not None:
+        obs_dict["robot0_eye_in_hand_image_2"] = img2
+        obs_dict["robot0_eye_in_hand_image_2_goal"] = img2_goal
     
-    # 如果有第二个相机视角，也处理
-    if img2 is not None and img2_goal is not None:
-        img2 = clip_image(img2, img_h)
-        img2_goal = clip_image(img2_goal, img_h)
-        img2_tensor = torch.FloatTensor(img2).permute(2, 0, 1).unsqueeze(0) / 255.0
-        img2_goal_tensor = torch.FloatTensor(img2_goal).permute(2, 0, 1).unsqueeze(0) / 255.0
+    obs_dict=input_dict_preprocess(obs_dict,rollout=True)
         
-        obs_dict["robot0_eye_in_hand_image_2"] = img2_tensor
-        obs_dict["robot0_eye_in_hand_image_2_goal"] = img2_goal_tensor
-    
     return obs_dict
 
 def setup_policy_model(config_path="../configs/train_mlp.json", checkpoint_path=None):
@@ -134,6 +120,47 @@ def setup_policy_model(config_path="../configs/train_mlp.json", checkpoint_path=
     
     return model, optimizer, criterion, config
 
+def process_and_append_observations(img, img2, img_light, img2_light, im_dep, im_dep2, img_h, 
+                             img_lst, img2_lst, img_light_list, img2_light_list, im_dep_lst, im_dep2_lst, 
+                             use_light_key=True, show_images=True):
+ 
+    # 处理主相机图像
+    img_vis = img.copy()
+    img = clip_image(img, img_h)
+    img_lst.append(img)
+    
+    # 处理主相机光照图像
+    if use_light_key and img_light is not None:
+        img_light = clip_image(img_light, img_h)
+        img_light_list.append(img_light)
+    
+    # 处理第二相机图像
+    if img2 is not None:
+        img2_vis = img2.copy()
+        img2 = clip_image(img2, img_h)
+        img2_lst.append(img2)
+        
+        # 显示组合图像
+        if show_images:
+            combined_img = np.hstack((img_vis, img2_vis))
+            cv2.imshow("Combined Image", combined_img)
+            cv2.waitKey(1)
+    
+    # 处理第二相机光照图像
+    if img2_light is not None:
+        img2_light = clip_image(img2_light, img_h)
+        img2_light_list.append(img2_light)
+    
+    # 处理主相机深度图像
+    if im_dep is not None:
+        im_dep = clip_image(im_dep, img_h)
+        im_dep_lst.append(im_dep[..., np.newaxis])  # [h,w,1]
+    
+    # 处理第二相机深度图像
+    if im_dep2 is not None:
+        im_dep2 = clip_image(im_dep2, img_h)
+        im_dep2_lst.append(im_dep2[..., np.newaxis])
+
 if __name__ == '__main__':
     img_w=220
     img_h=220
@@ -168,6 +195,17 @@ if __name__ == '__main__':
     if "dagger" in config["demo_collection"]:
         dagger_config = config["demo_collection"]["dagger"]
         use_dagger = dagger_config["utilized"]
+    # print("use_dagger: ", use_dagger)
+    
+    # start_episode: 整数，表示从第几个episode开始使用DAgger策略。在此之前的episode会使用普通的行为克隆方式收集数据。
+    # frequency: 整数，表示每多少个非DAgger的episode后执行一次DAgger收集过程。例如，值为5表示每5个正常episode后执行一次DAgger。
+    # episodes_per_dagger: 整数，表示每次触发DAgger时连续执行的DAgger episode数量。例如，值为10表示每次触发DAgger时会连续收集10个使用策略模型的episodes。
+    
+    # position_threshold: 浮点数，表示在DAgger模式下，当夹爪与目标物体之间的位置距离小于此值时，当前episode会提前结束。单位是米。
+    # check_frame_interval: 整数，表示在DAgger模式下每隔多少帧检查一次夹爪与物体的距离。
+    
+    # train_frequency: 整数，表示每完成多少个DAgger episodes后进行一次模型训练。
+    # train_epochs: 整数，表示每次训练模型时执行的轮数。
     
     # 如果使用DAgger，设置策略模型
     policy_model = None
@@ -181,6 +219,7 @@ if __name__ == '__main__':
         )
         # 确保模型处于评估模式
         policy_model.eval()
+        save_img_size = model_config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"]
     #================================dagger===============================
 
     trans_vel=config["demo_collection"]["velocity"]['trans_vel'] #m
@@ -230,6 +269,7 @@ if __name__ == '__main__':
     dagger_episodes_done = 0
     non_dagger_episodes_count = 0
     current_dagger_episodes = 0
+    end_episode = False
     
     # 用于存储DAgger收集的新数据
     dagger_new_data = {
@@ -240,7 +280,7 @@ if __name__ == '__main__':
     #================================dagger===============================
     
     for idx in range(demo_total_num):
-        print("[INFO] start collecting demo_{} ...".format(idx))
+        print("====================start collecting demo_{} ====================".format(idx))
         
         #================================dagger===============================
         # 判断是否应该使用DAgger策略
@@ -282,6 +322,7 @@ if __name__ == '__main__':
         im_dep2_lst=[]
         rz_list=[]
         delta_pose_list=[]
+        end_episode = False
 
         #get goal info
         init_transform_dict = env.return_cur_pos_info()
@@ -325,15 +366,12 @@ if __name__ == '__main__':
             dT = expert_dT
             action = expert_action
             
-            # 如果是DAgger策略，则使用当前策略生成动作，但保存专家标签
             if is_dagger_episode and policy_model is not None:
-                # 准备观察数据
-                obs_dict = prepare_observation_for_policy(
-                    img, goal_dict["img_goal"], 
-                    img2, goal_dict["img_goal2"] if goal_dict["img_goal2"] is not None else None,
-                    img_h=img_h
+                obs_dict = prepare_observation_for_policy(img_size = save_img_size, hdf_img_size = img_h,
+                    img=img, img_goal=goal_dict["img_goal"], 
+                    img2=img2, img2_goal=goal_dict["img_goal2"] if goal_dict["img_goal2"] is not None else None
                 )
-                
+
                 # 使用策略模型预测动作
                 policy_action = get_policy_action(policy_model, obs_dict)
                 
@@ -371,28 +409,9 @@ if __name__ == '__main__':
                 rz_list.append(rz)
 
             #postprocess
-            img_vis=img.copy()
-            img=clip_image(img,img_h)
-            img_lst.append(img)
-            if use_light_key:
-                img_light=clip_image(img_light,img_h)
-                img_light_list.append(img_light)
-            if img2 is not None:
-                img2_vis=img2.copy()
-                img2=clip_image(img2,img_h)
-                img2_lst.append(img2)
-                combined_img = np.hstack((img_vis, img2_vis))
-                cv2.imshow("Combined Image", combined_img)
-                cv2.waitKey(1)
-            if img2_light is not None:
-                img2_light=clip_image(img2_light,img_h)
-                img2_light_list.append(img2_light)
-            if im_dep is not None:
-                im_dep=clip_image(im_dep,img_h)
-                im_dep_lst.append(im_dep[..., np.newaxis]) #[h,w,1]
-            if im_dep2 is not None:
-                im_dep2=clip_image(im_dep2,img_h)
-                im_dep2_lst.append(im_dep2[..., np.newaxis])
+            process_and_append_observations(img, img2, img_light, img2_light, im_dep, im_dep2, img_h, 
+                             img_lst, img2_lst, img_light_list, img2_light_list, im_dep_lst, im_dep2_lst, 
+                             use_light_key=use_light_key, show_images=False)
             
             #================================dagger===============================
             # DAgger策略检查物体和夹爪位置
@@ -400,38 +419,40 @@ if __name__ == '__main__':
                 distance = compute_position_distance(wgT, wgT_tar)
                 if distance < dagger_config["position_threshold"]:
                     print(f"[DAgger] Position threshold reached at frame {frame_counter}, distance: {distance}")
-                    break
+                    end_episode = True
             #================================dagger===============================
             
             # 正常的移动
             env.action(dT)
-            if env.reinit():
+            if env.reinit() or end_episode:
+
+                # add the obs-action pair of the last frame
                 if is_dagger_episode:
-                    # 对于DAgger，最后添加专家动作作为终止动作
+                    print("Final distance between gripper and object:", distance)
                     action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
                     expert_action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
                 else:
-                    # 普通模式下添加零动作
                     action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
 
                 img_goal = clip_image(goal_dict["img_goal"], img_h)
-                img_lst.append(img_goal)
+                process_and_append_observations(
+                    img=img_goal, 
+                    img2=goal_dict["img_goal2"], 
+                    img_light=goal_dict["img_light_goal"], 
+                    img2_light=goal_dict["img_light_goal2"], 
+                    im_dep=goal_dict["img_dep_goal"], 
+                    im_dep2=goal_dict["img_dep_goal2"], 
+                    img_h=img_h, 
+                    img_lst=img_lst, 
+                    img2_lst=img2_lst, 
+                    img_light_list=img_light_list, 
+                    img2_light_list=img2_light_list, 
+                    im_dep_lst=im_dep_lst, 
+                    im_dep2_lst=im_dep2_lst, 
+                    use_light_key=use_light_key, 
+                    show_images=False
+                )
 
-                if goal_dict["img_light_goal"] is not None:
-                    img_light_goal = clip_image(goal_dict["img_light_goal"], img_h)
-                    img_light_list.append(img_light_goal)
-                if goal_dict["img_dep_goal"] is not None:
-                    im_dep_goal = clip_image(goal_dict["img_dep_goal"], img_h)
-                    im_dep_lst.append(im_dep_goal[..., np.newaxis])  # [h,w,1]
-                if goal_dict["img_goal2"] is not None:
-                    im_goal2 = clip_image(goal_dict["img_goal2"], img_h)
-                    img2_lst.append(im_goal2)
-                if goal_dict["img_light_goal2"] is not None:
-                    img_light_goal2 = clip_image(goal_dict["img_light_goal2"], img_h)
-                    img2_light_list.append(img_light_goal2)
-                if goal_dict["img_dep_goal2"] is not None:
-                    im_dep_goal2 = clip_image(goal_dict["img_dep_goal2"], img_h)
-                    im_dep2_lst.append(im_dep_goal2[..., np.newaxis])  # [h,w,1]
                 if dof==3:
                     rz_list.append(0)
                 if record_pose:
@@ -548,11 +569,9 @@ if __name__ == '__main__':
 
                 # 在DAgger中，保存的动作取决于是否是DAgger模式
                 if is_dagger_episode:
-                    # DAgger模式下，保存专家动作（标签）
                     new_f_out.create_dataset(action_path, data=expert_action_list)
                     print("expert_action_lst-1:", expert_action_list[-1])
                 else:
-                    # 普通模式下，保存实际动作
                     new_f_out.create_dataset(action_path, data=action_list)
                     print("action_lst-1:", action_list[-1])
                 
@@ -567,31 +586,25 @@ if __name__ == '__main__':
                         print(f"[DAgger] Training policy model after {dagger_episodes_done} episodes")
                         
                         # 聚合数据集并训练模型
-                        aggregate_dataset(dagger_new_data, dataset_dir)
-                        
-                        # 创建训练数据集
-                        train_set = dataset_factory(
-                            model_config["dataset"],
-                            img_size=model_config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"],
-                            filter_by_attribute='train'
-                        )
-                        
-                        train_loader = DataLoader(
-                            dataset=train_set,
-                            batch_size=model_config["training"]["batch_size"],
-                            shuffle=True,
-                            num_workers=model_config["training"]["num_data_workers"],
-                            drop_last=True
-                        )
+                        # aggregate_dataset(dagger_new_data, dataset_dir)
+                        aggregate_dataset(dagger_new_data, new_f_out)
                         
                         # 训练模型
-                        bc_algorithm = BehaviorCloning(policy_model, optimizer, criterion)
-                        bc_algorithm.train(train_loader, num_train_steps=1000)
+                        policy_model = train_policy( #这个函数的img_size填写的是对的
+                            hdf5_file=new_f_out,
+                            model=policy_model,
+                            optimizer=optimizer,
+                            criterion=criterion,
+                            num_epochs=dagger_config.get("train_epochs", 5),
+                            batch_size=model_config["training"]["batch_size"],
+                            device=None,  # 使用默认设备
+                            config=model_config
+                        )
                         
                         # 保存新模型
                         model_path = os.path.join(base_dir, 'AlignAnything', current_date, 'models')
                         ensure_dir(model_path)
-                        model_file = os.path.join(model_path, f'dagger_model_episodes_{dagger_episodes_done}.pth')
+                        model_file = os.path.join(model_path, f'dagger_episode_{dagger_episodes_done}.pth')
                         torch.save(policy_model.state_dict(), model_file)
                         print(f"[DAgger] Model saved to {model_file}")
                         

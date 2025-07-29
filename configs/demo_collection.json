@@ -22,14 +22,14 @@
         "dataset_base_dir": "/home/user0/dataset",
         "file_name": "25.04.30",
         "demo_total_num": 6000,
-        "objs_descriptor": 14,
+        "objs_descriptor": [3],
         "replace_existed_hdf5": true
     },
     "demo_collection": {
         "dof": 6,
         "third_view_camera": false,
         "trans_and_rot_type": "simultaneously",
-        "conditioned_sampling": true,
+        "conditioned_sampling": false,
         "random_light_dir": true,
         "use_random_light_img_key": true,
         "depth": {
@@ -38,14 +38,15 @@
         },
         "record_pose": true,
         "dagger": {
-            "utilized": false,
-            "start_episode": 10,
-            "frequency": 5,
-            "episodes_per_dagger": 3,
+            "utilized": true,
+            "start_episode": 1,
+            "frequency": 1,
+            "episodes_per_dagger": 10,
             "position_threshold": 0.01,
-            "check_frame_interval": 5,
+            "check_frame_interval": 1,
             "model_path": null,
-            "train_frequency": 5
+            "train_frequency": 5,
+            "train_epochs": 5
         },
 
         "init": {

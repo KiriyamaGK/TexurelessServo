@@ -34,6 +34,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             filter_by_attribute=None,
             load_next_obs=True,
             bgr2rgb=False,
+            hdf5_file=None,
     ):
         """
         Dataset class for fetching sequences of experience.
@@ -85,7 +86,9 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         self.hdf5_path = return_disc_route(hdf5_path)
         self.hdf5_use_swmr = hdf5_use_swmr
-        self._hdf5_file = None
+        self._hdf5_file = hdf5_file
+
+        assert hdf5_file is not None or hdf5_path is not None
 
         assert hdf5_cache_mode in ["all", "low_dim", None]
         self.hdf5_cache_mode = hdf5_cache_mode
@@ -520,7 +523,8 @@ def dataset_factory(config, img_size=None,filter_by_attribute=None):
 
 
     ds_kwargs = dict(
-        hdf5_path=config["hdf5_path"],
+        hdf5_path=config["hdf5_path"] if "hdf5_path" in config else None,
+        hdf5_file=config["hdf5_file"] if "hdf5_file" in config else None,
         obs_keys=config["specific_obs_keys"],
         dataset_keys=config["label_keys"] if "label_keys" in config else ["actions"],
         load_next_obs=False, # whether to load next observations (s') from dataset
