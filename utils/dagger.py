@@ -8,54 +8,25 @@ from utils.policy import get_expert_policy
 from utils.hdf5 import add_useless_things, compute_num_samples, split_train_val_from_hdf5
 from torch.utils.data import DataLoader
 from dataset.dataset import dataset_factory
+import pybullet as p
 
-def compute_position_distance(current_pose, target_pose):
-    """
-    计算当前姿态和目标姿态之间的位置距离
-    
-    Args:
-        current_pose: 当前夹爪位姿的变换矩阵 (4x4)
-        target_pose: 目标位姿的变换矩阵 (4x4)
-        
-    Returns:
-        float: 两个位姿之间的欧氏距离
-    """
-    # 提取位置部分(平移向量)
-    current_position = current_pose[0:3, 3]
-    target_position = target_pose[0:3, 3]
-    
-    # 计算欧氏距离
-    distance = np.linalg.norm(current_position - target_position)
-    return distance
 
-def compute_orientation_distance(current_pose, target_pose):
-    """
-    计算当前姿态和目标姿态之间的方向距离
-    
-    Args:
-        current_pose: 当前夹爪位姿的变换矩阵 (4x4)
-        target_pose: 目标位姿的变换矩阵 (4x4)
-        
-    Returns:
-        float: 两个旋转矩阵之间的角度差异(弧度)
-    """
-    # 提取旋转部分
-    current_rotation = current_pose[0:3, 0:3]
-    target_rotation = target_pose[0:3, 0:3]
-    
-    # 计算旋转矩阵的差异
-    diff_rotation = np.matmul(current_rotation, target_rotation.T)
-    
-    # 从差异旋转矩阵计算角度
-    # 使用旋转矩阵的迹(trace)和余弦定理计算角度
-    trace = np.trace(diff_rotation)
-    cos_theta = (trace - 1) / 2
-    
-    # 防止数值误差导致的问题
-    cos_theta = np.clip(cos_theta, -1.0, 1.0)
-    theta = np.arccos(cos_theta)
-    
-    return theta
+def compute_position_distance(obj, grip, distance_threshold=1.0):
+    closest_points = p.getClosestPoints(obj, grip[0], distance_threshold)
+
+    if not closest_points:
+        return {
+            "min_distance": float('inf'),  # 无点对，距离无限大
+            "is_colliding": False  # 无碰撞
+        }
+
+    min_distance = min(point[8] for point in closest_points)  # 最短距离
+    is_colliding = any(point[0] == 1 for point in closest_points)  # 检查是否有 contactFlag=1
+
+    return {
+        "min_distance": min_distance,
+        "is_colliding": is_colliding
+    }
 
 def load_policy_model(model_path, model, device=None):
     """
@@ -115,19 +86,13 @@ def get_policy_action(model, observation, device=None):
         if not isinstance(observation, torch.Tensor):
             observation = torch.FloatTensor(observation)
         obs_tensor = observation.to(device)
-    
-    # 禁用梯度计算以加速推理
     with torch.no_grad():
         prediction = model(obs_tensor)
-    
-    # 将结果转换为numpy数组并返回
+
     if isinstance(prediction, dict):
-        # 如果结果是字典，处理每个键
-        action = {}
-        for key, value in prediction.items():
-            action[key] = value.cpu().numpy()
+        action = prediction['output_tensor'].cpu().numpy().reshape(-1)
     else:
-        action = prediction.cpu().numpy()
+        action = prediction.cpu().numpy().reshape(-1)
     
     return action
 
@@ -146,12 +111,11 @@ def aggregate_dataset(new_data, f, max_size=None):
     Returns:
         更新后的数据集路径
     """
-    print(f"[DAgger] 将新数据聚合到 {dataset_path}")
     
 
     # 获取当前的demo数量
     demo_count = len([k for k in f["data"].keys() if "demo_" in k])
-    print(f"[DAgger] 当前数据集包含 {demo_count} 个演示")
+    print(f"[DAgger] The current dataset contains {demo_count} demonstrations.")
     
     # 处理每个新的episode
     for idx, (obs_data, actions_data, delta_pos_data) in enumerate(zip(
@@ -160,7 +124,7 @@ def aggregate_dataset(new_data, f, max_size=None):
     )):
         # 创建新的demo ID
         new_demo_id = f"demo_{demo_count + idx}"
-        print(f"[DAgger] 添加新演示: {new_demo_id}")
+        print(f"[DAgger] Adding new demonstration: {new_demo_id}")
         
         # 添加观察数据
         f.create_group(f"data/{new_demo_id}/obs")
@@ -178,12 +142,12 @@ def aggregate_dataset(new_data, f, max_size=None):
         epi_length = actions_data.shape[0]
         add_useless_things(new_f_out=f, demo_ind=new_demo_id, epi_len=epi_length)
         
-        print(f"[DAgger] 成功添加演示 {new_demo_id}, 长度: {epi_length}")
+        print(f"[DAgger] Adding successfully {new_demo_id}, demo length: {epi_length}")
     
     # 如果指定了最大大小，删除早期的演示
     if max_size is not None and demo_count + len(new_data["obs"]) > max_size:
         demos_to_remove = demo_count + len(new_data["obs"]) - max_size
-        print(f"[DAgger] 超出最大大小，删除 {demos_to_remove} 个早期演示")
+        print(f"[DAgger] Exceeded maximum demo buffer，deleting {demos_to_remove} earliest demos.")
         
         for i in range(demos_to_remove):
             demo_to_remove = f"demo_{i}"
@@ -193,43 +157,11 @@ def aggregate_dataset(new_data, f, max_size=None):
     
     
 
-def train_policy(hdf5_file, model, optimizer, criterion, num_epochs=10, batch_size=16, device=None, config=None):
-    """
-    使用聚合的数据集训练策略
-    
-    Args:
-        dataset_path: 数据集路径
-        model: 策略模型
-        optimizer: 优化器
-        criterion: 损失函数
-        num_epochs: 训练轮数
-        batch_size: 批量大小
-        device: 运行设备
-        config: 配置字典(可选)
-        
-    Returns:
-        训练后的模型
-    """
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    # 如果没有提供config，构建一个基本配置
-    if config is None:
-        config = {
-            "hdf5_file": hdf5_file,
-            "specific_obs_keys": ["robot0_eye_in_hand_image", "robot0_eye_in_hand_image_2"],
-            "label_keys": ["actions"],
-            "seq_length": 1,
-            "hdf5_cache_mode": "low_dim",
-            "hdf5_use_swmr": True,
-            "bgr2rgb": False
-        }
-    
+def train_policy(img_size ,model, num_train_steps,optimizer, criterion, num_epochs=10, batch_size=16, config=None):
     # 创建训练数据集
     train_set = dataset_factory(
         config,
-        img_size=config.get("img_size", None), #train_mlp.algorithm.policy.params.encoder.params.img_size
-        filter_by_attribute="train"
+        img_size = img_size, #do not utilize a subset of dataset so that the filter_by_attribute key is None
     )
     
     # 创建数据加载器
@@ -238,7 +170,7 @@ def train_policy(hdf5_file, model, optimizer, criterion, num_epochs=10, batch_si
         batch_size=batch_size,
         shuffle=True,
         num_workers=2,
-        drop_last=True
+        drop_last=False
     )
     
     # 创建BC算法实例
@@ -248,7 +180,7 @@ def train_policy(hdf5_file, model, optimizer, criterion, num_epochs=10, batch_si
     print(f"[DAgger] 开始训练，总轮数: {num_epochs}")
     for epoch in range(num_epochs):
         print(f"[DAgger] Epoch {epoch+1}/{num_epochs}")
-        train_loss_dict = bc_algorithm.train(train_loader, num_train_steps=None)
+        train_loss_dict = bc_algorithm.train(train_loader, num_train_steps=num_train_steps)
         print(f"[DAgger] Epoch {epoch+1} 训练损失: {train_loss_dict['loss']:.4f}")
     
     print("[DAgger] 训练完成")

@@ -5,7 +5,7 @@
       <excludeFolder url="file://$MODULE_DIR$/logs" />
       <excludeFolder url="file://$MODULE_DIR$/trained_models" />
     </content>
-    <orderEntry type="jdk" jdkName="trial" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="cns" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

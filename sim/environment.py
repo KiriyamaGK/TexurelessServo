@@ -420,7 +420,7 @@ class Environment(object):
                             ang = np.array([self.init_rot[i] * (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
                     else:
                         ang =np.array([self.init_rot[i]* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
-                    print("angle:",ang)
+                    # print("angle:",ang)
                     dT[0:3, 0:3] = R.from_rotvec(ang * np.pi / 180).as_matrix()
                 #trans
                 trans_dev=self.init_horizon_trans if self.use_max_trans else np.sqrt(random.uniform(0, self.init_horizon_trans**2))

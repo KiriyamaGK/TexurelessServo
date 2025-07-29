@@ -92,6 +92,7 @@ class BehaviorCloning():
         """
         data_loader_iter = iter(train_loader)
         num_train_steps=min(num_train_steps,len(train_loader))
+        print("=================num_train_steps={}".format(num_train_steps))
         idx=0
         epoch_loss_dict={}
         # for _ in tqdm(range(num_train_steps)):
@@ -111,9 +112,11 @@ class BehaviorCloning():
             if idx==0:
                 for k,v in batch_loss_dict.items():
                     epoch_loss_dict[k]=v
+                    print("===========key:",v)
             else:
                 for k,v in batch_loss_dict.items():
                     epoch_loss_dict[k]+=v
+                    print("===========key:", v)
             idx+=1
         for k, v in epoch_loss_dict.items():
             epoch_loss_dict[k] /= num_train_steps

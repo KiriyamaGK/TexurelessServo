@@ -83,12 +83,10 @@ class SequenceDataset(torch.utils.data.Dataset):
 
             load_next_obs (bool): whether to load next_obs from the dataset
         """
-
-        self.hdf5_path = return_disc_route(hdf5_path)
+        assert hdf5_file is not None or hdf5_path is not None
+        self.hdf5_path = return_disc_route(hdf5_path) if hdf5_path is not None else hdf5_path
         self.hdf5_use_swmr = hdf5_use_swmr
         self._hdf5_file = hdf5_file
-
-        assert hdf5_file is not None or hdf5_path is not None
 
         assert hdf5_cache_mode in ["all", "low_dim", None]
         self.hdf5_cache_mode = hdf5_cache_mode
@@ -189,7 +187,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         # determine index mapping
         self.total_num_sequences = 0
         for ep in self.demos:
-            demo_length = self.hdf5_file["data/{}".format(ep)].attrs["num_samples"]
+            demo_length = self.hdf5_file["data/{}".format(ep)].attrs["num_samples"] if hasattr(self.hdf5_file["data/{}".format(ep)], "num_samples") else self.hdf5_file["data/{}/actions".format(ep)].shape[0] - 1
             self._demo_id_to_start_indices[ep] = self.total_num_sequences
             self._demo_id_to_demo_length[ep] = demo_length
             # if demo_length==0:
@@ -286,7 +284,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         for ep in LogUtils.custom_tqdm(demo_list):
             all_data[ep] = {}
             all_data[ep]["attrs"] = {}
-            all_data[ep]["attrs"]["num_samples"] = hdf5_file["data/{}".format(ep)].attrs["num_samples"]
+            all_data[ep]["attrs"]["num_samples"] = hdf5_file["data/{}".format(ep)].attrs["num_samples"] if hasattr(hdf5_file["data/{}".format(ep)], "num_samples") else hdf5_file["data/{}/actions".format(ep)].shape[0] - 1
             # get obs
             all_data[ep]["obs"] = {k: hdf5_file["data/{}/obs/{}".format(ep, k)][()] for k in obs_keys}
             if load_next_obs:
@@ -389,7 +387,8 @@ class SequenceDataset(torch.utils.data.Dataset):
             )
             meta["next_obs"] = input_dict_preprocess(meta["next_obs"], bgr2rgb=self.bgr2rgb,img_size=self.img_size)
 
-
+        # print("=========demo:",demo_id)
+        # print("=========demo_start_index:",demo_start_index)
         return meta
 
     def get_sequence_from_demo(self, demo_id, index_in_demo, keys, num_frames_to_stack=0, seq_length=1):
