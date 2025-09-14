@@ -280,3 +280,20 @@ def error_pos_transform(error_pos):
     :return: [delta_xyz,delta_z,delta_theta][3,]
     '''
     return np.array([np.linalg.norm(error_pos[0:3]),abs(error_pos[2]),np.linalg.norm(error_pos[3:])])
+
+
+def construct_dT_from_action(action,dof = 6):
+    # 从策略动作构建变换矩阵dT
+    if not isinstance(action, np.ndarray):
+        action = np.array(action)
+    if dof == 3:
+        dT = np.eye(4)
+        dT[0:2, 3] = action[:2]  # 前两个元素是平移
+        dT[0:3, 0:3] = rotation_matrix_z(action[2] / 180 * np.pi)  # 最后一个元素是旋转
+    else:
+        dT = np.eye(4)
+        dT[0:3, 3] = action[:3]  # 前三个元素是平移
+        rot_vec = action[3:] / 180 * np.pi  # 后三个元素是旋转向量
+        from scipy.spatial.transform import Rotation as R
+        dT[0:3, 0:3] = R.from_rotvec(rot_vec).as_matrix()
+    return dT

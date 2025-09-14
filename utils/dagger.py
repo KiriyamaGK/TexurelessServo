@@ -9,6 +9,10 @@ from utils.hdf5 import add_useless_things, compute_num_samples, split_train_val_
 from torch.utils.data import DataLoader
 from dataset.dataset import dataset_factory
 import pybullet as p
+import json
+from networks.helpers import get_loss_fn, get_optimizer_cls, get_network_cls
+from utils.input_process import conditioned_clip_and_resize
+from utils.input_process import input_dict_preprocess
 
 
 def compute_position_distance_sim(obj, grip, distance_threshold=1.0):
@@ -27,6 +31,40 @@ def compute_position_distance_sim(obj, grip, distance_threshold=1.0):
         "min_distance": min_distance,
         "is_colliding": is_colliding
     }
+
+def prepare_observation_for_policy(img_size, hdf_img_size,img, img_goal, img2=None, img2_goal=None, img_light=None, img_light_goal=None, img2_light=None, img2_light_goal=None):
+    """
+    准备输入给策略模型的观察数据
+    """
+    img = conditioned_clip_and_resize(img, img_size, img_size, hdf_img_size)
+    img_goal = conditioned_clip_and_resize(img_goal, img_size, img_size, hdf_img_size)
+    if img2 is not None:
+        img2 = conditioned_clip_and_resize(img2, img_size, img_size, hdf_img_size)
+        img2_goal = conditioned_clip_and_resize(img2_goal, img_size, img_size, hdf_img_size)
+    if img_light is not None:
+        img_light = conditioned_clip_and_resize(img_light, img_size, img_size, hdf_img_size)
+        img_light_goal = conditioned_clip_and_resize(img_light_goal, img_size, img_size, hdf_img_size)
+    if img2_light is not None:
+        img2_light = conditioned_clip_and_resize(img2_light, img_size, img_size, hdf_img_size)
+        img2_light_goal = conditioned_clip_and_resize(img2_light_goal, img_size, img_size, hdf_img_size)
+    
+    obs_dict = {
+        "robot0_eye_in_hand_image": img,
+        "robot0_eye_in_hand_image_goal": img_goal
+    }
+    if img2 is not None:
+        obs_dict["robot0_eye_in_hand_image_2"] = img2
+        obs_dict["robot0_eye_in_hand_image_2_goal"] = img2_goal
+    if img_light is not None:
+        obs_dict["robot0_eye_in_hand_image_light"] = img_light
+        obs_dict["robot0_eye_in_hand_image_light_goal"] = img_light_goal
+    if img2_light is not None:
+        obs_dict["robot0_eye_in_hand_image_2_light"] = img2_light
+        obs_dict["robot0_eye_in_hand_image_2_light_goal"] = img2_light_goal
+    
+    obs_dict=input_dict_preprocess(obs_dict,rollout=True)
+        
+    return obs_dict
 
 def load_policy_model(model_path, model, device=None):
     """
@@ -97,6 +135,7 @@ def get_policy_action(model, observation, device=None):
     return action
 
 def aggregate_dataset(new_data, f, max_size=None):
+    ##TODO:temporaily useless
     """
     将新收集的数据聚合到现有的数据集中(DAgger的核心)
     
@@ -155,7 +194,49 @@ def aggregate_dataset(new_data, f, max_size=None):
                 del f[f"data/{demo_to_remove}"]
                 print(f"[DAgger] 已删除 {demo_to_remove}")
     
+def setup_policy_model(config_path="../configs/train_mlp.json", checkpoint_path=None):
+    """
+    设置策略模型
+    """
+    # 加载配置
+    with open(config_path, "r") as j:
+        config = json.load(j)
     
+    # 设置设备
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # 设置模型
+    model_cls, need_init_params = get_network_cls(config["algorithm"]["policy"]["name"])
+    if need_init_params:
+        model = model_cls(
+            input_low_dim=config["dataset"]["input_low_dim"],
+            output_dim=config["dataset"]["output_dim"],
+            obs_keys=config["dataset"]["specific_obs_keys"],
+            batch_size=config["training"]["batch_size"],
+            seq_length=config["dataset"]["seq_length"],
+            training=True,  # Key setting
+            **config["algorithm"]["policy"]["params"]
+        )
+    else:
+        model = model_cls()
+    
+    # 加载预训练权重
+    if checkpoint_path:
+        model = load_policy_model(checkpoint_path, model, device)
+    
+    # 设置优化器和损失函数，用于在线学习
+    optimizer = get_optimizer_cls(config["algorithm"]["optimizer"]["name"])(
+        model.parameters(), **config["algorithm"]["optimizer"]["params"]
+    )
+    
+    criterion = get_loss_fn(
+        config["algorithm"]["loss"]["name"],
+        config["algorithm"]["loss"]["weight"],
+        config["dataset"]["seq_length"],
+        config["dataset"]["output_dim"]
+    )
+    
+    return model, optimizer, criterion, config
 
 def train_policy(img_size, model, num_train_steps, optimizer, criterion, num_epochs=10, batch_size=16, data_cfg=None,train_cfg=None, save_path=None, episode_idx=None, filter_by_attribute=None):
     # 创建训练数据集

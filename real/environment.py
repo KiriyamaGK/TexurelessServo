@@ -341,11 +341,12 @@ class Environment:
             self.update_state_matrix()
 
     def reinit(self):
-        if  self.need_reinit():
+        res_dict = self.need_reinit()
+        if  res_dict["close_enough"]:
             self.init()
         else:
             self.init_flag=False
-        return self.init_flag
+        return res_dict
 
     def reinit_eval(self,all_epochs_num=None,cur_epoch=None,freq_per_pos=None):
         rtn_dict=self.need_reinit_eval()
@@ -359,11 +360,7 @@ class Environment:
         return rtn_dict
 
     def need_reinit(self):
-        err_dict = self.compute_error(self.wgT_tar, self.wgT) #demo stage,to determine demo termination,it doesn't matter whether dT = g_tar,gT or g,g_tar T
-        if err_dict["close_enough"]:
-            return True
-        else:
-            return False
+        return self.compute_error(self.wgT_tar, self.wgT)
 
     def need_reinit_eval(self):
         err_dict = self.compute_error(self.wgT_tar, self.wgT) #eval stage,to get accurate z_zrror,compute dT = g_tar,gT is more acceptable

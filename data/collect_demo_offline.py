@@ -1,24 +1,19 @@
 import os
-from utils.input_process import input_dict_preprocess
 from utils.hdf5 import add_useless_things, split_train_val_from_hdf5, add_env_meta, compute_num_samples, add_config, create_hdf5_filter_key
 import h5py
 import numpy as np
 import json
 from sim.environment import Environment
 from utils.paths import return_disc_route
-from utils.transform import rmat2euler_rz_degree
+from utils.transform import rmat2euler_rz_degree,construct_dT_from_action
 from sim.perception import CameraIntrinsic
 import time
 import cv2
-from utils.input_process import clip_image,conditioned_clip_and_resize
+from utils.input_process import clip_image
 from utils.policy import get_expert_policy
 from data.process_hdf5 import _disturb_abs_rot,_portion_last_episode,_add_end_episode,_add_medium_episode,insert_imgs
-from utils.dagger import compute_position_distance_sim, load_policy_model, get_policy_action, aggregate_dataset, train_policy
+from utils.dagger import compute_position_distance_sim, get_policy_action, train_policy, setup_policy_model, prepare_observation_for_policy
 from utils.dagger_params import is_in_dagger_episode, should_train_policy, print_dagger_status
-import torch
-from networks.helpers import get_loss_fn, get_optimizer_cls, get_network_cls
-from torch.utils.data import DataLoader
-from dataset.dataset import dataset_factory
 
 def filter_translation(input,thres):
     assert thres>0
@@ -55,84 +50,6 @@ def get_goal_info(env):
     im_dep2 = rtn_dict["img_2_depth"] if "img_2_depth" in rtn_dict else None
 
     return {"img_goal":img,"img_goal2":img2,"img_light_goal":img_light,"img_light_goal2":img2_light,"img_dep_goal":im_dep,"img_dep_goal2":im_dep2}
-
-def prepare_observation_for_policy(img_size, hdf_img_size,img, img_goal, img2=None, img2_goal=None, img_light=None, img_light_goal=None, img2_light=None, img2_light_goal=None):
-    """
-    准备输入给策略模型的观察数据
-    """
-    img = conditioned_clip_and_resize(img, img_size, img_size, hdf_img_size)
-    img_goal = conditioned_clip_and_resize(img_goal, img_size, img_size, hdf_img_size)
-    if img2 is not None:
-        img2 = conditioned_clip_and_resize(img2, img_size, img_size, hdf_img_size)
-        img2_goal = conditioned_clip_and_resize(img2_goal, img_size, img_size, hdf_img_size)
-    if img_light is not None:
-        img_light = conditioned_clip_and_resize(img_light, img_size, img_size, hdf_img_size)
-        img_light_goal = conditioned_clip_and_resize(img_light_goal, img_size, img_size, hdf_img_size)
-    if img2_light is not None:
-        img2_light = conditioned_clip_and_resize(img2_light, img_size, img_size, hdf_img_size)
-        img2_light_goal = conditioned_clip_and_resize(img2_light_goal, img_size, img_size, hdf_img_size)
-    
-    obs_dict = {
-        "robot0_eye_in_hand_image": img,
-        "robot0_eye_in_hand_image_goal": img_goal
-    }
-    if img2 is not None:
-        obs_dict["robot0_eye_in_hand_image_2"] = img2
-        obs_dict["robot0_eye_in_hand_image_2_goal"] = img2_goal
-    if img_light is not None:
-        obs_dict["robot0_eye_in_hand_image_light"] = img_light
-        obs_dict["robot0_eye_in_hand_image_light_goal"] = img_light_goal
-    if img2_light is not None:
-        obs_dict["robot0_eye_in_hand_image_2_light"] = img2_light
-        obs_dict["robot0_eye_in_hand_image_2_light_goal"] = img2_light_goal
-    
-    obs_dict=input_dict_preprocess(obs_dict,rollout=True)
-        
-    return obs_dict
-
-def setup_policy_model(config_path="../configs/train_mlp.json", checkpoint_path=None):
-    """
-    设置策略模型
-    """
-    # 加载配置
-    with open(config_path, "r") as j:
-        config = json.load(j)
-    
-    # 设置设备
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    # 设置模型
-    model_cls, need_init_params = get_network_cls(config["algorithm"]["policy"]["name"])
-    if need_init_params:
-        model = model_cls(
-            input_low_dim=config["dataset"]["input_low_dim"],
-            output_dim=config["dataset"]["output_dim"],
-            obs_keys=config["dataset"]["specific_obs_keys"],
-            batch_size=config["training"]["batch_size"],
-            seq_length=config["dataset"]["seq_length"],
-            training=True,  # Key setting
-            **config["algorithm"]["policy"]["params"]
-        )
-    else:
-        model = model_cls()
-    
-    # 加载预训练权重
-    if checkpoint_path:
-        model = load_policy_model(checkpoint_path, model, device)
-    
-    # 设置优化器和损失函数，用于在线学习
-    optimizer = get_optimizer_cls(config["algorithm"]["optimizer"]["name"])(
-        model.parameters(), **config["algorithm"]["optimizer"]["params"]
-    )
-    
-    criterion = get_loss_fn(
-        config["algorithm"]["loss"]["name"],
-        config["algorithm"]["loss"]["weight"],
-        config["dataset"]["seq_length"],
-        config["dataset"]["output_dim"]
-    )
-    
-    return model, optimizer, criterion, config
 
 def process_and_append_observations(img, img2, img_light, img2_light, im_dep, im_dep2, img_h, 
                              img_lst, img2_lst, img_light_list, img2_light_list, im_dep_lst, im_dep2_lst, 
@@ -398,19 +315,8 @@ if __name__ == '__main__':
 
                 policy_action = get_policy_action(policy_model, obs_dict)
                 action = policy_action
-                
                 # 从策略动作构建变换矩阵dT
-                if dof == 3:
-                    dT = np.eye(4)
-                    dT[0:2, 3] = policy_action[:2]  # 前两个元素是平移
-                    dT[0:3, 0:3] = rotation_matrix_z(policy_action[2] / 180 * np.pi)  # 最后一个元素是旋转
-                else:
-                    dT = np.eye(4)
-                    dT[0:3, 3] = policy_action[:3]  # 前三个元素是平移
-                    rot_vec = policy_action[3:] / 180 * np.pi  # 后三个元素是旋转向量
-                    from scipy.spatial.transform import Rotation as R
-                    dT[0:3, 0:3] = R.from_rotvec(rot_vec).as_matrix()
-                
+                dT = construct_dT_from_action(policy_action, dof=dof)
                 # 打印策略动作和专家动作的差异
                 # print(f"[DAgger] Policy Action: {action}, Expert Action: {expert_action}")
             
@@ -447,6 +353,7 @@ if __name__ == '__main__':
             # 正常的移动
             env.action(dT)
             reinit_res = env.reinit()
+            
             if is_dagger_episode:
                 tr = reinit_res["dist"]
                 rot = reinit_res["angle"]
