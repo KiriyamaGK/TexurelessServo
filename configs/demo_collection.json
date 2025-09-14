@@ -20,9 +20,9 @@
     },
     "overall_setting": {
         "dataset_base_dir": "/home/kiriyamagk/桌面/tmp0729",
-        "file_name": "25.04.30",
-        "demo_total_num": 20,
-        "objs_descriptor": [4],
+        "file_name": "25.08.11",
+        "demo_total_num": 600,
+        "objs_descriptor": [5],
         "replace_existed_hdf5": true
     },
     "demo_collection": {
@@ -39,26 +39,36 @@
         "record_pose": true,
         "dagger": {
             "utilized": true,
-            "start_episode": 0,
-            "frequency": 0,
-            "episodes_per_dagger": 10,
-            "position_threshold": [0.005,0.15],
-            "check_frame_interval": 1,
-            "model_path": null,
-            "train_frequency": 1,
-            "train_epochs": 1
+            "dagger_episodes": {
+                "_comment": "use_type: list of [start_episode, end_episode] - episodes in these ranges will use DAgger strategy",
+                "use_type": [[300,400],[551, 900], [900, 950],[1200, 1250]]
+            },
+            "train": {
+                "_comment": "use_type: list of [episode_idx, num_train_epochs, dagger_proportion] - dagger_proportion in [0,1] or null to not specify",
+                "use_type": [[299,20,null],[550,20,0.4],[799, 40, 0.3], [1199, 70, null], [1299, 40, 0.8]]
+            },
+            "task_termination": {
+                "min_position_threshold": [0.002, 0.08],
+                "pose_error_threshold": {
+                    "trans": 0.001,
+                    "rot": 1,
+                    "time": 20
+                }
+            },
+            "check_frame_interval": 2,
+            "model_path": null
         },
 
         "init": {
             "init_transform_frame": "grip",
             "init_horizon_trans": {
-                "value": 0.005,
+                "value": 0.02,
                 "use_max_trans": false,
                 "use_high_proportion_x":false
             },
 
             "init_vertical_trans": {
-                "value":0.05,
+                "value":0.02,
                 "using_max_v_trans": false,
                 "using_minus": false
             },

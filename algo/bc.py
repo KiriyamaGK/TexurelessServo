@@ -112,11 +112,11 @@ class BehaviorCloning():
             if idx==0:
                 for k,v in batch_loss_dict.items():
                     epoch_loss_dict[k]=v
-                    print("===========key:",v)
+                    # print("===========key:",v)
             else:
                 for k,v in batch_loss_dict.items():
                     epoch_loss_dict[k]+=v
-                    print("===========key:", v)
+                    # print("===========key:", v)
             idx+=1
         for k, v in epoch_loss_dict.items():
             epoch_loss_dict[k] /= num_train_steps

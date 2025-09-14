@@ -1,6 +1,6 @@
 import os
 from utils.input_process import input_dict_preprocess
-from utils.hdf5 import add_useless_things, split_train_val_from_hdf5, add_env_meta, compute_num_samples, add_config
+from utils.hdf5 import add_useless_things, split_train_val_from_hdf5, add_env_meta, compute_num_samples, add_config, create_hdf5_filter_key
 import h5py
 import numpy as np
 import json
@@ -14,6 +14,7 @@ from utils.input_process import clip_image,conditioned_clip_and_resize
 from utils.policy import get_expert_policy
 from data.process_hdf5 import _disturb_abs_rot,_portion_last_episode,_add_end_episode,_add_medium_episode,insert_imgs
 from utils.dagger import compute_position_distance, load_policy_model, get_policy_action, aggregate_dataset, train_policy
+from utils.dagger_params import is_in_dagger_episode, should_train_policy, print_dagger_status
 import torch
 from networks.helpers import get_loss_fn, get_optimizer_cls, get_network_cls
 from torch.utils.data import DataLoader
@@ -55,7 +56,7 @@ def get_goal_info(env):
 
     return {"img_goal":img,"img_goal2":img2,"img_light_goal":img_light,"img_light_goal2":img2_light,"img_dep_goal":im_dep,"img_dep_goal2":im_dep2}
 
-def prepare_observation_for_policy(img_size, hdf_img_size,img, img_goal, img2=None, img2_goal=None):
+def prepare_observation_for_policy(img_size, hdf_img_size,img, img_goal, img2=None, img2_goal=None, img_light=None, img_light_goal=None, img2_light=None, img2_light_goal=None):
     """
     准备输入给策略模型的观察数据
     """
@@ -63,7 +64,14 @@ def prepare_observation_for_policy(img_size, hdf_img_size,img, img_goal, img2=No
     img_goal = conditioned_clip_and_resize(img_goal, img_size, img_size, hdf_img_size)
     if img2 is not None:
         img2 = conditioned_clip_and_resize(img2, img_size, img_size, hdf_img_size)
-        img2_goal = conditioned_clip_and_resize(img2_goal, img_size, img_size, hdf_img_size)  
+        img2_goal = conditioned_clip_and_resize(img2_goal, img_size, img_size, hdf_img_size)
+    if img_light is not None:
+        img_light = conditioned_clip_and_resize(img_light, img_size, img_size, hdf_img_size)
+        img_light_goal = conditioned_clip_and_resize(img_light_goal, img_size, img_size, hdf_img_size)
+    if img2_light is not None:
+        img2_light = conditioned_clip_and_resize(img2_light, img_size, img_size, hdf_img_size)
+        img2_light_goal = conditioned_clip_and_resize(img2_light_goal, img_size, img_size, hdf_img_size)
+    
     obs_dict = {
         "robot0_eye_in_hand_image": img,
         "robot0_eye_in_hand_image_goal": img_goal
@@ -71,6 +79,12 @@ def prepare_observation_for_policy(img_size, hdf_img_size,img, img_goal, img2=No
     if img2 is not None:
         obs_dict["robot0_eye_in_hand_image_2"] = img2
         obs_dict["robot0_eye_in_hand_image_2_goal"] = img2_goal
+    if img_light is not None:
+        obs_dict["robot0_eye_in_hand_image_light"] = img_light
+        obs_dict["robot0_eye_in_hand_image_light_goal"] = img_light_goal
+    if img2_light is not None:
+        obs_dict["robot0_eye_in_hand_image_2_light"] = img2_light
+        obs_dict["robot0_eye_in_hand_image_2_light_goal"] = img2_light_goal
     
     obs_dict=input_dict_preprocess(obs_dict,rollout=True)
         
@@ -96,7 +110,7 @@ def setup_policy_model(config_path="../configs/train_mlp.json", checkpoint_path=
             obs_keys=config["dataset"]["specific_obs_keys"],
             batch_size=config["training"]["batch_size"],
             seq_length=config["dataset"]["seq_length"],
-            training=False,  # 推理模式
+            training=True,  # Key setting
             **config["algorithm"]["policy"]["params"]
         )
     else:
@@ -162,8 +176,8 @@ def process_and_append_observations(img, img2, img_light, img2_light, im_dep, im
         im_dep2_lst.append(im_dep2[..., np.newaxis])
 
 if __name__ == '__main__':
-    img_w=220
-    img_h=220
+    img_w=300
+    img_h=300
     visualize_img = False
 
     config_dir= "../configs/demo_collection.json"
@@ -172,8 +186,8 @@ if __name__ == '__main__':
         config = json.load(j)
 
     #overall setting
-    # base_dir = return_disc_route("One Touch")
-    base_dir = config['overall_setting']["dataset_base_dir"]
+    base_dir = return_disc_route("One Touch")
+    # base_dir = config['overall_setting']["dataset_base_dir"]
     objs_descriptor=config['overall_setting']['objs_descriptor']
     current_date=config['overall_setting']['file_name']
     demo_total_num = config['overall_setting']['demo_total_num']
@@ -203,7 +217,7 @@ if __name__ == '__main__':
     # frequency: 整数，表示每多少个非DAgger的episode后执行一次DAgger收集过程。例如，值为5表示每5个正常episode后执行一次DAgger。
     # episodes_per_dagger: 整数，表示每次触发DAgger时连续执行的DAgger episode数量。例如，值为10表示每次触发DAgger时会连续收集10个使用策略模型的episodes。
     
-    # position_threshold: 浮点数，表示在DAgger模式下，当夹爪与目标物体之间的位置距离小于此值时，当前episode会提前结束。单位是米。
+    # min_position_threshold: list，表示在DAgger模式下，当夹爪与目标物体之间的最小位置距离不在此范围时，当前episode会提前结束。单位是米。
     # check_frame_interval: 整数，表示在DAgger模式下每隔多少帧检查一次夹爪与物体的距离。
     
     # train_frequency: 整数，表示每完成多少个DAgger episodes后进行一次模型训练。
@@ -222,6 +236,9 @@ if __name__ == '__main__':
         # 确保模型处于评估模式
         policy_model.eval()
         save_img_size = model_config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"]
+
+        min_position_threshold = dagger_config["task_termination"]["min_position_threshold"]
+        pose_error_threshold = dagger_config["task_termination"]["pose_error_threshold"]  # m,deg,sec
     #================================dagger===============================
 
     trans_vel=config["demo_collection"]["velocity"]['trans_vel'] #m
@@ -267,37 +284,32 @@ if __name__ == '__main__':
     existed_demo_num = 0
 
     #================================dagger===============================
-    # DAgger相关计数器
-    dagger_episodes_done = 0
-    non_dagger_episodes_count = 0
-    current_dagger_episodes = 0
+    # DAgger相关变量
     end_episode = False
-    
-    # 用于存储DAgger收集的新数据
-    dagger_new_data = {
-        "obs": [],
-        "actions": [],
-        "delta_pos_curgoal": []
-    }
+    first_in_error = False
     #================================dagger===============================
     
     for idx in range(demo_total_num):
+        if not is_hdf_open:
+            new_f_out = h5py.File(dataset_dir, "r+")
+            is_hdf_open = True
+
         print("====================start collecting demo_{} ====================".format(idx))
         
         #================================dagger===============================
+        first_in_error = False
         is_dagger_episode = False
-        if use_dagger and idx >= dagger_config["start_episode"]:
-            if non_dagger_episodes_count >= dagger_config["frequency"]:
-                is_dagger_episode = True
-                current_dagger_episodes += 1
-                if current_dagger_episodes >= dagger_config["episodes_per_dagger"]:
-                    current_dagger_episodes = 0
-                    non_dagger_episodes_count = 0
-            else:
-                non_dagger_episodes_count += 1
-            if not is_hdf_open:
-                new_f_out = h5py.File(dataset_dir, "r+")
-                is_hdf_open = True
+        should_train = False
+        train_epochs = 0
+        
+        if use_dagger:
+            # 判断是否应该使用DAgger策略
+            is_dagger_episode = is_in_dagger_episode(idx, dagger_config)
+            # 判断是否应该训练策略，并获得训练时的DAgger数据比例
+            should_train, train_epochs, dagger_proportion = should_train_policy(idx, dagger_config)
+            
+            # 打印DAgger状态
+            print_dagger_status(idx, is_dagger_episode, should_train, train_epochs)
                 
         if is_dagger_episode:
             print("[INFO] Using DAgger strategy for episode {}".format(idx))
@@ -307,7 +319,7 @@ if __name__ == '__main__':
             if 'data' in new_f_out and not replace_existed_hdf5:
                 existed_demo_num=len(new_f_out["data"])
 
-        if existed_demo_num>=1:#根据existed_demo_num和dagger_episodes_done的数量整体偏移
+        if existed_demo_num>=1:#根据existed_demo_num的数量整体偏移
             obs_path = 'data/demo_{}/obs'.format(idx+existed_demo_num)
             action_path = 'data/demo_{}/actions'.format(idx+existed_demo_num)
             pos_path = 'data/demo_{}/delta_pos_curgoal'.format(idx + existed_demo_num)
@@ -371,9 +383,17 @@ if __name__ == '__main__':
             action = expert_action
             
             if is_dagger_episode and policy_model is not None:
-                obs_dict = prepare_observation_for_policy(img_size = save_img_size, hdf_img_size = img_h,
-                    img=img, img_goal=goal_dict["img_goal"], 
-                    img2=img2, img2_goal=goal_dict["img_goal2"] if goal_dict["img_goal2"] is not None else None
+                obs_dict = prepare_observation_for_policy(
+                    img_size=save_img_size,
+                    hdf_img_size=img_h,
+                    img=img,
+                    img_goal=goal_dict["img_goal"],
+                    img2=img2,
+                    img2_goal=goal_dict["img_goal2"] if goal_dict["img_goal2"] is not None else None,
+                    img_light=img_light if use_light_key else None,
+                    img_light_goal=goal_dict["img_light_goal"] if use_light_key else None,
+                    img2_light=img2_light if (use_light_key and img2_light is not None) else None,
+                    img2_light_goal=goal_dict["img_light_goal2"] if (use_light_key and goal_dict["img_light_goal2"] is not None) else None
                 )
 
                 policy_action = get_policy_action(policy_model, obs_dict)
@@ -418,16 +438,35 @@ if __name__ == '__main__':
                 distance = collision_res["min_distance"]
                 contact_flag = collision_res["is_colliding"]
                 print(f"distance: {distance}")
-                if distance < dagger_config["position_threshold"][0] or distance > dagger_config["position_threshold"][1] or contact_flag:
-                    print(f"[DAgger] Position threshold reached at frame {frame_counter}, distance: {distance}")
+                
+                if distance < min_position_threshold[0] or distance > min_position_threshold[1] or contact_flag:
+                    print(f"[DAgger] Position minimum threshold reached at frame {frame_counter}, distance: {distance}, threshold: {min_position_threshold}")
                     end_episode = True
             #================================dagger===============================
             
             # 正常的移动
             env.action(dT)
             reinit_res = env.reinit()
-            if reinit_res or end_episode:
-                if not reinit_res:
+            if is_dagger_episode:
+                tr = reinit_res["dist"]
+                rot = reinit_res["angle"]
+                print(f"------------error:trans:{tr},rot:{rot}-----------------")
+                if tr > pose_error_threshold["trans"] or rot > pose_error_threshold["rot"]:
+                    if first_in_error:
+                        dt = time.time() - error_timer
+                        if dt > pose_error_threshold["time"]:
+                            print(
+                                f"[DAgger] Pose error reached at frame {frame_counter}, trans: {tr}, rot: {rot} for over {dt} seconds.")
+                            end_episode = True
+                    else:
+                        error_timer = time.time()
+                        first_in_error = True
+                else:
+                    first_in_error = False
+
+
+            if reinit_res["close_enough"] or end_episode:
+                if not reinit_res["close_enough"]:
                     env.init()
                 # add the obs-action pair of the last frame
                 if is_dagger_episode:
@@ -538,12 +577,6 @@ if __name__ == '__main__':
                         episode_data["obs"]["depth_image_2"] = np.array(im_dep2_lst)
                     if len(delta_pose_list)!=0:
                         episode_data["delta_pos_curgoal"] = np.array(delta_pose_list)
-                    
-                    # 添加到DAgger数据集
-                    dagger_new_data["obs"].append(episode_data["obs"])
-                    dagger_new_data["actions"].append(episode_data["actions"])
-                    if "delta_pos_curgoal" in episode_data:
-                        dagger_new_data["delta_pos_curgoal"].append(episode_data["delta_pos_curgoal"])
                 
                 #save hdf5
                 epi_length=len(img_lst)
@@ -580,49 +613,70 @@ if __name__ == '__main__':
                 print("[INFO] demo_{} collected successfully.".format(idx))
                 #================================dagger===============================
                 if is_dagger_episode:
-                    dagger_episodes_done += 1
-                    print(f"[DAgger] Episode completed. Total DAgger episodes: {dagger_episodes_done}")
-                    
-                    # 每完成一定数量的DAgger episodes后，进行一次在线训练
-                    if dagger_episodes_done % dagger_config.get("train_frequency", 5) == 0 and policy_model is not None:
-                        print(f"[DAgger] Training policy model after {dagger_episodes_done} episodes")
-                        
-                        # 聚合数据集并训练模型
-                        # aggregate_dataset(dagger_new_data, dataset_dir)
-                        # aggregate_dataset(dagger_new_data, new_f_out)
-                        
-                        # 训练模型
-                        new_f_out.close()
-                        is_hdf_open = False
-                        tr_model_cfg = model_config["dataset"]
-                        # tr_model_cfg["hdf5_file"] = new_f_out
-                        tr_model_cfg["hdf5_path"] = dataset_dir
+                    print(f"[DAgger] Episode {idx} completed successfully")
+                # ================================dagger===============================
 
-                        policy_model = train_policy( #这个函数的img_size填写的是对的
-                            img_size = model_config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"],
-                            num_train_steps = model_config["training"]["num_train_steps_per_epoch"],
-                            model=policy_model,
-                            optimizer=optimizer,
-                            criterion=criterion,
-                            num_epochs=dagger_config.get("train_epochs", 5),
-                            batch_size=model_config["training"]["batch_size"],
-                            config = tr_model_cfg
-                        )
-                        
-                        # 保存新模型
-                        model_path = os.path.join(base_dir, 'AlignAnything', current_date, 'models')
-                        ensure_dir(model_path)
-                        model_file = os.path.join(model_path, f'dagger_episode_{dagger_episodes_done}.pth')
-                        torch.save(policy_model.state_dict(), model_file)
-                        print(f"[DAgger] Model saved to {model_file}")
-                        
-                        # 清空新数据缓冲区
-                        dagger_new_data = {
-                            "obs": [],
-                            "actions": [],
-                            "delta_pos_curgoal": []
-                        }
-                #================================dagger===============================
+                #===============================policy training=============================
+                # 使用之前计算的训练状态
+                if should_train and policy_model is not None:
+                    print(f"[DAgger] Training policy model at episode {idx} with {train_epochs} epochs")
+
+                    # 训练模型
+                    new_f_out.close()
+                    is_hdf_open = False
+                    data_cfg = model_config["dataset"]
+                    data_cfg["hdf5_path"] = dataset_dir
+                    train_cfg = model_config["training"]
+                    # 保存新模型
+                    model_path = os.path.join(base_dir, 'AlignAnything', current_date, 'models')
+                    ensure_dir(model_path)
+                    
+                    # 根据 dagger_proportion 构建过滤键
+                    filter_key = None
+                    if 'dagger' in config['demo_collection'] and dagger_proportion is not None:
+                        # 构建 dagger/non-dagger 划分
+                        f_tmp = h5py.File(dataset_dir, 'r')
+                        all_demos = sorted(list(f_tmp['data'].keys()))
+                        f_tmp.close()
+                        dagger_ranges = dagger_config.get('dagger_episodes', {}).get('use_type', [])
+                        dagger_set = set()
+                        for s, e in dagger_ranges:
+                            for ep in range(s, e + 1):
+                                demo_id = f"demo_{ep+existed_demo_num}"  #crucial improvement
+                                if demo_id in all_demos:
+                                    dagger_set.add(demo_id)
+                        dagger_demos = [d for d in all_demos if d in dagger_set]
+                        non_dagger_demos = [d for d in all_demos if d not in dagger_set]
+
+                        num_total = len(all_demos)
+                        num_dagger_target = int(round(dagger_proportion * num_total))
+                        num_non_dagger_target = max(0, num_total - num_dagger_target)
+
+                        rng = np.random.default_rng(seed=idx)
+                        chosen_dagger = rng.choice(dagger_demos, size=min(len(dagger_demos), num_dagger_target), replace=False).tolist()
+                        chosen_non_dagger = rng.choice(non_dagger_demos, size=min(len(non_dagger_demos), num_non_dagger_target), replace=False).tolist()
+                        mixed = sorted(chosen_dagger + chosen_non_dagger)
+                        tmp_key = f"dagger_mix_ep_{idx}"
+                        create_hdf5_filter_key(hdf5_path=dataset_dir, demo_keys=mixed, key_name=tmp_key,return_length=False)
+                        filter_key = tmp_key
+                    #训练
+                    policy_model = train_policy(
+                        img_size=model_config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"],
+                        num_train_steps=model_config["training"]["num_train_steps_per_epoch"],
+                        model=policy_model,
+                        optimizer=optimizer,
+                        criterion=criterion,
+                        num_epochs=train_epochs,
+                        batch_size=model_config["training"]["batch_size"],
+                        train_cfg=train_cfg,
+                        data_cfg=data_cfg,
+                        save_path=model_path,
+                        episode_idx=idx,
+                        filter_by_attribute=filter_key
+                    )
+
+
+                #===============================policy training===============================
                 break
     # add_env_meta(new_f_out,additional_itms={"pose_and_orientations":pose_and_orientations})
     if not is_hdf_open:

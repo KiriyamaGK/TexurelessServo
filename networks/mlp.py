@@ -70,6 +70,7 @@ class MLP(NetworkBase):
         if self.use_tcl_loss:
             assert self.use_data_augmentation
 
+
         self.activation = get_activation_fn(activation)
         self.output_activation = get_activation_fn(output_activation) if output_activation is not None else None
 

@@ -157,11 +157,12 @@ def aggregate_dataset(new_data, f, max_size=None):
     
     
 
-def train_policy(img_size ,model, num_train_steps,optimizer, criterion, num_epochs=10, batch_size=16, config=None):
+def train_policy(img_size, model, num_train_steps, optimizer, criterion, num_epochs=10, batch_size=16, data_cfg=None,train_cfg=None, save_path=None, episode_idx=None, filter_by_attribute=None):
     # 创建训练数据集
     train_set = dataset_factory(
-        config,
-        img_size = img_size, #do not utilize a subset of dataset so that the filter_by_attribute key is None
+        data_cfg,
+        img_size = img_size,
+        filter_by_attribute=filter_by_attribute,
     )
     
     # 创建数据加载器
@@ -176,12 +177,23 @@ def train_policy(img_size ,model, num_train_steps,optimizer, criterion, num_epoc
     # 创建BC算法实例
     bc_algorithm = BehaviorCloning(model, optimizer, criterion)
     
+    # 获取保存频率
+    num_epochs_save = train_cfg.get("num_epochs_save", 10) if train_cfg else 10
+    
     # 训练模型
     print(f"[DAgger] 开始训练，总轮数: {num_epochs}")
     for epoch in range(num_epochs):
         print(f"[DAgger] Epoch {epoch+1}/{num_epochs}")
         train_loss_dict = bc_algorithm.train(train_loader, num_train_steps=num_train_steps)
-        print(f"[DAgger] Epoch {epoch+1} 训练损失: {train_loss_dict['loss']:.4f}")
+        current_loss = train_loss_dict['loss']
+        print(f"[DAgger] Epoch {epoch+1} 训练损失: {current_loss:.4f}")
+        
+        # 按指定频率保存模型
+        if (epoch + 1) % num_epochs_save == 0 and save_path is not None and episode_idx is not None:
+            model_filename = f'dagger_episode_{episode_idx}_epoch_{epoch+1}_loss_{current_loss:.4f}.pth'
+            model_file = os.path.join(save_path, model_filename)
+            torch.save(model.state_dict(), model_file)
+            print(f"[DAgger] 模型已保存到: {model_file}")
     
     print("[DAgger] 训练完成")
     return model 

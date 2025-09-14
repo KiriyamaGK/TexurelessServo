@@ -82,7 +82,7 @@ class BehaviorCloningExperiment():
         """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    def _setup_paths(self):
+    def _setup_paths(self):  #TODO:need to convert for dagger
         """
         Set up the paths for saving models.
         """

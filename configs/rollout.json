@@ -13,8 +13,8 @@
         "fov": 60
     },
 
-    "logs_dir":  "trained_models/trial/2025-05-23_21-23-39/config.json",
-    "ckpts_dir": [280],
+    "logs_dir":  "/media/kiriyamagk/One Touch/AlignAnything/25.08.10/models/config.json",
+    "ckpts_dir": "epoch_20_dagger_episode_550_epoch_20_loss_0.0007.pth",
     "objs_descriptor": [5],
     "eval_epoch_num": 300,
     "bgr2rgb": false,
@@ -30,7 +30,7 @@
     "init": {
         "uniform_evaluation": {
             "freq_per_pos": 3,
-            "utilized": true,
+            "utilized": false,
             "trans": {
                 "x":{
                     "range": [0.005, 0.005],
@@ -62,11 +62,11 @@
     },
         "init_transform_frame": "grip",
         "init_horizon_trans": {
-            "value": 0.005,
+            "value": 0.02,
             "use_max_trans": false
         },
         "init_vertical_trans": {
-            "value":0.05,
+            "value":0.02,
             "using_max_v_trans": false,
             "using_minus": false
         },

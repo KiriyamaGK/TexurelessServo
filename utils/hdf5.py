@@ -15,7 +15,7 @@ def copy_attributes(source, target):
     """Copy attributes from source to target"""
     for key, value in source.attrs.items():
         target.attrs[key] = value
-def create_hdf5_filter_key(hdf5_path, demo_keys, key_name):
+def create_hdf5_filter_key(hdf5_path, demo_keys, key_name,return_length = True):
     """
     Creates a new hdf5 filter key in hdf5 file @hdf5_path with
     name @key_name that corresponds to the demonstrations
@@ -40,12 +40,13 @@ def create_hdf5_filter_key(hdf5_path, demo_keys, key_name):
     f = h5py.File(hdf5_path, "a")
     demos = sorted(list(f["data"].keys()))
 
-    # collect episode lengths for the keys of interest
-    ep_lengths = []
-    for ep in demos:
-        ep_data_grp = f["data/{}".format(ep)]
-        if ep in demo_keys:
-            ep_lengths.append(ep_data_grp.attrs["num_samples"])
+    if return_length:
+        # collect episode lengths for the keys of interest
+        ep_lengths = []
+        for ep in demos:
+            ep_data_grp = f["data/{}".format(ep)]
+            if ep in demo_keys:
+                ep_lengths.append(ep_data_grp.attrs["num_samples"])
 
     # store list of filtered keys under mask group
     k = "mask/{}".format(key_name)
@@ -54,7 +55,8 @@ def create_hdf5_filter_key(hdf5_path, demo_keys, key_name):
     f[k] = np.array(demo_keys, dtype='S')
 
     f.close()
-    return ep_lengths
+    if return_length:
+        return ep_lengths
 
 def add_useless_things(new_f_out:h5py.File,epi_len:int,demo_ind):
     if isinstance(demo_ind,str):

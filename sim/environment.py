@@ -44,19 +44,20 @@ class Environment(object):
         self.obj_idx_pointer:指针,self.obj_idxs=self.obj_idxs[self.obj_idx_pointer]
         '''
         if pose_and_orientations is None:
+            # raise RuntimeError
             pose_and_orientations={
-                "cam1": {
-                    "cwT_trans": [0, -0.09, 2.1],
-                    "rotation": 30
+                "cam1":{
+                    "cwT_trans":[0,-0.098,2.05],
+                    "rotation": 45
                 },
                 "cam2": {
-                    "c2wT_trans": [0, -0.08, 2.1],
-                    "rotation": 30
+                    "c2wT_trans": [0, -0.098, 2.05],
+                    "rotation": 45
                 },
                 "grip": {
-                    "start_pos_z": 2.25,
-                    "offset_z": 0
-                },
+                    "start_pos_z": 2.20,
+                    "offset_z": [-0.05,-0.05,-0.02,-0.05,-0.05,0,-0.05,-0.05,-0.02,-0.05,-0.05,-0.05,-0.05,-0.05,-0.05,-0.02,-0.05,-0.02,0,-0.05,-0.05,-0.05,-0.05]
+                }
             }
         self.third_view_camera = third_view_camera if dof == 6 else False
 
@@ -426,7 +427,7 @@ class Environment(object):
                 trans_dev=self.init_horizon_trans if self.use_max_trans else np.sqrt(random.uniform(0, self.init_horizon_trans**2))
                 dT[0:3,3]=np.array([cos(ori)*trans_dev, sin(ori)*trans_dev,-self.init_vertical_trans])
 
-                if self.using_max_v_trans: #TODO:这条分支是错的
+                if not self.using_max_v_trans:
                     dT[2, 3]*=random.uniform(0, 1)
                 if self.using_minus_vertical:
                     if random.randint(0,1)>0.65:
@@ -581,11 +582,12 @@ class Environment(object):
         # time.sleep(1000000)
 
     def reinit(self):
-        if  self.need_reinit():
+        res_dict = self.need_reinit()
+        if  res_dict["close_enough"]:
             self.init()
         else:
             self.init_flag=False
-        return self.init_flag
+        return res_dict
 
     def reinit_eval(self,all_epochs_num=None,cur_epoch=None,freq_per_pos=None):
         rtn_dict=self.need_reinit_eval()
@@ -605,11 +607,7 @@ class Environment(object):
         self.axes_gripper.clear()
 
     def need_reinit(self):
-        err_dict = self.compute_error(self.wcT_tar, self.wcT)
-        if err_dict["close_enough"]:
-            return True
-        else:
-            return False
+        return self.compute_error(self.wcT_tar, self.wcT)
 
     def need_reinit_eval(self):
         err_dict=self.compute_error(self.wcT_tar, self.wcT)
