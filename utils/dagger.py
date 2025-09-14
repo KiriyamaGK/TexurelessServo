@@ -11,7 +11,7 @@ from dataset.dataset import dataset_factory
 import pybullet as p
 
 
-def compute_position_distance(obj, grip, distance_threshold=1.0):
+def compute_position_distance_sim(obj, grip, distance_threshold=1.0):
     closest_points = p.getClosestPoints(obj, grip[0], distance_threshold)
 
     if not closest_points:

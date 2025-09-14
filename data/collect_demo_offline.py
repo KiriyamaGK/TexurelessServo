@@ -13,7 +13,7 @@ import cv2
 from utils.input_process import clip_image,conditioned_clip_and_resize
 from utils.policy import get_expert_policy
 from data.process_hdf5 import _disturb_abs_rot,_portion_last_episode,_add_end_episode,_add_medium_episode,insert_imgs
-from utils.dagger import compute_position_distance, load_policy_model, get_policy_action, aggregate_dataset, train_policy
+from utils.dagger import compute_position_distance_sim, load_policy_model, get_policy_action, aggregate_dataset, train_policy
 from utils.dagger_params import is_in_dagger_episode, should_train_policy, print_dagger_status
 import torch
 from networks.helpers import get_loss_fn, get_optimizer_cls, get_network_cls
@@ -434,7 +434,7 @@ if __name__ == '__main__':
             #================================dagger===============================
             # DAgger策略检查物体和夹爪位置
             if is_dagger_episode and frame_counter % dagger_config["check_frame_interval"] == 0:
-                collision_res = compute_position_distance(env.objId, env.gripId)
+                collision_res = compute_position_distance_sim(env.objId, env.gripId)
                 distance = collision_res["min_distance"]
                 contact_flag = collision_res["is_colliding"]
                 print(f"distance: {distance}")
