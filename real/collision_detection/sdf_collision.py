@@ -30,7 +30,7 @@ def cross_check_collision(obj1_sdf, obj2_sdf, obj1_mesh, obj2_mesh, num_sample_p
     
     return collision1 or collision2
 
-def check_collision_hybrid(obj1_sdf, obj2_sdf, obj1_mesh, obj2_mesh, num_sample_points=500,a_to_b=True):
+def check_collision_hybrid(obj1_sdf, obj2_sdf, obj1_mesh, obj2_mesh, num_sample_points=500,a_to_b=True,threshold=0.0):
     # 第一步：快速AABB（axis-aligned bounding box）检测
     obj1_bounds = obj1_mesh.bounds
     obj2_bounds = obj2_mesh.bounds
@@ -49,10 +49,10 @@ def check_collision_hybrid(obj1_sdf, obj2_sdf, obj1_mesh, obj2_mesh, num_sample_
         points = obj1_mesh.sample(num_sample_points)  # 增加采样点
         t_end = time.time()
         print("use sample time:",t_end - t_start)
-        return any(obj2_sdf.signed_distance(p) < 0 for p in points)
+        return any(obj2_sdf.signed_distance(p) < threshold for p in points)
     else:
         points = obj2_mesh.sample(num_sample_points)  # 增加采样点
-        return any(obj1_sdf.signed_distance(p) < 0 for p in points)
+        return any(obj1_sdf.signed_distance(p) < threshold for p in points)
 
 if __name__ == "__main__":
     gripper_path = os.path.join(PROJECT_ROOT_DIR,"meshes/gripper/meshes/l_gripper_tip_scaled.stl")   
