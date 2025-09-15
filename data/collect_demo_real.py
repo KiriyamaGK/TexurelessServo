@@ -19,12 +19,12 @@ from utils.transform import rotation_matrix_z, rmat2euler_rz_degree,construct_dT
 from utils.dagger_params import is_in_dagger_episode, should_train_policy, print_dagger_status
 from utils.dagger import  get_policy_action, aggregate_dataset, train_policy, setup_policy_model, prepare_observation_for_policy
 from real.collision_detection.sdf_collision import check_collision_hybrid
+from utils.augmentation import AugmentationModule
 
 import atexit
 from pynput import keyboard
 
-##TODO:1.modify mesh loading 2.add_data_augmentation
-
+##TODO:1.modify mesh loading
 def filter_translation(input,thres):
     assert thres>0
     input=np.array(input)
@@ -202,6 +202,23 @@ if __name__=='__main__':
     img_save_type = config["demo_collection"]["img"]["save_type"]
     assert img_save_type in ["rgb", "bgr"]
     img_size = config["demo_collection"]["img"]["size"]
+    use_augmentation = config["demo_collection"]["img"]["augmentation"]["utilized"]
+    pretrained_model_pth = config["demo_collection"]["img"]["augmentation"]["pretrained_model_pth"]
+    scale_range_min = config["demo_collection"]["img"]["augmentation"]["scale_range_min"]
+    scale_range_max = config["demo_collection"]["img"]["augmentation"]["scale_range_max"]
+    offset_range_min = config["demo_collection"]["img"]["augmentation"]["offset_range_min"]
+    offset_range_max = config["demo_collection"]["img"]["augmentation"]["offset_range_max"]
+    noise_std = config["demo_collection"]["img"]["augmentation"]["noise_std"]
+
+    if use_augmentation:
+        augmentation_module = AugmentationModule(
+            pretrained_model_pth=pretrained_model_pth,
+            scale_range_min=scale_range_min,
+            scale_range_max=scale_range_max,
+            offset_range_min=offset_range_min,
+            offset_range_max=offset_range_max,
+            noise_std=noise_std,
+        )
 
       ##record pose
     record_pose = config["demo_collection"]['record_pose']
@@ -327,6 +344,8 @@ if __name__=='__main__':
         expert_action_list=[] # 专家动作列表（用于DAgger的标签）
         img_lst=[]
         img2_lst = []
+        img_light_list = []
+        img2_light_list = []
         rz_list=[]
         delta_pose_list=[]
 
@@ -439,6 +458,9 @@ if __name__=='__main__':
                 if img_save_type == "rgb":
                     img = img[:, :, ::-1]
                 img_lst.append(img)
+                if use_augmentation:
+                    img_light = augmentation_module.augment_image(img, False)
+                    img_light_list.append(img_light)
 
                 if img2 is not None:
                     img2_vis = img2.copy()
@@ -446,6 +468,9 @@ if __name__=='__main__':
                     if img_save_type == "rgb":
                         img2 = img2[:, :, ::-1]
                     img2_lst.append(img2)
+                    if use_augmentation:
+                        img2_light = augmentation_module.augment_image(img2, False)
+                        img2_light_list.append(img2_light)
 
                     combined_img = np.hstack((img_vis, img2_vis))
                 else:
@@ -508,12 +533,19 @@ if __name__=='__main__':
                     if img_save_type == "rgb":
                         img_goal = img_goal[:, :, ::-1]
                     img_lst.append(img_goal)
+                    if use_augmentation:
+                        img_light_goal = augmentation_module.augment_image(img_goal, False)
+                        img_light_list.append(img_light_goal)
 
                     if goal_dict["img_goal2"] is not None:
                         im_goal2 = clip_image(goal_dict["img_goal2"], img_size,keep_right=True)
                         if img_save_type == "rgb":
                             im_goal2 = im_goal2[:, :, ::-1]
                         img2_lst.append(im_goal2)
+                        if use_augmentation:
+                            img2_light_goal = augmentation_module.augment_image(im_goal2, False)
+                            img2_light_list.append(img2_light_goal)
+
                     if record_pose:
                         delta_pose_list.append(np.zeros(6))
 
@@ -547,8 +579,12 @@ if __name__=='__main__':
                                                                                  act_lst=expert_action_list,
                                                                                  pose_list=delta_pose_list)
                         img_lst = insert_imgs(img_lst, pick_id, insert_id, add_num)
+                        if use_augmentation:
+                            img_light_list = insert_imgs(img_light_list, pick_id, insert_id, add_num)
                         if len(img2_lst) != 0:
                             img2_lst = insert_imgs(img2_lst, pick_id, insert_id, add_num)
+                            if use_augmentation:
+                                img2_light_list = insert_imgs(img2_light_list, pick_id, insert_id, add_num)
 
                     if add_medium_episode["utilized"]:
                         action_list, rz_list, delta_pose_list, need_add_medium, trans_id, rot_id = _add_medium_episode(
@@ -567,8 +603,12 @@ if __name__=='__main__':
                             add_num = add_medium_episode["add_num"]
 
                             img_lst = insert_imgs(img_lst, pick_id, insert_id, add_num)
+                            if use_augmentation:
+                                img_light_list = insert_imgs(img_light_list, pick_id, insert_id, add_num)
                             if len(img2_lst) != 0:
                                 img2_lst = insert_imgs(img2_lst, pick_id, insert_id, add_num)
+                                if use_augmentation:
+                                    img2_light_list = insert_imgs(img2_light_list, pick_id, insert_id, add_num)
 
                     # 如果是DAgger模式，保存到临时数据中
                     if is_dagger_episode:
@@ -582,6 +622,10 @@ if __name__=='__main__':
                         
                         if len(img2_lst)!=0:
                             episode_data["obs"]["robot0_eye_in_hand_image_2"] = np.array(img2_lst)
+                        if len(img_light_list) != 0:
+                            episode_data["obs"]["robot0_eye_in_hand_image_light"] = np.array(img_light_list)
+                        if len(img2_light_list) != 0:
+                            episode_data["obs"]["robot0_eye_in_hand_image_2_light"] = np.array(img2_light_list)
 
                     # save hdf5
                     epi_length = len(img_lst)
@@ -597,11 +641,12 @@ if __name__=='__main__':
 
                     if len(img2_lst) != 0:
                         new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image_2', data=img2_lst)
-
+                    if len(img_light_list)!=0:
+                        new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image_light', data=img_light_list)
+                    if len(img2_light_list)!= 0:
+                        new_f_out.create_dataset(obs_path + '/robot0_eye_in_hand_image_2_light', data=img2_light_list)
                     if len(delta_pose_list) != 0:
                         new_f_out.create_dataset(pos_path, data=delta_pose_list)
-
-                    # new_f_out.create_dataset(action_path, data=action_list)
 
                     # 在DAgger中，保存的动作取决于是否是DAgger模式
                     if is_dagger_episode:

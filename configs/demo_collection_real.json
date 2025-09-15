@@ -68,7 +68,16 @@
 
         "img": {
             "save_type": "rgb",
-            "size": 300
+            "size": 300,
+            "augmentation": {
+                "utilized": true,
+                "pretrained_model_pth": "/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train/weights/best.pt",
+                "scale_range_min": 0.87,
+                "scale_range_max": 1.15,
+                "offset_range_min": -0.1,
+                "offset_range_max": 0.1,
+                "noise_std": 0.07
+            }
         },
         "record_pose": true,
         "dagger": {

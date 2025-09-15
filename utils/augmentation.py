@@ -3,6 +3,7 @@ import torch
 import cv2
 import random
 
+
 def augment_lighting_for_image_np(
     img_np,
     scale_range_min=0.3,
@@ -194,6 +195,122 @@ def check_overlap(y1, x1, h1, w1, y2, x2, h2, w2):
                x2 + w2 <= x1 or
                y1 + h1 <= y2 or
                y2 + h2 <= y1)
+
+def process_image_with_yolo(img, model,color_channel_inv=False):
+    """
+    Process image with YOLO and return target mask (binary mask of highest confidence detection)
+    """
+    # if color_channel_inv:
+    #     img = img[:, :, ::-1].copy()
+
+    results = model(img) if not color_channel_inv else model(img[:, :, ::-1])
+
+    if len(results) == 0:
+        return np.zeros(img.shape[:2], dtype=np.uint8)
+
+    # Get the result with highest confidence
+    result = results[0]
+    if result.boxes is None or len(result.boxes) == 0:
+        return np.zeros(img.shape[:2], dtype=np.uint8)
+
+    # Get the highest confidence detection
+    confidences = result.boxes.conf.cpu().numpy()
+    best_idx = np.argmax(confidences)
+
+    # Get mask for the highest confidence detection
+    if result.masks is not None and len(result.masks) > best_idx:
+        mask = result.masks[best_idx].data.cpu().numpy()[0]  # [H, W]
+        return (mask > 0).astype(np.uint8)
+    else:
+        # If no mask, use bounding box
+        x1, y1, x2, y2 = result.boxes.xyxy[best_idx].cpu().numpy()
+        mask = np.zeros(img.shape[:2], dtype=np.uint8)
+        mask[int(y1):int(y2), int(x1):int(x2)] = 1
+        return mask
+
+
+def draw_bounding_box(img, mask, color=(0, 255, 0), thickness=2):
+    """
+    Draw the bounding box of the mask on the image
+    """
+    # Find the bounding box coordinates
+    y, x = np.where(mask > 0)
+    if len(y) == 0 or len(x) == 0:
+        return img  # No mask to draw
+
+    x_min, x_max = np.min(x), np.max(x)
+    y_min, y_max = np.min(y), np.max(y)
+
+    img_with_bbox = img.copy()
+    cv2.rectangle(img_with_bbox, (x_min, y_min), (x_max, y_max), color, thickness)
+    return img_with_bbox
+
+
+class AugmentationModule():
+    def __init__(self, 
+                 pretrained_model_pth,
+                 scale_range_min=0.3, scale_range_max=1.8,
+                 offset_range_min=-0.3, offset_range_max=0.3,
+                 noise_std=0.1, draw_box=False, box_color=(0, 255, 0), box_thickness=2):
+        from ultralytics import YOLO
+
+        self.model = YOLO(pretrained_model_pth)
+        self.scale_range_min = scale_range_min
+        self.scale_range_max = scale_range_max
+        self.offset_range_min = offset_range_min
+        self.offset_range_max = offset_range_max
+        self.noise_std = noise_std
+        self.draw_box = draw_box
+        self.box_color = box_color
+        self.box_thickness = box_thickness
+
+    def augment_image(self,img, color_channel_inv=False):
+        """
+        Apply all augmentations to an image with safety checks and visualization options
+
+        Args:
+            img: Input image (numpy array)
+            model: YOLO model for target detection
+            color_channel_inv: Whether to invert color channels
+            scale_range_min/max: Lighting scale range
+            offset_range_min/max: Lighting offset range
+            noise_std: Noise standard deviation
+            draw_box: Whether to draw bounding box
+            box_color: Color for bounding box (BGR format)
+            box_thickness: Thickness of bounding box lines
+
+        Returns:
+            Augmented image with optional bounding box visualization
+        """
+        # 1. Get target mask from YOLO
+        target_mask = process_image_with_yolo(img, self.model,color_channel_inv)
+
+        # 2. Apply lighting augmentation (preserves target area)
+        img_aug = augment_lighting_for_image_np(
+            img,
+            scale_range_min=self.scale_range_min,
+            scale_range_max=self.scale_range_max,
+            offset_range_min=self.offset_range_min,
+            offset_range_max=self.offset_range_max,
+            noise_std=self.noise_std
+        )
+
+        # 3. Apply rectangle swap augmentation to non-target area (with safety checks)
+        img_aug, swap_success = swap_random_rectangles_non_target(img_aug, target_mask)
+
+        # 4. Apply solid color rectangle to non-target area (with safety checks)
+        img_aug, solid_success = apply_solid_color_rectangle_non_target(img_aug, target_mask)
+
+        # 5. Draw the bounding box if requested
+        if self.draw_box:
+            img_aug = draw_bounding_box(
+                img_aug,
+                target_mask,
+                color=self.box_color,
+                thickness=self.box_thickness
+            )
+        return img_aug
+
 
 if __name__ == '__main__':
     img = cv2.imread('/media/noematrix/One Touch/AlignAnything_real/25.06.22/hdf5/goal_images/img1/0.png')
