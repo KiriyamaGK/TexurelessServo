@@ -16,6 +16,21 @@ def load_mesh(mesh_path,scale=1.0):
     print(f"Mesh loaded successfully. Number of vertices: {len(mesh.vertices)}, Number of faces: {len(mesh.faces)}")
     return mesh
 
-def sample_face_points(mesh, num_sample_points=500):
-    points = mesh.sample(num_sample_points) # the points are on the faces of the mesh
-    return points
+def sample_face_points(mesh, num_sample_points=500,return_index = False,face_weight = None):
+    """
+    sample the points on the faces of the mesh
+    Args:
+        mesh: trimesh.Trimesh
+        num_sample_points: int
+        return_index: bool, if True, return the index of the sampled points
+        face_weight: Optional[NDArray[float64]], the weight of the faces
+    Returns:
+        points: NDArray[float64], the sampled points
+        index: NDArray[int], the index of the sampled points
+    """
+    if return_index:
+        points, index = mesh.sample(num_sample_points,return_index,face_weight) # the points are on the faces of the mesh
+        return points, index
+    else:
+        points = mesh.sample(num_sample_points,return_index,face_weight) # the points are on the faces of the mesh
+        return points

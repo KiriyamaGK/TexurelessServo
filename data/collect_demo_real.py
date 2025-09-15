@@ -18,7 +18,7 @@ from data.process_hdf5 import _disturb_abs_rot,_portion_last_episode,_add_end_ep
 from utils.transform import rotation_matrix_z, rmat2euler_rz_degree,construct_dT_from_action
 from utils.dagger_params import is_in_dagger_episode, should_train_policy, print_dagger_status
 from utils.dagger import  get_policy_action, aggregate_dataset, train_policy, setup_policy_model, prepare_observation_for_policy
-from real.collision_detection.sdf_collision import check_collision_hybrid
+from real.collision_detection.sdf_collision import CollisionDetector
 from utils.augmentation import AugmentationModule
 
 import atexit
@@ -44,39 +44,6 @@ def filter_pos(pos):
             pos[i]=0
     return pos
 
-def check_collision_real(env, threshold=1.0):  #TODO:remain to be finished
-    """
-    使用SDF碰撞检测检查夹爪和物体之间的碰撞
-    
-    Args:
-        env: 环境实例，包含夹爪和物体的网格和SDF
-        threshold: 距离阈值，小于此值认为有碰撞风险
-        
-    Returns:
-        dict: 包含最小距离和是否碰撞的信息
-    """
-    # 获取夹爪和物体的网格和SDF
-    gripper_mesh = env.gripper_mesh
-    object_mesh = env.object_mesh
-    gripper_sdf = env.gripper_sdf
-    object_sdf = env.object_sdf
-    
-    # 使用check_collision_hybrid函数检测碰撞
-    is_colliding = check_collision_hybrid(
-        gripper_sdf, object_sdf, 
-        gripper_mesh, object_mesh, 
-        num_sample_points=500, 
-        a_to_b=True,
-        threshold=0.0  # 设置为0表示严格碰撞检测
-    )
-    
-    # 这里我们简化返回值，与compute_position_distance_sim保持一致的接口
-    min_distance = 0.0 if is_colliding else threshold
-    
-    return {
-        "min_distance": min_distance,
-        "is_colliding": is_colliding
-    }
 
 def cleanup():
     cam.release()
@@ -260,7 +227,7 @@ if __name__=='__main__':
     # episodes_per_dagger: 整数，表示每次触发DAgger时连续执行的DAgger episode数量。例如，值为10表示每次触发DAgger时会连续收集10个使用策略模型的episodes。
     
     # min_position_threshold: list，表示在DAgger模式下，当夹爪与目标物体之间的最小位置距离不在此范围时，当前episode会提前结束。单位是米。
-    # check_frame_interval: 整数，表示在DAgger模式下每隔多少帧检查一次夹爪与物体的距离。
+    # check_freq: 检查频率
     
     # train_frequency: 整数，表示每完成多少个DAgger episodes后进行一次模型训练。
     # train_epochs: 整数，表示每次训练模型时执行的轮数。
@@ -281,6 +248,11 @@ if __name__=='__main__':
 
         min_position_threshold = dagger_config["task_termination"]["min_position_threshold"]
         pose_error_threshold = dagger_config["task_termination"]["pose_error_threshold"]  # m,deg,sec
+        collision_check_freq = dagger_config["check_freq"]
+        obj_1_mesh_pth = "xx.stl"  #TODO:remember to calibrate
+        obj_2_mesh_pth = "xx.stl"
+        T1 = 10000
+        collision_detector = CollisionDetector(obj_1_mesh_pth,obj_2_mesh_pth,use_convex_hull_1=False,T_1=T1)
     #================================dagger===============================
 
     #================================dagger===============================
@@ -388,6 +360,54 @@ if __name__=='__main__':
         ##TODO daemon = True的含义为：设置target为守护线程，即主程序中断，robo_operator也会中断。此处设置daemon=True是必须的，因为这么做是为了配合atexit()函数(参见atexit注释)
 
         operate.start()
+        
+        #================================dagger===============================
+        def collision_detection():
+            global end_episode
+            global frame_counter
+            global min_position_threshold
+            global is_dagger_episode
+            global collision_detector
+            global collision_check_freq
+            global env
+
+            first_frame = True
+            while True:
+                # DAgger策略检查物体和夹爪位置
+                if is_dagger_episode and frame_counter:
+                    t_start = time.time()
+
+                    #apply transform to meshes first
+                    if not first_frame:
+                        last_wgT = wgT.copy()
+                        wgT = env.wgT.copy()
+                        dT = np.linalg.inv(last_wgT)@wgT
+                    else:
+                        wgT = env.wgT.copy()
+                        dT = np.eye(4)
+                        first_frame = False
+                    collision_detector.apply_transform(dT,obj_id=1)
+
+                    #check collision
+                    contact_flag ,distance = collision_detector.check_collision_hybrid(num_sample_points=500,a_to_b=True,threshold=min_position_threshold[0])
+                    print(f"distance: {distance}")
+                    
+                    if distance < min_position_threshold[0] or distance > min_position_threshold[1] or contact_flag:
+                        print(f"[DAgger] Position minimum threshold reached at frame {frame_counter}, distance: {distance}, threshold: {min_position_threshold}")
+                        end_episode = True
+
+                    
+                    dt = time.time()-t_start
+                    if dt < 1/collision_check_freq:
+                        time.sleep(1/collision_check_freq - dt)
+
+        coll_det_thread = threading.Thread(target=collision_detection, daemon = True)
+        coll_det_thread.start()
+                    
+        #================================dagger===============================
+                    
+                    
+
         tt = time.time()
 
         t0 = time.time()
@@ -479,18 +499,16 @@ if __name__=='__main__':
                 cv2.imshow("Combined Image", combined_img)
                 cv2.waitKey(1)
 
-                #================================dagger===============================
-                # DAgger策略检查物体和夹爪位置
-                if is_dagger_episode and frame_counter % dagger_config["check_frame_interval"] == 0:
-                    collision_res = check_collision_real()  #TODO:remain to be finished
-                    distance = collision_res["min_distance"]
-                    contact_flag = collision_res["is_colliding"]
-                    print(f"distance: {distance}")
+                # #================================dagger===============================
+                # # DAgger策略检查物体和夹爪位置
+                # if is_dagger_episode and frame_counter:
+                #     contact_flag ,distance = collision_detector.check_collision_hybrid(num_sample_points=500,a_to_b=True)
+                #     print(f"distance: {distance}")
                     
-                    if distance < min_position_threshold[0] or distance > min_position_threshold[1] or contact_flag:
-                        print(f"[DAgger] Position minimum threshold reached at frame {frame_counter}, distance: {distance}, threshold: {min_position_threshold}")
-                        end_episode = True
-                #================================dagger===============================
+                #     if distance < min_position_threshold[0] or distance > min_position_threshold[1] or contact_flag:
+                #         print(f"[DAgger] Position minimum threshold reached at frame {frame_counter}, distance: {distance}, threshold: {min_position_threshold}")
+                #         end_episode = True
+                # #================================dagger===============================
 
                 #env.action_dT(dT) ##TODO:应该在robo_operator被使用
 
@@ -519,6 +537,7 @@ if __name__=='__main__':
                         env.init()
                     quit = True
                     operate.join()
+                    coll_det_thread.join()
                     cv2.destroyAllWindows()
                     print('...录制结束，数据处理中...')
 

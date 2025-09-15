@@ -98,7 +98,7 @@
                     "time": 20
                 }
             },
-            "check_frame_interval": 2,
+            "check_freq": 2,
             "model_path": null
         },
         "post_process": {

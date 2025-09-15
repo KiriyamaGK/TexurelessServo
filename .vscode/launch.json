@@ -2,15 +2,14 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Debug with Conda (trial)",
+            "name": "Python: Debug with Conda (cns)",
             "type": "python",
             "env": {
                 "PYTHONPATH": "${env:PYTHONPATH}:${workspaceFolder}"
             },
             "request": "launch",
-            "program": "${workspaceFolder}/data/collect_demo_offline.py",
-            "python": "/home/noematrix/anaconda3/envs/trial/bin/python",  // 替换为你的实际路径
-            "cwd": "${workspaceFolder}/data",
+            "program": "${workspaceFolder}/real/collision_detection/sdf_collision.py",
+            "python": "/home/kiriyamagk/anaconda3/envs/cns/bin/python",  // 替换为你的实际路径
             "console": "integratedTerminal"
         }
     ]
