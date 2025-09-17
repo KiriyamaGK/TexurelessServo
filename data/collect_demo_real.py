@@ -6,6 +6,7 @@ import random
 import threading
 import json
 import torch
+from utils.paths import PROJECT_ROOT_DIR
 from utils.paths import return_disc_route
 from utils.file import ensure_dir
 from utils.policy import get_expert_policy
@@ -116,7 +117,7 @@ def teleop_and_pic(img_gt_1, img_gt_2,img_size):
 if __name__=='__main__':
     ##TODO:数据采集和测试阶段一共算了四种类型的dT，其中env.sample_init_pos算了g_tar_gT；get_action算了g_gtar(和缩短后的dT)；need_init和need_init_eval在compute_error的时候各自算了一次（见env相关函数）
     # ===================================manually_set_info===================================
-    initial_teleop = True
+    initial_teleop = False
     init_pos = np.array(
         [-510.449,-106.808,147.588,-179.2,-0.534,-162.46])
     goal_img_base_dir = "/media/kiriyamagk/One Touch/AlignAnything_real/25.06.22/hdf5/goal_images"
@@ -249,10 +250,14 @@ if __name__=='__main__':
         min_position_threshold = dagger_config["task_termination"]["min_position_threshold"]
         pose_error_threshold = dagger_config["task_termination"]["pose_error_threshold"]  # m,deg,sec
         collision_check_freq = dagger_config["check_freq"]
-        obj_1_mesh_pth = "xx.stl"  #TODO:remember to calibrate
-        obj_2_mesh_pth = "xx.stl"
-        T1 = 10000
-        collision_detector = CollisionDetector(obj_1_mesh_pth,obj_2_mesh_pth,use_convex_hull_1=False,T_1=T1)
+
+        gripper_path = os.path.join(PROJECT_ROOT_DIR, "meshes/zhixing/crt_ctag2f120.urdf")
+        object_path = os.path.join(PROJECT_ROOT_DIR, "meshes/classical_part.STL")
+        cali_T = np.eye(4)
+        cali_T[0, 0] *= -1
+        cali_T[2, 2] *= -1
+        cali_T[2, 3] = 0.06 #todo:remember to calibrate
+        collision_detector = CollisionDetector(gripper_path,object_path,scalar_1=1.0,scalar_2=0.001,use_convex_hull_1=False,use_convex_hull_2=False,cali_T = cali_T)
     #================================dagger===============================
 
     #================================dagger===============================
@@ -370,6 +375,7 @@ if __name__=='__main__':
             global collision_detector
             global collision_check_freq
             global env
+            global distance
 
             first_frame = True
             while True:
@@ -384,12 +390,13 @@ if __name__=='__main__':
                         dT = np.linalg.inv(last_wgT)@wgT
                     else:
                         wgT = env.wgT.copy()
-                        dT = np.eye(4)
+                        wgT_tar = env.wgT_tar.copy()
+                        dT = np.linalg.inv(wgT_tar)@wgT
                         first_frame = False
-                    collision_detector.apply_transform(dT,obj_id=1)
+                    collision_detector.update_pos(dT)
 
                     #check collision
-                    contact_flag ,distance = collision_detector.check_collision_hybrid(num_sample_points=500,a_to_b=True,threshold=min_position_threshold[0])
+                    contact_flag ,distance = collision_detector.check_collision(num_sample_points=500,threshold=min_position_threshold[0])
                     print(f"distance: {distance}")
                     
                     if distance < min_position_threshold[0] or distance > min_position_threshold[1] or contact_flag:
@@ -478,9 +485,6 @@ if __name__=='__main__':
                 if img_save_type == "rgb":
                     img = img[:, :, ::-1]
                 img_lst.append(img)
-                if use_augmentation:
-                    img_light = augmentation_module.augment_image(img, False)
-                    img_light_list.append(img_light)
 
                 if img2 is not None:
                     img2_vis = img2.copy()
@@ -488,9 +492,6 @@ if __name__=='__main__':
                     if img_save_type == "rgb":
                         img2 = img2[:, :, ::-1]
                     img2_lst.append(img2)
-                    if use_augmentation:
-                        img2_light = augmentation_module.augment_image(img2, False)
-                        img2_light_list.append(img2_light)
 
                     combined_img = np.hstack((img_vis, img2_vis))
                 else:
@@ -499,16 +500,6 @@ if __name__=='__main__':
                 cv2.imshow("Combined Image", combined_img)
                 cv2.waitKey(1)
 
-                # #================================dagger===============================
-                # # DAgger策略检查物体和夹爪位置
-                # if is_dagger_episode and frame_counter:
-                #     contact_flag ,distance = collision_detector.check_collision_hybrid(num_sample_points=500,a_to_b=True)
-                #     print(f"distance: {distance}")
-                    
-                #     if distance < min_position_threshold[0] or distance > min_position_threshold[1] or contact_flag:
-                #         print(f"[DAgger] Position minimum threshold reached at frame {frame_counter}, distance: {distance}, threshold: {min_position_threshold}")
-                #         end_episode = True
-                # #================================dagger===============================
 
                 #env.action_dT(dT) ##TODO:应该在robo_operator被使用
 
@@ -552,18 +543,12 @@ if __name__=='__main__':
                     if img_save_type == "rgb":
                         img_goal = img_goal[:, :, ::-1]
                     img_lst.append(img_goal)
-                    if use_augmentation:
-                        img_light_goal = augmentation_module.augment_image(img_goal, False)
-                        img_light_list.append(img_light_goal)
 
                     if goal_dict["img_goal2"] is not None:
                         im_goal2 = clip_image(goal_dict["img_goal2"], img_size,keep_right=True)
                         if img_save_type == "rgb":
                             im_goal2 = im_goal2[:, :, ::-1]
                         img2_lst.append(im_goal2)
-                        if use_augmentation:
-                            img2_light_goal = augmentation_module.augment_image(im_goal2, False)
-                            img2_light_list.append(img2_light_goal)
 
                     if record_pose:
                         delta_pose_list.append(np.zeros(6))
@@ -598,12 +583,8 @@ if __name__=='__main__':
                                                                                  act_lst=expert_action_list,
                                                                                  pose_list=delta_pose_list)
                         img_lst = insert_imgs(img_lst, pick_id, insert_id, add_num)
-                        if use_augmentation:
-                            img_light_list = insert_imgs(img_light_list, pick_id, insert_id, add_num)
                         if len(img2_lst) != 0:
                             img2_lst = insert_imgs(img2_lst, pick_id, insert_id, add_num)
-                            if use_augmentation:
-                                img2_light_list = insert_imgs(img2_light_list, pick_id, insert_id, add_num)
 
                     if add_medium_episode["utilized"]:
                         action_list, rz_list, delta_pose_list, need_add_medium, trans_id, rot_id = _add_medium_episode(
@@ -622,12 +603,18 @@ if __name__=='__main__':
                             add_num = add_medium_episode["add_num"]
 
                             img_lst = insert_imgs(img_lst, pick_id, insert_id, add_num)
-                            if use_augmentation:
-                                img_light_list = insert_imgs(img_light_list, pick_id, insert_id, add_num)
                             if len(img2_lst) != 0:
                                 img2_lst = insert_imgs(img2_lst, pick_id, insert_id, add_num)
-                                if use_augmentation:
-                                    img2_light_list = insert_imgs(img2_light_list, pick_id, insert_id, add_num)
+
+                    #================main augmentation================
+                    if use_augmentation:
+                        for img in img_lst:
+                            img_light = augmentation_module.augment_image(img, False)
+                            img_light_list.append(img_light)
+                        for img2 in img2_lst:
+                            img2_light = augmentation_module.augment_image(img2, False)
+                            img2_light_list.append(img2_light)
+                    # ================main augmentation================
 
                     # 如果是DAgger模式，保存到临时数据中
                     if is_dagger_episode:

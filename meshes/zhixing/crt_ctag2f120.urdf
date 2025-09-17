@@ -1,0 +1,893 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="crt_ctag2f120">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="3.60790901430323E-07 -5.64320645350742E-06 0.0706726714806953"
+        rpy="0 0 0" />
+      <mass
+        value="0.550602760471901" />
+      <inertia
+        ixx="0.00142017584507119"
+        ixy="3.08098146076886E-08"
+        ixz="-5.73433229424981E-10"
+        iyy="0.00143857361219326"
+        iyz="-4.68447322183702E-08"
+        izz="0.000380243423733305" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+    <link
+    name="R2_Link">
+    <inertial>
+      <origin
+        xyz="-0.00307534282071652 0.0306564133124412 7.14174657879278E-14"
+        rpy="0 0 0" />
+      <mass
+        value="0.0103929935266039" />
+      <inertia
+        ixx="8.49390755914334E-06"
+        ixy="4.90641790340941E-07"
+        ixz="5.86605656108451E-22"
+        iyy="3.65218690931793E-06"
+        iyz="6.42852492771497E-22"
+        izz="5.18210347868652E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/R2_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/R2_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="R2"
+    type="revolute">
+    <origin
+      xyz="0.031809 0 0.15424"
+      rpy="1.5708 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="R2_Link" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="0"
+      upper="0.7"
+      effort="2"
+      velocity="1000" />
+  </joint>
+  <link
+    name="Right_in_Link">
+    <inertial>
+      <origin
+        xyz="-0.01353866342122 0.0217978676545458 8.23589797046891E-10"
+        rpy="0 0 0" />
+      <mass
+        value="0.0148304041156915" />
+      <inertia
+        ixx="5.03355963171223E-06"
+        ixy="1.41306394406675E-06"
+        ixz="1.03725990405709E-14"
+        iyy="1.36223938670171E-06"
+        iyz="-1.03191172758403E-13"
+        izz="5.38450977847141E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/Right_in_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/Right_in_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Right_in"
+    type="revolute">
+    <origin
+      xyz="-0.006488 0.064675 0"
+      rpy="0 0 0" />
+    <parent
+      link="R2_Link" />
+    <child
+      link="Right_in_Link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+    <mimic
+      joint="R2"
+      multiplier="1"
+      offset="0" />
+  </joint>
+  <link
+    name="Right_Pad_Link">
+    <inertial>
+      <origin
+        xyz="-3.2660014016167E-12 0.00209017759237007 7.11467394982792E-14"
+        rpy="0 0 0" />
+      <mass
+        value="0.00221607596633023" />
+      <inertia
+        ixx="3.72447507805222E-07"
+        ixy="-1.4440089389694E-21"
+        ixz="2.86865273561824E-22"
+        iyy="9.60147251354242E-08"
+        iyz="3.94346085652842E-22"
+        izz="2.77910166647352E-07" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/Right_Pad_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.384313725490196 0.384313725490196 0.384313725490196 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/Right_Pad_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Right_Pad"
+    type="fixed">
+    <origin
+      xyz="-0.024321 0.03825 0"
+      rpy="0 0 0" />
+    <parent
+      link="Right_in_Link" />
+    <child
+      link="Right_Pad_Link" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="R3_Link">
+    <inertial>
+      <origin
+        xyz="-0.00309014684107268 0.0310140569467607 7.12318251109555E-14"
+        rpy="0 0 0" />
+      <mass
+        value="0.0174171623188833" />
+      <inertia
+        ixx="4.92759040651407E-06"
+        ixy="1.97343592159646E-07"
+        ixz="1.41452134790062E-22"
+        iyy="2.89352854551975E-06"
+        iyz="-4.79201919261344E-22"
+        izz="2.46748088438256E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/R3_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/R3_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="R3"
+    type="revolute">
+    <origin
+      xyz="0.014489 0 0.16424"
+      rpy="1.5708 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="R3_Link" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+    <mimic
+      joint="R2"
+      multiplier="1"
+      offset="0" />
+  </joint>
+  <link
+    name="Right_Main_Link">
+    <inertial>
+      <origin
+        xyz="0.019922857746903 -0.00174624583643407 7.19764586462086E-14"
+        rpy="0 0 0" />
+      <mass
+        value="0.00767248607311942" />
+      <inertia
+        ixx="1.61905064419592E-07"
+        ixy="1.41186473929966E-07"
+        ixz="1.16074029320803E-07"
+        iyy="1.76183954189053E-06"
+        iyz="-1.01644257475684E-08"
+        izz="1.8078877181843E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/Right_Main_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes//Right_Main_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Right_Main"
+    type="revolute">
+    <origin
+      xyz="0.014489 0 0.16424"
+      rpy="1.5708 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="Right_Main_Link" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+    <mimic
+      joint="R2"
+      multiplier="1"
+      offset="0" />
+  </joint>
+  <link
+    name="R1_Link">
+    <inertial>
+      <origin
+        xyz="-0.0145073789754339 0.0290823994005286 7.12300556440619E-14"
+        rpy="0 0 0" />
+      <mass
+        value="0.00985263959018644" />
+      <inertia
+        ixx="3.66964315008607E-06"
+        ixy="1.75717427840684E-06"
+        ixz="-3.14194591860258E-23"
+        iyy="1.02364534605578E-06"
+        iyz="9.58532942161711E-23"
+        izz="4.6399483772557E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/R1_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/R1_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="R1"
+    type="revolute">
+    <origin
+      xyz="0.039847 -0.0034894 0"
+      rpy="0 0 0" />
+    <parent
+      link="Right_Main_Link" />
+    <child
+      link="R1_Link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+    <mimic
+      joint="R2"
+      multiplier="-0.15"
+      offset="0" />
+  </joint>
+  <link
+    name="Right_Slip_Link">
+    <inertial>
+      <origin
+        xyz="-0.0101161357334184 -0.0153030076024619 7.14021278320572E-14"
+        rpy="0 0 0" />
+      <mass
+        value="0.0104817171858542" />
+      <inertia
+        ixx="1.70868067057352E-06"
+        ixy="-9.02640123358804E-07"
+        ixz="-2.69730779157751E-21"
+        iyy="1.65153314998731E-06"
+        iyz="-3.33898323115271E-21"
+        izz="2.44312625018602E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/Right_Slip_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/Right_Slip_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Right_Slip"
+    type="revolute">
+    <origin
+      xyz="0.039847 -0.0034894 0"
+      rpy="0 0 0" />
+    <parent
+      link="Right_Main_Link" />
+    <child
+      link="Right_Slip_Link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+    <mimic
+      joint="R2"
+      multiplier="1"
+      offset="0" />
+  </joint>
+  <link
+    name="L2_Link">
+    <inertial>
+      <origin
+        xyz="-0.003074982647498 0.0306564239589311 -2.62500719653024E-15"
+        rpy="0 0 0" />
+      <mass
+        value="0.0103929935266039" />
+      <inertia
+        ixx="8.4939190062867E-06"
+        ixy="4.90585305963773E-07"
+        ixz="3.85686488037559E-22"
+        iyy="3.65217546217458E-06"
+        iyz="1.11215058290318E-21"
+        izz="5.18210347868653E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/L2_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/L2_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="L2"
+    type="revolute">
+    <origin
+      xyz="-0.031808 0 0.15424"
+      rpy="1.5708 0 -3.1416" />
+    <parent
+      link="base_link" />
+    <child
+      link="L2_Link" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="-1"
+      upper="1"
+      effort="2"
+      velocity="1000" />
+    <mimic
+      joint="R2"
+      multiplier="1"
+      offset="0" />
+  </joint>
+  <link
+    name="Left_in_Link">
+    <inertial>
+      <origin
+        xyz="-0.0135386634172176 0.0217978676711873 8.23798541583149E-10"
+        rpy="0 0 0" />
+      <mass
+        value="0.0148304041156915" />
+      <inertia
+        ixx="5.03355963171223E-06"
+        ixy="1.41306394406675E-06"
+        ixz="1.03726006011721E-14"
+        iyy="1.36223938670171E-06"
+        iyz="-1.03191178488474E-13"
+        izz="5.38450977847141E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/Left_in_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/Left_in_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Left_in"
+    type="revolute">
+    <origin
+      xyz="-0.0064872 0.064675 0"
+      rpy="0 0 0" />
+    <parent
+      link="L2_Link" />
+    <child
+      link="Left_in_Link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+    <mimic
+      joint="L2"
+      multiplier="1"
+      offset="0" />
+  </joint>
+  <link
+    name="Left_Pad_Link">
+    <inertial>
+      <origin
+        xyz="1.39411637616049E-12 0.00209017759146468 1.28343121452714E-13"
+        rpy="0 0 0" />
+      <mass
+        value="0.00221607596633023" />
+      <inertia
+        ixx="3.72447507805222E-07"
+        ixy="-1.42598052017838E-21"
+        ixz="2.85390625390961E-22"
+        iyy="9.6014725135424E-08"
+        iyz="4.09611600650029E-22"
+        izz="2.77910166647351E-07" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/Left_Pad_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.384313725490196 0.384313725490196 0.384313725490196 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/Left_Pad_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Left_Pad"
+    type="fixed">
+    <origin
+      xyz="-0.024321 0.03825 0"
+      rpy="0 0 0" />
+    <parent
+      link="Left_in_Link" />
+    <child
+      link="Left_Pad_Link" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="L3_Link">
+    <inertial>
+      <origin
+        xyz="-0.00308938473733376 0.031014056946804 -1.10668984574934E-15"
+        rpy="0 0 0" />
+      <mass
+        value="0.0174171623188832" />
+      <inertia
+        ixx="4.92759040651406E-06"
+        ixy="1.97343592159646E-07"
+        ixz="9.8958131249605E-23"
+        iyy="2.89352854551974E-06"
+        iyz="-6.32506296879156E-22"
+        izz="2.46748088438256E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/L3_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/L3_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="L3"
+    type="revolute">
+    <origin
+      xyz="-0.014488 0 0.16424"
+      rpy="1.5708 0 -3.1416" />
+    <parent
+      link="base_link" />
+    <child
+      link="L3_Link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+    <mimic
+      joint="R3"
+      multiplier="-1"
+      offset="0" />
+  </joint>
+  <link
+    name="Left_Main_Link">
+    <inertial>
+      <origin
+        xyz="0.0199236198490203 -0.0017462458370337 3.35612229870905E-17"
+        rpy="0 0 0" />
+      <mass
+        value="0.00767248607311942" />
+      <inertia
+        ixx="1.61905064419593E-07"
+        ixy="1.41186473929966E-07"
+        ixz="1.16074029320803E-07"
+        iyy="1.76183954189053E-06"
+        iyz="-1.01644257475684E-08"
+        izz="1.8078877181843E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/Left_Main_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/Left_Main_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Left_Main"
+    type="revolute">
+    <origin
+      xyz="-0.014488 0 0.16424"
+      rpy="1.5708 0 -3.1416" />
+    <parent
+      link="base_link" />
+    <child
+      link="Left_Main_Link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+    <mimic
+      joint="Right_Main"
+      multiplier="-1"
+      offset="0" />
+  </joint>
+  <link
+    name="L1_Link">
+    <inertial>
+      <origin
+        xyz="-0.0145073789806201 0.0290823993984715 9.18161249467235E-16"
+        rpy="0 0 0" />
+      <mass
+        value="0.00985263959018644" />
+      <inertia
+        ixx="3.66964315008607E-06"
+        ixy="1.75717427840684E-06"
+        ixz="-3.23368457479221E-23"
+        iyy="1.02364534605578E-06"
+        iyz="9.20158722921844E-23"
+        izz="4.6399483772557E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/L1_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/L1_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="L1"
+    type="revolute">
+    <origin
+      xyz="0.039848 -0.0034894 0"
+      rpy="0 0 0" />
+    <parent
+      link="Left_Main_Link" />
+    <child
+      link="L1_Link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+    <mimic
+      joint="R1"
+      multiplier="1"
+      offset="0" />
+  </joint>
+  <link
+    name="Left_Slip_Link">
+    <inertial>
+      <origin
+        xyz="-0.0101161357570116 -0.0153030076118182 1.9668117698532E-13"
+        rpy="0 0 0" />
+      <mass
+        value="0.0104817171858542" />
+      <inertia
+        ixx="1.70868067057352E-06"
+        ixy="-9.02640123358802E-07"
+        ixz="-2.83098552056847E-21"
+        iyy="1.65153314998731E-06"
+        iyz="-3.48452007732097E-21"
+        izz="2.44312625018602E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/Left_Slip_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="/home/kiriyamagk/桌面/urdf_to_obj/meshes/Left_Slip_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Left_Slip"
+    type="revolute">
+    <origin
+      xyz="0.039848 -0.0034894 0"
+      rpy="0 0 0" />
+    <parent
+      link="Left_Main_Link" />
+    <child
+      link="Left_Slip_Link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+    <mimic
+      joint="L2"
+      multiplier="1"
+      offset="0" />
+  </joint>
+</robot>

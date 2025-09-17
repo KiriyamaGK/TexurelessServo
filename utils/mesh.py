@@ -1,7 +1,8 @@
 import trimesh
 
-def load_mesh(mesh_path,scale=1.0):
-    print(f"Loading mesh from {mesh_path}...")
+def load_mesh(mesh_path,scale=1.0,fineprint = False):
+    if fineprint:
+        print(f"Loading mesh from {mesh_path}...")
     mesh = trimesh.load(mesh_path)
     mesh.apply_scale(scale) #if scale is 1000,the mesh unit will be expanded 1000 times (eg. m to mm
     if not mesh.is_watertight:
@@ -10,10 +11,11 @@ def load_mesh(mesh_path,scale=1.0):
         mesh.merge_vertices()
         if not mesh.is_watertight:
             print("Repair failed, mesh is still not watertight.")
-            return None
+            return mesh
         else:
             print("Repair successful.")
-    print(f"Mesh loaded successfully. Number of vertices: {len(mesh.vertices)}, Number of faces: {len(mesh.faces)}")
+    if fineprint:
+        print(f"Mesh loaded successfully. Number of vertices: {len(mesh.vertices)}, Number of faces: {len(mesh.faces)}")
     return mesh
 
 def sample_face_points(mesh, num_sample_points=500,return_index = False,face_weight = None):

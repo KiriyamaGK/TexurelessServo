@@ -71,13 +71,18 @@ class FR_Robot:
 
 if __name__ == '__main__':
     fr_robot = FR_Robot()
-    in_pose=[-608.364013671875, -31.763967514038086, 135.91221618652344, -179.99742126464844, -0.07470376789569855,176.9801788330078]
-    fr_robot.move_cart(np.array(in_pose),tool=1,user=0,vel=40)
+    init_pos = np.array(
+        [-509.0465087890625, -101.97378540039062, 447.5419921875, -179.19952392578125, -0.5334994196891785, -162.46022033691406])
+    fr_robot.move_cart(np.array(init_pos),tool=0,user=0,vel=40)
+    init_pos[2]-=300
+    fr_robot.move_cart(np.array(init_pos), tool=2, user=0, vel=40)
     pos = fr_robot.get_gripper_TCP_pose()
+    print(pos)
     time.sleep(1)
-    while True:
-        cur_pose = fr_robot.get_gripper_TCP_pose()
-        fr_robot.servo_cart(cur_pose,mode=0,vel=10)
-        time.sleep(1)
-        print(cur_pose)
-        time.sleep(0.1)
+    print("move finished")
+    # while True:
+    #     cur_pose = fr_robot.get_gripper_TCP_pose()
+    #     fr_robot.servo_cart(cur_pose,mode=0,vel=10)
+    #     time.sleep(1)
+    #     print(cur_pose)
+    #     time.sleep(0.1)
