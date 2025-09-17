@@ -273,6 +273,72 @@ def show_gripper_at_angles(joint_angles=None):
         print("没有加载到任何网格")
 
 
+def calculate_finger_spacing(joint_angles=None):
+    """计算指定关节角度下的二指间距
+    
+    Args:
+        joint_angles: 关节角度字典，例如 {'R2': 0.3, 'L2': -0.3}
+        
+    Returns:
+        float: 二指间距（毫米）
+    """
+    if joint_angles is None:
+        joint_angles = {}
+    
+    urdf_path = "/home/kiriyamagk/桌面/AlignAnything/meshes/zhixing/crt_ctag2f120.urdf"
+    
+    # 加载URDF模型
+    meshes, mesh_info, joint_info = load_urdf_with_joint_angles(urdf_path, joint_angles)
+    
+    # 找到左右手指尖的网格（假设是Pad或Slip链接）
+    left_finger_mesh = None
+    right_finger_mesh = None
+    
+    for i, info in enumerate(mesh_info):
+        if 'Left_Pad' in info['link_name']:
+            left_finger_mesh = meshes[i]
+        elif 'Right_Pad' in info['link_name']:
+            right_finger_mesh = meshes[i]
+    
+    if left_finger_mesh is None or right_finger_mesh is None:
+        print("警告: 未找到手指尖网格")
+        return None
+    
+    # 计算两个网格之间的最小距离
+    # 获取两个网格的所有顶点
+    left_vertices = left_finger_mesh.vertices
+    right_vertices = right_finger_mesh.vertices
+    
+    # 计算所有顶点对之间的最小距离
+    min_distance = float('inf')
+    
+    for left_vert in left_vertices:
+        for right_vert in right_vertices:
+            # 计算欧几里得距离
+            distance = np.linalg.norm(left_vert - right_vert)
+            if distance < min_distance:
+                min_distance = distance
+    
+    # 转换为毫米
+    spacing_mm = min_distance * 1000
+    
+    print(f"关节角度: {joint_angles}")
+    print(f"二指间距: {spacing_mm:.2f} mm")
+    
+    return spacing_mm
+
+
+def measure_opening(opening_angle):
+    """测量开度下的二指间距"""
+    # 根据URDF结构，R2和L2关节控制手指开合
+    # 1.035开度可能需要转换为相应的关节角度
+    # 这里假设1.035开度对应R2=0.5175, L2=-0.5175（对称开合）
+    joint_angles = {'R2': opening_angle}
+    
+    spacing = calculate_finger_spacing(joint_angles)
+    return spacing
+
+
 # 示例用法
 if __name__ == "__main__":
     # 示例1：0开度
@@ -287,6 +353,13 @@ if __name__ == "__main__":
     print("=== R2关节完全打开到0.7弧度 ===")
     show_gripper_at_angles({'R2': 0.7})
     
-    # # 示例4：自定义多个关节角度
+    # 示例4：测量1.035开度下的二指间距
+    print("=== 测量1.035开度下的二指间距 ===")
+    spacing_1035 = measure_opening(1.08)
+    if spacing_1035 is not None:
+        print(f"1.035开度下的二指间距: {spacing_1035:.2f} mm")
+
+    
+    # # 示例5：自定义多个关节角度
     # print("=== 自定义多个关节角度 ===")
     # show_gripper_at_angles({'R2': 0.5, 'L2': -0.3})

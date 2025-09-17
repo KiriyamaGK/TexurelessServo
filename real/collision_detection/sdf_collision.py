@@ -167,18 +167,5 @@ if __name__ == "__main__":
         print("distance:",distance)
         print("use time:",t_end - t_start)
         scene.show(viewer="gl")
-    #     print("="*100)
-    #     dT = np.eye(4)
-    #     from scipy.spatial.transform import Rotation as R
-    #     for j in range(3):
-    #         dT[j,3] = random.uniform(-0.02,0.02)
-    #     dT[0:3,0:3] = R.from_euler("xyz",[10,0,0], degrees=True).as_matrix() if i<6 else R.from_euler("xyz",[0,10,0], degrees=True).as_matrix()
-    #     detector.apply_transform(dT,1)
 
-    #     t_start = time.time()
-    #     res_1,distance = detector.check_collision(num_sample_points=500,threshold=0.0)
-    #     t_end = time.time()
-    #     print("res_1:",res_1)
-    #     print("distance:",distance)
-    #     print("use time:",t_end - t_start)
-    #     scene.show(viewer="gl")
+   
