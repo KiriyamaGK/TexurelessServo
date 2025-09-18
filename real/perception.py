@@ -22,7 +22,7 @@ class Camera:
                  width: int = 640,
                  height: int = 480,
                  fps: int = 30):
-
+        self.print_connected_realsense_serial_numbers()
         # 参数验证
         if not isinstance(devices, dict) or not isinstance(use_devices_type, list):
             raise TypeError("devices must be a dict and use_devices_type must be a list")
@@ -178,6 +178,24 @@ class Camera:
             except Exception as e:
                 print(f"Error stopping pipeline: {e}")
 
+    def print_connected_realsense_serial_numbers(self):
+        # 创建上下文对象
+        ctx = rs.context()
+
+        # 获取所有连接的设备
+        devices = ctx.query_devices()
+
+        print(f"找到 {len(devices)} 个RealSense设备:")
+
+        # 遍历所有设备并打印序列号
+        for i, device in enumerate(devices):
+            serial_number = device.get_info(rs.camera_info.serial_number)
+            name = device.get_info(rs.camera_info.name)
+            print(f"设备 {i + 1}:")
+            print(f"  名称: {name}")
+            print(f"  序列号: {serial_number}")
+            print()
+
 
 if __name__ == "__main__":
     # 设备配置
@@ -205,8 +223,8 @@ if __name__ == "__main__":
                     cv2.imshow(name, img)
                     cv2.waitKey(1)
                     print(name)
-                    if i==5:
-                        cv2.imwrite(f"/home/kiriyamagk/桌面/0628_FORMAL_RESULTS/goal_image1/{name}"+"_badpos"+".jpg",img) if bad_pos else cv2.imwrite(f"/home/kiriyamagk/桌面/0628_FORMAL_RESULTS/goal_image1/{name}"+".jpg",img)
+                    # if i==5:
+                    #     cv2.imwrite(f"/home/kiriyamagk/桌面/0628_FORMAL_RESULTS/goal_image1/{name}"+"_badpos"+".jpg",img) if bad_pos else cv2.imwrite(f"/home/kiriyamagk/桌面/0628_FORMAL_RESULTS/goal_image1/{name}"+".jpg",img)
             else:
                 print(1)
 

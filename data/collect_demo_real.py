@@ -1,3 +1,4 @@
+import copy
 import time
 import cv2
 import numpy as np
@@ -19,7 +20,7 @@ from data.process_hdf5 import _disturb_abs_rot,_portion_last_episode,_add_end_ep
 from utils.transform import rotation_matrix_z, rmat2euler_rz_degree,construct_dT_from_action
 from utils.dagger_params import is_in_dagger_episode, should_train_policy, print_dagger_status
 from utils.dagger import  get_policy_action, aggregate_dataset, train_policy, setup_policy_model, prepare_observation_for_policy
-from real.collision_detection.sdf_collision import CollisionDetector
+from real.collision_detection.sdf_collision import CollisionDetector,Open3DVisualizer
 from utils.augmentation import AugmentationModule
 
 import atexit
@@ -119,7 +120,7 @@ if __name__=='__main__':
     # ===================================manually_set_info===================================
     initial_teleop = False
     init_pos = np.array(
-        [-510.449,-106.808,147.588,-179.2,-0.534,-162.46])
+        [-429.290283203125, -93.67056274414062, 181.42144775390625, 179.7019805908203, 0.6188414096832275, -4.211060047149658])
     goal_img_base_dir = "/media/kiriyamagk/One Touch/AlignAnything_real/25.06.22/hdf5/goal_images"
     goal_idx=1999
     origin_color_type = "bgr"
@@ -138,7 +139,7 @@ if __name__=='__main__':
     if not initial_teleop:
         # init_pos = robot_ins.get_gripper_TCP_pose()
         in_desire_pt = init_pos
-        env.robot_ins.move_cart(filter_pos(in_desire_pt),tool=1, user=0, vel=40)
+        env.robot_ins.move_cart(filter_pos(in_desire_pt),tool=2, user=0, vel=40)
     else:
         img_1_gt = cv2.imread(os.path.join(goal_img_base_dir,"img1", f"{goal_idx}.png"))
         img_2_gt = cv2.imread(os.path.join(goal_img_base_dir,"img2", f"{goal_idx}.png"))  # /255
@@ -186,6 +187,9 @@ if __name__=='__main__':
             offset_range_min=offset_range_min,
             offset_range_max=offset_range_max,
             noise_std=noise_std,
+            draw_box=False,  # todo:cautious!
+            box_color=(0, 255, 0),
+            box_thickness=2
         )
 
       ##record pose
@@ -249,15 +253,16 @@ if __name__=='__main__':
 
         min_position_threshold = dagger_config["task_termination"]["min_position_threshold"]
         pose_error_threshold = dagger_config["task_termination"]["pose_error_threshold"]  # m,deg,sec
+        time_upper_bound = dagger_config["task_termination"]["use_time_upperbound"]
         collision_check_freq = dagger_config["check_freq"]
 
         gripper_path = os.path.join(PROJECT_ROOT_DIR, "meshes/zhixing/crt_ctag2f120.urdf")
         object_path = os.path.join(PROJECT_ROOT_DIR, "meshes/classical_part.STL")
         cali_T = np.eye(4)
-        cali_T[0, 0] *= -1
+        cali_T[1, 1] *= -1
         cali_T[2, 2] *= -1
-        cali_T[2, 3] = 0.06 #todo:remember to calibrate
-        collision_detector = CollisionDetector(gripper_path,object_path,scalar_1=1.0,scalar_2=0.001,use_convex_hull_1=False,use_convex_hull_2=False,cali_T = cali_T)
+        cali_T[2, 3] = 0.09 #todo:remember to calibrate
+        # collision_detector = CollisionDetector(gripper_path,object_path,scalar_1=1.0,scalar_2=0.001,use_convex_hull_1=False,use_convex_hull_2=False,cali_T = cali_T)
     #================================dagger===============================
 
     #================================dagger===============================
@@ -325,7 +330,7 @@ if __name__=='__main__':
         img2_light_list = []
         rz_list=[]
         delta_pose_list=[]
-
+        end_episode = False
         quit = False
         flag_tr = False
         flag_rot = False
@@ -345,20 +350,25 @@ if __name__=='__main__':
             global uniform_vel
             global quit
             global ctrl_freq
+            global is_dagger_episode
+            global obs_dict
 
             while not quit:
                 tt=time.time()
-                act_dict = get_expert_policy(wgT_tar=env.wgT_tar, wgT=env.wgT, trans_vel=trans_vel, rot_vel=rot_vel,
-                                             uniform_vel=uniform_vel, dist_eps=env.dist_eps, angle_eps=env.angle_eps,
-                                             motion_type="simultaneously", dof=6, need_trans_unit_transform=False,fine_print=False,real=True)
-                # print("vel_rot: ",act_dict["vel_rot"])
-                # print("vel_trans: ",act_dict["vel_tr"])
-                # print("delta_pos: ",act_dict["cur_goal_delta_pose"])
-                env.action_dT(act_dict["dT"])
+                if not is_dagger_episode:
+                    act_dict = get_expert_policy(wgT_tar=env.wgT_tar, wgT=env.wgT, trans_vel=trans_vel, rot_vel=rot_vel,
+                                                 uniform_vel=uniform_vel, dist_eps=env.dist_eps, angle_eps=env.angle_eps,
+                                                 motion_type="simultaneously", dof=6, need_trans_unit_transform=False,fine_print=False,real=True)
+                    env.action_dT(act_dict["dT"])
+                else:
+                    if obs_dict == None:
+                        continue
+                    policy_action_motion = get_policy_action(policy_model, obs_dict)
+                    dT = construct_dT_from_action(policy_action_motion, dof=6)
+                    env.action_dT(dT)
+                    print(f"[DAgger] pred_action:{policy_action_motion}")
                 dt=time.time()-tt
                 time.sleep(max(0,1/ctrl_freq-dt))
-                # print("actual_ctrl_freq: ",1/(time.time()-tt))
-            # operate.join()
 
         # robo_operator()
         operate = threading.Thread(target=robo_operator, daemon = True)
@@ -367,18 +377,30 @@ if __name__=='__main__':
         operate.start()
         
         #================================dagger===============================
+        frame_counter = 0
+        start_time = time.time()
+        obs_dict = None
+
         def collision_detection():
+            global object_path
+            global gripper_path
             global end_episode
             global frame_counter
             global min_position_threshold
             global is_dagger_episode
-            global collision_detector
             global collision_check_freq
             global env
             global distance
+            global cali_T
+            global start_time
 
             first_frame = True
-            while True:
+            collision_detector = CollisionDetector(gripper_path, object_path, scalar_1=1.0, scalar_2=0.001,
+                                                   use_convex_hull_1=False, use_convex_hull_2=False, cali_T=cali_T)
+            visualizer = Open3DVisualizer(collision_detector)
+            visualizer.vis.poll_events()
+            visualizer.vis.update_renderer()
+            while not quit:
                 # DAgger策略检查物体和夹爪位置
                 if is_dagger_episode and frame_counter:
                     t_start = time.time()
@@ -393,41 +415,43 @@ if __name__=='__main__':
                         wgT_tar = env.wgT_tar.copy()
                         dT = np.linalg.inv(wgT_tar)@wgT
                         first_frame = False
+                    dT[0:3,3]/=1000 #mm2m
                     collision_detector.update_pos(dT)
+                    visualizer.run_iteration()
 
                     #check collision
                     contact_flag ,distance = collision_detector.check_collision(num_sample_points=500,threshold=min_position_threshold[0])
-                    print(f"distance: {distance}")
-                    
-                    if distance < min_position_threshold[0] or distance > min_position_threshold[1] or contact_flag:
-                        print(f"[DAgger] Position minimum threshold reached at frame {frame_counter}, distance: {distance}, threshold: {min_position_threshold}")
+                    print(f"[DAgger] distance: {distance}==================")
+
+                    use_t = time.time()-start_time
+                    if distance < min_position_threshold[0] or distance > min_position_threshold[1] or contact_flag or use_t>time_upper_bound:
+                        if not time.time()-start_time>time_upper_bound:
+                            print(f"[DAgger] Position minimum threshold reached at frame {frame_counter}, distance: {distance}, threshold: {min_position_threshold}")
+                        else:
+                            print(f"[DAgger] Time limit reached, use time:{use_t}, time limit: {time_upper_bound}")
                         end_episode = True
+                        break
 
                     
                     dt = time.time()-t_start
                     if dt < 1/collision_check_freq:
                         time.sleep(1/collision_check_freq - dt)
 
-        coll_det_thread = threading.Thread(target=collision_detection, daemon = True)
-        coll_det_thread.start()
+            visualizer.vis.destroy_window()
+
+        if is_dagger_episode:
+            coll_det_thread = threading.Thread(target=collision_detection, daemon = True)
+            coll_det_thread.start()
                     
         #================================dagger===============================
-                    
-                    
 
-        tt = time.time()
-
+        # time.sleep(5)
         t0 = time.time()
-        # gkkk=0
-
-        #================================dagger===============================
-        frame_counter = 0
-        #================================dagger===============================
 
         while True:
-            frame_counter += 1
             if time.time() - t0 > 1/data_collect_freq:    #此程序运行约0.01s（10hz）,因此循环频率需要低于10hz
                 # print("camera circulation_time:", time.time() - t0)
+                frame_counter += 1
                 t0 = time.time()
                 # 读取图像帧，包括RGB图
                 rtn_dict = env.observation()
@@ -454,11 +478,11 @@ if __name__=='__main__':
                 if is_dagger_episode and policy_model is not None:
                     obs_dict = prepare_observation_for_policy(
                         img_size=save_img_size,
-                        hdf_img_size=img_h,
-                        img=img,
-                        img_goal=goal_dict["img_goal"],
-                        img2=img2,
-                        img2_goal=goal_dict["img_goal2"] if goal_dict["img_goal2"] is not None else None,
+                        hdf_img_size=img_size,
+                        img=img.copy(),
+                        img_goal=goal_dict["img_goal"].copy(),
+                        img2 = img2.copy(),
+                        img2_goal=goal_dict["img_goal2"].copy() if goal_dict["img_goal2"] is not None else None,
                         img_light = None,
                         img_light_goal = None,
                         img2_light = None,
@@ -469,7 +493,7 @@ if __name__=='__main__':
                     # 从策略动作构建变换矩阵dT
                     dT = construct_dT_from_action(policy_action, dof=6)
                     # 打印策略动作和专家动作的差异
-                    # print(f"[DAgger] Policy Action: {action}, Expert Action: {expert_action}")
+                    print(f"[DAgger] Policy Action: {action}, Expert Action: {expert_action}")
             
                 # 保存动作（对于普通收集是实际执行的动作，对于DAgger是专家动作）
                 action_list.append(action)
@@ -508,7 +532,7 @@ if __name__=='__main__':
                 if is_dagger_episode:
                     tr = reinit_res["dist"]
                     rot = reinit_res["angle"]
-                    print(f"------------error:trans:{tr},rot:{rot}-----------------")
+                    print(f"[DAgger] error:trans:{tr},rot:{rot}-----------------")
                     if tr > pose_error_threshold["trans"] or rot > pose_error_threshold["rot"]:
                         if first_in_error:
                             dt = time.time() - error_timer
@@ -528,9 +552,10 @@ if __name__=='__main__':
                         env.init()
                     quit = True
                     operate.join()
-                    coll_det_thread.join()
+                    if is_dagger_episode:
+                        coll_det_thread.join()
                     cv2.destroyAllWindows()
-                    print('...录制结束，数据处理中...')
+                    print(f'...录制结束，数据处理中...')
 
                     if is_dagger_episode:
                         print("Final distance between gripper and object:", distance)
@@ -609,10 +634,12 @@ if __name__=='__main__':
                     #================main augmentation================
                     if use_augmentation:
                         for img in img_lst:
-                            img_light = augmentation_module.augment_image(img, False)
+                            # print(img.shape)
+                            img_light = augmentation_module.augment_image(img, True)
                             img_light_list.append(img_light)
                         for img2 in img2_lst:
-                            img2_light = augmentation_module.augment_image(img2, False)
+                            # print(img2.shape)
+                            img2_light = augmentation_module.augment_image(img2, True)
                             img2_light_list.append(img2_light)
                     # ================main augmentation================
 
@@ -731,14 +758,14 @@ if __name__=='__main__':
                         )
                     #===============================policy training===============================
                     break
-        # add_env_meta(new_f_out,additional_itms={"pose_and_orientations":pose_and_orientations})
-        if not is_hdf_open:
-            new_f_out = h5py.File(dataset_dir, "r+")
-            is_hdf_open = True
-        add_config(new_f_out, config)
-        new_f_out.close()
-        compute_num_samples(dataset_dir)
-        split_train_val_from_hdf5(dataset_dir, val_ratio=0.1)            
+    # add_env_meta(new_f_out,additional_itms={"pose_and_orientations":pose_and_orientations})
+    if not is_hdf_open:
+        new_f_out = h5py.File(dataset_dir, "r+")
+        is_hdf_open = True
+    add_config(new_f_out, config)
+    new_f_out.close()
+    compute_num_samples(dataset_dir)
+    split_train_val_from_hdf5(dataset_dir, val_ratio=0.1)
 
 
 

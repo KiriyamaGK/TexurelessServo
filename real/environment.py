@@ -91,12 +91,12 @@ class Environment:
         pose[2] -= self.down_dis
         self.gripper.move_gripper(0,60,60)
         time.sleep(2)
-        self.robot_ins.move_l(pose, tool=1, user=0, vel=10)
+        self.robot_ins.move_l(pose, tool=2, user=0, vel=10)
         self.gripper.move_gripper(3000, 60, 60)
         time.sleep(2)
 
         #开始上来
-        self.robot_ins.move_l(p_0, tool=1, user=0, vel=30)
+        self.robot_ins.move_l(p_0, tool=2, user=0, vel=30)
 
         # 开始平移到新位置
         p_1=[0,0,0,0,0,0]
@@ -106,7 +106,7 @@ class Environment:
         p_1[3]=p_0[3]
         p_1[4]=p_0[4]
         p_1[5]=random.randint(130, 175)*(random.randint(0, 1) - 0.5) * 2
-        self.robot_ins.move_l(p_1, tool=1, user=0, vel=30)
+        self.robot_ins.move_l(p_1, tool=2, user=0, vel=30)
 
         #开始下去
         pose = p_1.copy()
@@ -115,7 +115,7 @@ class Environment:
         self.gripper.move_gripper(0,60,60)
         time.sleep(1)
 
-        self.robot_ins.move_l(p_1, tool=1, user=0, vel=10)
+        self.robot_ins.move_l(p_1, tool=2, user=0, vel=10)
         return p_1
 
     def cond_sample_init_pos_algo(self):
@@ -327,7 +327,7 @@ class Environment:
         """
         # print("actioned")
         tar_pose = self.absolute_T_to_pose(T)
-        self.robot_ins.move_cart(pose=tar_pose, tool=1, user=0, vel=40)  ##servo cart is a blocked-type cmd
+        self.robot_ins.move_cart(pose=tar_pose, tool=2, user=0, vel=40)  ##servo cart is a blocked-type cmd
         self.update_state_matrix()
 
     def action_dT(self, dT,update_state=True):

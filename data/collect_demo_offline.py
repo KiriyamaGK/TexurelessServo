@@ -156,6 +156,7 @@ if __name__ == '__main__':
 
         min_position_threshold = dagger_config["task_termination"]["min_position_threshold"]
         pose_error_threshold = dagger_config["task_termination"]["pose_error_threshold"]  # m,deg,sec
+        time_upper_bound = dagger_config["task_termination"]["time_upper_bound"]
     #================================dagger===============================
 
     trans_vel=config["demo_collection"]["velocity"]['trans_vel'] #m
@@ -264,6 +265,7 @@ if __name__ == '__main__':
 
         #================================dagger===============================
         frame_counter = 0
+        task_start_time = time.time()
         #================================dagger===============================
         
         while True:
@@ -345,7 +347,7 @@ if __name__ == '__main__':
                 contact_flag = collision_res["is_colliding"]
                 print(f"distance: {distance}")
                 
-                if distance < min_position_threshold[0] or distance > min_position_threshold[1] or contact_flag:
+                if distance < min_position_threshold[0] or distance > min_position_threshold[1] or contact_flag or time.time()-task_start_time>=time_upper_bound:
                     print(f"[DAgger] Position minimum threshold reached at frame {frame_counter}, distance: {distance}, threshold: {min_position_threshold}")
                     end_episode = True
             #================================dagger===============================

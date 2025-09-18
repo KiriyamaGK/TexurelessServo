@@ -8,7 +8,6 @@ from utils.policy import get_expert_policy
 from utils.hdf5 import add_useless_things, compute_num_samples, split_train_val_from_hdf5
 from torch.utils.data import DataLoader
 from dataset.dataset import dataset_factory
-import pybullet as p
 import json
 from networks.helpers import get_loss_fn, get_optimizer_cls, get_network_cls
 from utils.input_process import conditioned_clip_and_resize
@@ -16,6 +15,7 @@ from utils.input_process import input_dict_preprocess
 
 
 def compute_position_distance_sim(obj, grip, distance_threshold=1.0):
+    import pybullet as p
     closest_points = p.getClosestPoints(obj, grip[0], distance_threshold)
 
     if not closest_points:

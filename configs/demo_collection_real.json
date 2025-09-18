@@ -14,10 +14,10 @@
     },
     "overall_setting":{
         "dataset_base_dir": "/home/user0/dataset",
-        "file_name": "25.06.23",
-        "demo_total_num": 500,
+        "file_name": "25.09.18",
+        "demo_total_num": 600,
         "desire_pt_change_cycle":10000,
-        "replace_existed_hdf5": false,
+        "replace_existed_hdf5": true,
         "delete_last_demo": false
     },
     "demo_collection":{
@@ -39,7 +39,7 @@
                     "using_minus": true
                 },
                 "init_rot": {
-                    "value": [8, 8, 8],
+                    "value": [8, 8, 40],
                     "use_max_rot": false
                 }
             },
@@ -81,22 +81,23 @@
         },
         "record_pose": true,
         "dagger": {
-            "utilized": false,
+            "utilized": true,
             "dagger_episodes": {
                 "_comment": "use_type: list of [start_episode, end_episode] - episodes in these ranges will use DAgger strategy",
-                "use_type": [[100,200],[300, 400], [500, 550]]
+                "use_type": [[2,4],[100,200],[300, 400], [500, 550]]
             },
             "train": {
                 "_comment": "use_type: list of [episode_idx, num_train_epochs, dagger_proportion] - dagger_proportion in [0,1] or null to not specify",
-                "use_type": [[99,20,null],[299,30,0.4],[499, 50, 0.3]]
+                "use_type": [[1,1],[99,20,null],[299,30,0.4],[499, 50, 0.3]]
             },
             "task_termination": {
-                "min_position_threshold": [0.002, 0.08],
+                "min_position_threshold": [5, 80],
                 "pose_error_threshold": {
-                    "trans": 0.001,
-                    "rot": 1,
-                    "time": 20
-                }
+                    "trans": 0.02,
+                    "rot": 15,
+                    "time": 10
+                },
+                "use_time_upperbound":20
             },
             "check_freq": 2,
             "model_path": null

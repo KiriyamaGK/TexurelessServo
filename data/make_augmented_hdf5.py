@@ -15,11 +15,11 @@ if __name__ == '__main__':
         offset_range_min=-0.1,
         offset_range_max=0.1,
         noise_std=0.07,
-        draw_box=False,
+        draw_box=False,  #todo:cautious!
         box_color=(0, 255, 0),
         box_thickness=2
     )
-    dataset_path = "/media/kiriyamagk/One Touch/AlignAnything_real/25.06.23/hdf5/merged.hdf5"
+    dataset_path = "/media/kiriyamagk/One Touch/AlignAnything_real/25.09.18/hdf5/mimic.hdf5"
     img_key_names = ["robot0_eye_in_hand_image", "robot0_eye_in_hand_image_2"]
     color_channel_inverse = True
 
@@ -37,8 +37,8 @@ if __name__ == '__main__':
                     augmented_imgs.append(augmented_img)
 
                     # #debug
-                    # cv2.imshow("img",augmented_img[:,:,::-1])
-                    # cv2.waitKey(0)
+                    cv2.imshow("img",augmented_img[:,:,::-1])
+                    cv2.waitKey(0)
 
                 # Convert list to numpy array
                 augmented_imgs = np.array(augmented_imgs)

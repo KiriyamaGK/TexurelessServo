@@ -52,8 +52,9 @@
                 "pose_error_threshold": {
                     "trans": 0.001,
                     "rot": 1,
-                    "time": 20
-                }
+                    "time": 10
+                },
+                "use_time_upperbound":20
             },
             "check_frame_interval": 2,
             "model_path": null
