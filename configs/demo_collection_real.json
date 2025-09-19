@@ -84,11 +84,11 @@
             "utilized": true,
             "dagger_episodes": {
                 "_comment": "use_type: list of [start_episode, end_episode] - episodes in these ranges will use DAgger strategy",
-                "use_type": [[2,4],[100,200],[300, 400], [500, 550]]
+                "use_type": [[100,200],[300, 400], [500, 550]]
             },
             "train": {
                 "_comment": "use_type: list of [episode_idx, num_train_epochs, dagger_proportion] - dagger_proportion in [0,1] or null to not specify",
-                "use_type": [[1,1],[99,20,null],[299,30,0.4],[499, 50, 0.3]]
+                "use_type": [[99,20,null],[299,30,0.4],[499, 50, 0.3]]
             },
             "task_termination": {
                 "min_position_threshold": [5, 80],
