@@ -33,17 +33,27 @@ class Environment:
         self.trans_vel = velocity["trans_vel"]["value"]
         self.rot_vel = velocity["rot_vel"]["value"]
 
-        self.init_horizon_trans = init["init_horizon_trans"]["value"]                             #最大平移距离，mm
-        self.init_vertical_trans = init["init_vertical_trans"]["value"] if self.dof==6 else 0     #mm
-        init_rot = init["init_rot"]["value"]                                                      #最大旋转偏差（axis-angle，deg）
+        # 保存参数列表用于动态选择
+        self.init_horizon_trans_list = init["init_horizon_trans"]["value"]
+        self.init_vertical_trans_list = init["init_vertical_trans"]["value"] if self.dof==6 else [[0, 0, 0]]
+        self.init_rot_list = init["init_rot"]["value"]
+        
+        # 初始化参数（将在init()中动态更新）
+        self.init_horizon_trans = self.init_horizon_trans_list[0][0] if isinstance(self.init_horizon_trans_list[0], list) else self.init_horizon_trans_list[0]
+        self.init_vertical_trans = self.init_vertical_trans_list[0][0] if isinstance(self.init_vertical_trans_list[0], list) else self.init_vertical_trans_list[0]
+        init_rot = self.init_rot_list[0][:3] if isinstance(self.init_rot_list[0], list) else self.init_rot_list[0]
         self.uniform_eval_settings = init["uniform_evaluation"]
 
         if self.dof == 3:
-            assert isinstance(init_rot,(int, float))
-            self.init_rot = np.array([0,0,init_rot]) # degree
+            if isinstance(init_rot, list):
+                self.init_rot = np.array([0,0,init_rot[0]]) # degree
+            else:
+                self.init_rot = np.array([0,0,init_rot]) # degree
         else:
-            assert isinstance(init_rot, list) and len(init_rot) == 3
-            self.init_rot = np.array(init_rot)  # degree
+            if isinstance(init_rot, list) and len(init_rot) == 3:
+                self.init_rot = np.array(init_rot)  # degree
+            else:
+                self.init_rot = np.array([0,0,0])  # degree
 
         self.use_max_rot = init["init_rot"]["use_max_rot"]
         self.use_max_trans = init["init_horizon_trans"]["use_max_h_trans"]
@@ -65,6 +75,7 @@ class Environment:
 
         self.init_flag = False
         self.vel_in_threshold_flag = False
+        self.episode = -1
 
         self.task_timer = time.time()
         self.vel_timer = time.time()
@@ -77,6 +88,36 @@ class Environment:
         self.gwT_tar=None
         self.wgT=None
         self.gwT=None
+
+        self.episode = -1
+
+    def get_dynamic_params(self, param_list, episode):
+        """
+        根据episode动态选择参数
+        :param param_list: 参数列表，格式为[[value, epi_start, epi_end], ...] 或 [[theta1, theta2, theta3, epi_start, epi_end], ...]
+        :param episode: 当前episode
+        :return: 对应的参数值
+        """
+        for param_config in param_list:
+            if len(param_config) == 3:  # [value, epi_start, epi_end]
+                value, epi_start, epi_end = param_config
+                if epi_start <= episode <= epi_end:
+                    return value
+            elif len(param_config) == 5:  # [theta1, theta2, theta3, epi_start, epi_end]
+                theta1, theta2, theta3, epi_start, epi_end = param_config
+                if epi_start <= episode <= epi_end:
+                    return [theta1, theta2, theta3]
+        
+        # 如果没有找到匹配的episode范围，返回最后一个配置的值
+        if len(param_list) > 0:
+            last_config = param_list[-1]
+            if len(last_config) == 3:
+                return last_config[0]
+            elif len(last_config) == 5:
+                return last_config[:3]
+        
+        # 默认值
+        return param_list[0][0] if len(param_list) > 0 else 0
 
     def place(self,p_0):
         '''
@@ -309,11 +350,25 @@ class Environment:
         return pose
 
     def init(self):
+        self.episode += 1
+        
+        # 动态选择参数
+        if hasattr(self, 'init_horizon_trans_list'):
+            self.init_horizon_trans = self.get_dynamic_params(self.init_horizon_trans_list, self.episode)
+        if hasattr(self, 'init_vertical_trans_list') and self.dof == 6:
+            self.init_vertical_trans = self.get_dynamic_params(self.init_vertical_trans_list, self.episode)
+        if hasattr(self, 'init_rot_list'):
+            rot_params = self.get_dynamic_params(self.init_rot_list, self.episode)
+            if self.dof == 3:
+                self.init_rot = np.array([0, 0, rot_params[0] if isinstance(rot_params, list) else rot_params])
+            else:
+                self.init_rot = np.array(rot_params)
+        
         self.sample_init_pos()
         self.init_flag = True
         self.task_timer = time.time()
         self.vel_timer = time.time()
-        print("environment initialized")
+        print(f"environment initialized for episode {self.episode}")
 
     def observation(self):
         return self.camera.get_frame()

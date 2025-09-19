@@ -30,16 +30,16 @@
                 },
                 "conditioned_sampling": false,
                 "init_horizon_trans": {
-                    "value": 20,
+                    "value": [[20, 0, 200], [15, 201, 400], [10, 401, 600]],
                     "use_max_h_trans": false
                 },
                 "init_vertical_trans": {
-                    "value": 20,
+                    "value": [[20, 0, 200], [15, 201, 400], [10, 401, 600]],
                     "using_max_v_trans": true,
                     "using_minus": true
                 },
                 "init_rot": {
-                    "value": [8, 8, 40],
+                    "value": [[8, 8, 40, 0, 200], [6, 6, 30, 201, 400], [4, 4, 20, 401, 600]],
                     "use_max_rot": false
                 }
             },
