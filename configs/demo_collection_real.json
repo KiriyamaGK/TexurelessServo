@@ -30,15 +30,18 @@
                 },
                 "conditioned_sampling": false,
                 "init_horizon_trans": {
+                    "_comment": "value format: [value, start_episode, end_episode] - value: 水平平移距离(mm), start_episode: 起始episode, end_episode: 结束episode",
                     "value": [[20, 0, 200], [15, 201, 400], [10, 401, 600]],
                     "use_max_h_trans": false
                 },
                 "init_vertical_trans": {
+                    "_comment": "value format: [value, start_episode, end_episode] - value: 垂直平移距离(mm), start_episode: 起始episode, end_episode: 结束episode",
                     "value": [[20, 0, 200], [15, 201, 400], [10, 401, 600]],
                     "using_max_v_trans": true,
                     "using_minus": true
                 },
                 "init_rot": {
+                    "_comment": "value format: [theta1, theta2, theta3, start_episode, end_episode] - theta1,theta2,theta3: 三个旋转角度(度), start_episode: 起始episode, end_episode: 结束episode",
                     "value": [[8, 8, 40, 0, 200], [6, 6, 30, 201, 400], [4, 4, 20, 401, 600]],
                     "use_max_rot": false
                 }
