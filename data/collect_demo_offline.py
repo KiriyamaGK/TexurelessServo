@@ -156,7 +156,7 @@ if __name__ == '__main__':
 
         min_position_threshold = dagger_config["task_termination"]["min_position_threshold"]
         pose_error_threshold = dagger_config["task_termination"]["pose_error_threshold"]  # m,deg,sec
-        time_upper_bound = dagger_config["task_termination"]["time_upper_bound"]
+        time_upper_bound = dagger_config["task_termination"]["use_time_upperbound"]
     #================================dagger===============================
 
     trans_vel=config["demo_collection"]["velocity"]['trans_vel'] #m
@@ -551,7 +551,7 @@ if __name__ == '__main__':
                         dagger_set = set()
                         for s, e in dagger_ranges:
                             for ep in range(s, e + 1):
-                                demo_id = f"demo_{ep+existed_demo_num}"  #crucial improvement
+                                demo_id = f"demo_{ep+existed_demo_num}"
                                 if demo_id in all_demos:
                                     dagger_set.add(demo_id)
                         dagger_demos = [d for d in all_demos if d in dagger_set]

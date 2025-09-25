@@ -120,7 +120,7 @@ if __name__=='__main__':
     # ===================================manually_set_info===================================
     initial_teleop = False
     init_pos = np.array(
-        [-429.290283203125, -93.67056274414062, 181.42144775390625, 179.7019805908203, 0.6188414096832275, -4.211060047149658])
+        [-555.3734741210938, -48.798828125, 171.80722045898438, 178.49427795410156, 1.540321946144104, 13.897172927856445])
     goal_img_base_dir = "/media/kiriyamagk/One Touch/AlignAnything_real/25.06.22/hdf5/goal_images"
     goal_idx=1999
     origin_color_type = "bgr"
@@ -252,7 +252,7 @@ if __name__=='__main__':
         save_img_size = model_config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"]
 
         min_position_threshold = dagger_config["task_termination"]["min_position_threshold"]
-        pose_error_threshold = dagger_config["task_termination"]["pose_error_threshold"]  # m,deg,sec
+        pose_error_threshold = dagger_config["task_termination"]["pose_error_threshold"]  # mm,deg,sec
         time_upper_bound = dagger_config["task_termination"]["use_time_upperbound"]
         collision_check_freq = dagger_config["check_freq"]
 
@@ -261,7 +261,8 @@ if __name__=='__main__':
         cali_T = np.eye(4)
         cali_T[1, 1] *= -1
         cali_T[2, 2] *= -1
-        cali_T[2, 3] = 0.09 #todo:remember to calibrate
+        cali_T[0, 3] = -0.006
+        cali_T[2, 3] = 0.08 #todo:remember to calibrate
         # collision_detector = CollisionDetector(gripper_path,object_path,scalar_1=1.0,scalar_2=0.001,use_convex_hull_1=False,use_convex_hull_2=False,cali_T = cali_T)
     #================================dagger===============================
 
@@ -334,6 +335,7 @@ if __name__=='__main__':
         quit = False
         flag_tr = False
         flag_rot = False
+        obs_dict = None
 
         # get goal info
         goal_dict = get_goal_info(env)
@@ -351,7 +353,7 @@ if __name__=='__main__':
             global quit
             global ctrl_freq
             global is_dagger_episode
-            global obs_dict
+            # global obs_dict
 
             while not quit:
                 tt=time.time()
@@ -366,8 +368,9 @@ if __name__=='__main__':
                     policy_action_motion = get_policy_action(policy_model, obs_dict)
                     dT = construct_dT_from_action(policy_action_motion, dof=6)
                     env.action_dT(dT)
-                    print(f"[DAgger] pred_action:{policy_action_motion}")
+                    # print(f"[DAgger] pred_action:{policy_action_motion}")
                 dt=time.time()-tt
+                print(f"actual ctrl_freq={1 / (dt)}")
                 time.sleep(max(0,1/ctrl_freq-dt))
 
         # robo_operator()
@@ -379,7 +382,6 @@ if __name__=='__main__':
         #================================dagger===============================
         frame_counter = 0
         start_time = time.time()
-        obs_dict = None
 
         def collision_detection():
             global object_path
@@ -421,7 +423,7 @@ if __name__=='__main__':
 
                     #check collision
                     contact_flag ,distance = collision_detector.check_collision(num_sample_points=500,threshold=min_position_threshold[0])
-                    print(f"[DAgger] distance: {distance}==================")
+                    # print(f"[DAgger] distance: {distance}==================")
 
                     use_t = time.time()-start_time
                     if distance < min_position_threshold[0] or distance > min_position_threshold[1] or contact_flag or use_t>time_upper_bound:
@@ -432,8 +434,8 @@ if __name__=='__main__':
                         end_episode = True
                         break
 
-                    
                     dt = time.time()-t_start
+                    print(f"collision detection freq:{1/dt}")
                     if dt < 1/collision_check_freq:
                         time.sleep(1/collision_check_freq - dt)
 
@@ -450,7 +452,7 @@ if __name__=='__main__':
 
         while True:
             if time.time() - t0 > 1/data_collect_freq:    #此程序运行约0.01s（10hz）,因此循环频率需要低于10hz
-                # print("camera circulation_time:", time.time() - t0)
+                print("MAIN circulation_freq:", 1/(time.time() - t0))
                 frame_counter += 1
                 t0 = time.time()
                 # 读取图像帧，包括RGB图
@@ -479,21 +481,23 @@ if __name__=='__main__':
                     obs_dict = prepare_observation_for_policy(
                         img_size=save_img_size,
                         hdf_img_size=img_size,
-                        img=img.copy(),
-                        img_goal=goal_dict["img_goal"].copy(),
-                        img2 = img2.copy(),
-                        img2_goal=goal_dict["img_goal2"].copy() if goal_dict["img_goal2"] is not None else None,
-                        img_light = None,
-                        img_light_goal = None,
-                        img2_light = None,
-                        img2_light_goal = None
+                        img=img.copy()[:, :, ::-1],
+                        img_goal=goal_dict["img_goal"].copy()[:, :, ::-1],
+                        img2=img2.copy()[:, :, ::-1],
+                        img2_goal=goal_dict["img_goal2"].copy()[:, :, ::-1] if goal_dict[
+                                                                                   "img_goal2"] is not None else None,
+                        img_light=None,
+                        img_light_goal=None,
+                        img2_light=None,
+                        img2_light_goal=None,
+                        keep_right=True
                     )
                     policy_action = get_policy_action(policy_model, obs_dict)
                     action = policy_action
                     # 从策略动作构建变换矩阵dT
                     dT = construct_dT_from_action(policy_action, dof=6)
                     # 打印策略动作和专家动作的差异
-                    print(f"[DAgger] Policy Action: {action}, Expert Action: {expert_action}")
+                    # print(f"[DAgger] Policy Action: {action}, Expert Action: {expert_action}")
             
                 # 保存动作（对于普通收集是实际执行的动作，对于DAgger是专家动作）
                 action_list.append(action)
@@ -532,7 +536,7 @@ if __name__=='__main__':
                 if is_dagger_episode:
                     tr = reinit_res["dist"]
                     rot = reinit_res["angle"]
-                    print(f"[DAgger] error:trans:{tr},rot:{rot}-----------------")
+                    # print(f"[DAgger] error:trans:{tr},rot:{rot}-----------------")
                     if tr > pose_error_threshold["trans"] or rot > pose_error_threshold["rot"]:
                         if first_in_error:
                             dt = time.time() - error_timer
@@ -724,7 +728,7 @@ if __name__=='__main__':
                             dagger_set = set()
                             for s, e in dagger_ranges:
                                 for ep in range(s, e + 1):
-                                    demo_id = f"demo_{ep+existed_demo_num}"  #crucial improvement
+                                    demo_id = f"demo_{ep+existed_demo_num}" if not delete_last_demo else f"demo_{ep+existed_demo_num-1}" #crucial improvement
                                     if demo_id in all_demos:
                                         dagger_set.add(demo_id)
                             dagger_demos = [d for d in all_demos if d in dagger_set]

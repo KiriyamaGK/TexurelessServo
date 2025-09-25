@@ -32,21 +32,21 @@ def compute_position_distance_sim(obj, grip, distance_threshold=1.0):
         "is_colliding": is_colliding
     }
 
-def prepare_observation_for_policy(img_size, hdf_img_size,img, img_goal, img2=None, img2_goal=None, img_light=None, img_light_goal=None, img2_light=None, img2_light_goal=None):
+def prepare_observation_for_policy(img_size, hdf_img_size,img, img_goal, img2=None, img2_goal=None, img_light=None, img_light_goal=None, img2_light=None, img2_light_goal=None,bgr2rgb = False,keep_right = False):
     """
     准备输入给策略模型的观察数据
     """
-    img = conditioned_clip_and_resize(img, img_size, img_size, hdf_img_size)
-    img_goal = conditioned_clip_and_resize(img_goal, img_size, img_size, hdf_img_size)
+    img = conditioned_clip_and_resize(img, img_size, img_size, hdf_img_size,keep_right=keep_right)
+    img_goal = conditioned_clip_and_resize(img_goal, img_size, img_size, hdf_img_size,keep_right=keep_right)
     if img2 is not None:
-        img2 = conditioned_clip_and_resize(img2, img_size, img_size, hdf_img_size)
-        img2_goal = conditioned_clip_and_resize(img2_goal, img_size, img_size, hdf_img_size)
+        img2 = conditioned_clip_and_resize(img2, img_size, img_size, hdf_img_size,keep_right=keep_right)
+        img2_goal = conditioned_clip_and_resize(img2_goal, img_size, img_size, hdf_img_size,keep_right=keep_right)
     if img_light is not None:
-        img_light = conditioned_clip_and_resize(img_light, img_size, img_size, hdf_img_size)
-        img_light_goal = conditioned_clip_and_resize(img_light_goal, img_size, img_size, hdf_img_size)
+        img_light = conditioned_clip_and_resize(img_light, img_size, img_size, hdf_img_size,keep_right=keep_right)
+        img_light_goal = conditioned_clip_and_resize(img_light_goal, img_size, img_size, hdf_img_size,keep_right=keep_right)
     if img2_light is not None:
-        img2_light = conditioned_clip_and_resize(img2_light, img_size, img_size, hdf_img_size)
-        img2_light_goal = conditioned_clip_and_resize(img2_light_goal, img_size, img_size, hdf_img_size)
+        img2_light = conditioned_clip_and_resize(img2_light, img_size, img_size, hdf_img_size,keep_right=keep_right)
+        img2_light_goal = conditioned_clip_and_resize(img2_light_goal, img_size, img_size, hdf_img_size,keep_right=keep_right)
     
     obs_dict = {
         "robot0_eye_in_hand_image": img,
@@ -62,7 +62,7 @@ def prepare_observation_for_policy(img_size, hdf_img_size,img, img_goal, img2=No
         obs_dict["robot0_eye_in_hand_image_2_light"] = img2_light
         obs_dict["robot0_eye_in_hand_image_2_light_goal"] = img2_light_goal
     
-    obs_dict=input_dict_preprocess(obs_dict,rollout=True)
+    obs_dict=input_dict_preprocess(obs_dict,rollout=True,bgr2rgb=bgr2rgb)
         
     return obs_dict
 
@@ -85,7 +85,7 @@ def load_policy_model(model_path, model, device=None):
         print(f"[警告] 模型文件不存在: {model_path}")
         return model
     
-    state_dict = torch.load(model_path, map_location=device)
+    state_dict = torch.load(model_path, map_location=device,weights_only=False)
     model.load_state_dict(state_dict)
     model.to(device)
     model.eval()
@@ -124,14 +124,16 @@ def get_policy_action(model, observation, device=None):
         if not isinstance(observation, torch.Tensor):
             observation = torch.FloatTensor(observation)
         obs_tensor = observation.to(device)
-    with torch.no_grad():
-        prediction = model(obs_tensor)
+
+
+    prediction = model(obs_tensor)
+    
 
     if isinstance(prediction, dict):
-        action = prediction['output_tensor'].cpu().numpy().reshape(-1)
+        action = prediction['output_tensor'].detach().cpu().numpy().reshape(-1)
     else:
-        action = prediction.cpu().numpy().reshape(-1)
-    
+        action = prediction.detach().cpu().numpy().reshape(-1)
+
     return action
 
 def aggregate_dataset(new_data, f, max_size=None):
@@ -264,10 +266,13 @@ def train_policy(img_size, model, num_train_steps, optimizer, criterion, num_epo
     # 训练模型
     print(f"[DAgger] 开始训练，总轮数: {num_epochs}")
     for epoch in range(num_epochs):
+        print("=============================")
         print(f"[DAgger] Epoch {epoch+1}/{num_epochs}")
         train_loss_dict = bc_algorithm.train(train_loader, num_train_steps=num_train_steps)
         current_loss = train_loss_dict['loss']
         print(f"[DAgger] Epoch {epoch+1} 训练损失: {current_loss:.4f}")
+        for k ,v in train_loss_dict.items():
+            print(f"{k}:{v}")
         
         # 按指定频率保存模型
         if (epoch + 1) % num_epochs_save == 0 and save_path is not None and episode_idx is not None:

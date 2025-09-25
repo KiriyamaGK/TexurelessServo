@@ -20,7 +20,7 @@
     },
     "overall_setting": {
         "dataset_base_dir": "/home/kiriyamagk/桌面/tmp0729",
-        "file_name": "25.08.11",
+        "file_name": "25.09.22",
         "demo_total_num": 600,
         "objs_descriptor": [5],
         "replace_existed_hdf5": true

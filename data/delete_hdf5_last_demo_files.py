@@ -7,7 +7,7 @@ if __name__ == '__main__':
     delete_demo_num=2
 
     base_dir = return_disc_route("One Touch")
-    file_name="25.03.11"
+    file_name="25.09.20"
     database_dir = os.path.join(base_dir, 'AlignAnything_real', file_name, 'hdf5')
     ensure_dir(database_dir)
     dataset_dir = os.path.join(database_dir, 'mimic.hdf5')
@@ -17,4 +17,5 @@ if __name__ == '__main__':
         existed_demo_num=len(new_f_out["data"])
         delete_demo_num = min(existed_demo_num,delete_demo_num)
         for uu in range(delete_demo_num):
+            print(f"deleting demo_{existed_demo_num - 1-uu}")
             del new_f_out['data/demo_{}'.format(existed_demo_num - 1-uu)]

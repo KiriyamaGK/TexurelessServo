@@ -71,9 +71,9 @@ class FR_Robot:
 
 if __name__ == '__main__':
     fr_robot = FR_Robot()
-    # init_pos = np.array(
-    #     [-665.4080200195312, -134.65577697753906, 459.40484619140625, 90.01770782470703, 0.003496273187920451, -89.99652099609375])
-    # fr_robot.move_cart(np.array(init_pos),tool=0,user=0,vel=40)
+    init_pos = np.array(
+        [-555.3706665039062, -48.806392669677734, 169.33677673339844,180.0,0., 13.89781379699707])
+    # fr_robot.move_cart(np.array(init_pos),tool=2,user=0,vel=40)
     # init_pos[2]-=300
     # fr_robot.move_cart(np.array(init_pos), tool=2, user=0, vel=40)
     pos = fr_robot.get_gripper_TCP_pose()

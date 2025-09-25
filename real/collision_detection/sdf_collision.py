@@ -54,7 +54,7 @@ class CollisionDetector():
     def initial_calibration(self,cali_T):
         """
         calibrate initial wpos1_T according to given cali_T,which is bias between obj and gripper.
-        :param cali_T:
+        :param cali_T:transform matrix from deslcl_2 to deslcl_1
         :return:
         """
         # self.wpos2_T @ self.lcl_deslcl_2 @ T_cali @ np.linalg.inv(self.lcl_deslcl_1) = T_apply @ self.wpos1_T

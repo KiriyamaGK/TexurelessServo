@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import cv2
 import random
+import os
 
 
 def augment_lighting_for_image_np(
@@ -252,6 +253,7 @@ class AugmentationModule():
                  scale_range_min=0.3, scale_range_max=1.8,
                  offset_range_min=-0.3, offset_range_max=0.3,
                  noise_std=0.1, draw_box=False, box_color=(0, 255, 0), box_thickness=2):
+        os.environ['YOLO_VERBOSE'] = 'False' #abandon yolo logger printing
         from ultralytics import YOLO
 
         self.model = YOLO(pretrained_model_pth)

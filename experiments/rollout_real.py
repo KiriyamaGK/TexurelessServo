@@ -169,8 +169,8 @@ if __name__ == '__main__':
     #===================================manually_set_info===================================
     initial_teleop = False
     init_pos = np.array(
-        [-510.449,-106.808,147.588,-179.2,-0.534,-162.46])
-    goal_img_base_dir = "/media/kiriyamagk/One Touch/AlignAnything_real/25.06.22/hdf5/goal_images"
+        [-555.3695678710938, -48.81327438354492, 176.91848754882812, 180.0,0., 13.89868450164795])
+    goal_img_base_dir = "/media/kiriyamagk/One Touch/AlignAnything_real/25.06.22/hdf5/goal_images" #if initial_teleop
     goal_idx = 1999
     origin_color_type = "bgr"
     # ===================================manually_set_info===================================
@@ -235,7 +235,7 @@ if __name__ == '__main__':
     if not initial_teleop:
         # init_pos = robot_ins.get_gripper_TCP_pose()
         in_desire_pt = init_pos
-        env.robot_ins.move_cart(in_desire_pt,tool=1, user=0, vel=40)
+        env.robot_ins.move_cart(in_desire_pt,tool=2, user=0, vel=40)
     else:
         img_1_gt = cv2.imread(os.path.join(goal_img_base_dir,"img1", f"{goal_idx}.png"))
         img_2_gt = cv2.imread(os.path.join(goal_img_base_dir,"img2", f"{goal_idx}.png"))  # /255

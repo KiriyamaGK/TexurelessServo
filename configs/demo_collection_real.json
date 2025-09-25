@@ -14,7 +14,7 @@
     },
     "overall_setting":{
         "dataset_base_dir": "/home/user0/dataset",
-        "file_name": "25.09.18",
+        "file_name": "25.09.24",
         "demo_total_num": 600,
         "desire_pt_change_cycle":10000,
         "replace_existed_hdf5": true,
@@ -31,24 +31,24 @@
                 "conditioned_sampling": false,
                 "init_horizon_trans": {
                     "_comment": "value format: [value, start_episode, end_episode] - value: 水平平移距离(mm), start_episode: 起始episode, end_episode: 结束episode",
-                    "value": [[20, 0, 200], [15, 201, 400], [10, 401, 600]],
+                    "value": [[20, 0, 349], [5, 350, 600]],
                     "use_max_h_trans": false
                 },
                 "init_vertical_trans": {
                     "_comment": "value format: [value, start_episode, end_episode] - value: 垂直平移距离(mm), start_episode: 起始episode, end_episode: 结束episode",
-                    "value": [[20, 0, 200], [15, 201, 400], [10, 401, 600]],
+                    "value": [[20, 0, 349], [5, 350, 600]],
                     "using_max_v_trans": true,
                     "using_minus": true
                 },
                 "init_rot": {
                     "_comment": "value format: [theta1, theta2, theta3, start_episode, end_episode] - theta1,theta2,theta3: 三个旋转角度(度), start_episode: 起始episode, end_episode: 结束episode",
-                    "value": [[8, 8, 40, 0, 200], [6, 6, 30, 201, 400], [4, 4, 20, 401, 600]],
+                    "value": [[8, 8, 40, 0, 349], [5 ,5 ,5, 350, 600]],
                     "use_max_rot": false
                 }
             },
             "stop_policy":{
-                "angle_eps": 0.2,
-                "dist_eps": 0.2
+                "angle_eps": 0.35,
+                "dist_eps": 0.35
             },
             "velocity": {
                 "trans_vel": {
@@ -66,8 +66,10 @@
             }
         },
 
-        "data_collect_freq": 7,
+        "data_collect_freq": 20,
+        "data_process_freq":1000,
         "ctrl_freq": 20,
+        "frame_sampling_gap": 3,
 
         "img": {
             "save_type": "rgb",
@@ -91,14 +93,14 @@
             },
             "train": {
                 "_comment": "use_type: list of [episode_idx, num_train_epochs, dagger_proportion] - dagger_proportion in [0,1] or null to not specify",
-                "use_type": [[99,20,null],[299,30,0.4],[499, 50, 0.3]]
+                "use_type": [[99,5,null],[299,10,0.4],[499, 15, 0.3]]
             },
             "task_termination": {
                 "min_position_threshold": [5, 80],
                 "pose_error_threshold": {
-                    "trans": 0.02,
+                    "trans": 20,
                     "rot": 15,
-                    "time": 10
+                    "time": 15
                 },
                 "use_time_upperbound":20
             },

@@ -12,9 +12,9 @@
             "use_devices_type": ["img_1","img_2"]
         }
     },
-    "logs_dir": "trained_models/trial/2025-06-29_01-02-25/config.json",
-    "ckpts_dir": [150],
-    "eval_epoch_num": 50,
+    "logs_dir": "trained_models/trial/2025-09-20_20-00-00/config.json",
+    "ckpts_dir": [499],
+    "eval_epoch_num": 100,
     "bgr2rgb": false,
     "cv2_visualize": true,
     "expert_motion_type": "trans_first",
@@ -58,16 +58,16 @@
             }
     },
         "init_horizon_trans": {
-            "value": 5,
+            "value": [[20,0,10000]],
             "use_max_h_trans": false
         },
         "init_vertical_trans": {
-            "value": 20,
+            "value": [[20,0,10000]],
             "using_max_v_trans": false,
             "using_minus": false
         },
         "init_rot": {
-            "value":[8,8,25],
+            "value":[[8,8,40,0,10000]],
             "use_max_rot": false
         }
     },

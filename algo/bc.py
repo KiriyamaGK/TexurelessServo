@@ -92,7 +92,7 @@ class BehaviorCloning():
         """
         data_loader_iter = iter(train_loader)
         num_train_steps=min(num_train_steps,len(train_loader))
-        print("=================num_train_steps={}".format(num_train_steps))
+        print("num_train_steps={}".format(num_train_steps))
         idx=0
         epoch_loss_dict={}
         # for _ in tqdm(range(num_train_steps)):
