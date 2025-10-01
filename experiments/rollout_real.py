@@ -28,7 +28,7 @@ def cleanup():
     if eval_metrics["success_rate"]["utilized"]:
         calculate_success_rate(success_list, os.path.join(save_base_pth, "success_rate.json"))
     visualize_final_error(final_error_list, os.path.join(save_base_pth, "final_error.json"))
-    np.save(os.path.join(save_base_pth, "even_distributed_successrate.npy"),np.array(success_even_distributed_list))
+    np.save(os.path.join(save_base_pth, "even_distributed_successrate.npy"),np.array(success_even_distributed_list)) if len(success_even_distributed_list) else None
     plot_time(time_list,save_base_pth,show=False)
 
 # 注册退出时的回调函数
@@ -441,7 +441,7 @@ if __name__ == '__main__':
                     if eval_metrics["trajectory"]["utilized"] and use_eval_metrics:
                         traj_pth=os.path.join(obj_pth, "traj")
                         os.makedirs(traj_pth, exist_ok=True)
-                        plot_trajs(wgT_list=wgT_list, wgT_tar=env.wgT_tar, motion_type=expert_motion_type, obj_path=traj_pth,show=False)
+                        plot_trajs(wgT_list=wgT_list, wgT_tar=env.wgT_tar, motion_type=expert_motion_type, obj_path=traj_pth,show=False,is_mm=True)
 
                         np.save(os.path.join(traj_pth,f"{int(time.time())}_traj.npy"),wgT_list,allow_pickle=True)
                         
