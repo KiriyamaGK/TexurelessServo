@@ -240,7 +240,13 @@ def setup_policy_model(config_path="../configs/train_mlp.json", checkpoint_path=
     
     return model, optimizer, criterion, config
 
-def train_policy(img_size, model, num_train_steps, optimizer, criterion, num_epochs=10, batch_size=16, data_cfg=None,train_cfg=None, save_path=None, episode_idx=None, filter_by_attribute=None):
+def train_policy(img_size, model, num_train_steps, optimizer, criterion, num_epochs=10, batch_size=16, data_cfg=None,train_cfg=None, save_path=None, episode_idx=None, filter_by_attribute=None,ewc_info = None):
+    if ewc_info is None: #should include：utilized，filter_key
+        use_ewc = False
+    else:
+        use_ewc = ewc_info["utilized"]
+
+
     # 创建训练数据集
     train_set = dataset_factory(
         data_cfg,

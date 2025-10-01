@@ -15,6 +15,28 @@ from data.process_hdf5 import _disturb_abs_rot,_portion_last_episode,_add_end_ep
 from utils.dagger import compute_position_distance_sim, get_policy_action, train_policy, setup_policy_model, prepare_observation_for_policy
 from utils.dagger_params import is_in_dagger_episode, should_train_policy, print_dagger_status
 
+def build_ewc_fisher(model,batch_size,img_size,filter_key):
+    from utils.ewc import EWC
+    from dataset.dataset import dataset_factory
+    from torch.utils.data import DataLoader
+
+    ewc_train_set = dataset_factory(
+        data_cfg,
+        img_size=img_size,
+        filter_by_attribute=filter_key,
+    )
+
+    # 创建数据加载器
+    ewc_train_loader = DataLoader(
+        dataset=ewc_train_set,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=2,
+        drop_last=False
+    )
+    ewc_ins = EWC(model,ewc_train_loader)
+
+
 def filter_translation(input,thres):
     assert thres>0
     input=np.array(input)
