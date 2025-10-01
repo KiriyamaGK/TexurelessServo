@@ -1,7 +1,4 @@
 import json
-import csv
-
-from uaclient.api.u.pro.packages.summary.v1 import summary
 
 
 def determine_key_and_append(dic,lst,key):
