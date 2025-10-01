@@ -17,12 +17,12 @@ class Environment(object):
         self,
         camera_config: Optional[Union[str, CameraIntrinsic]],
         objs_descriptor=20,
-        init_horizon_trans=0.05,
-        init_vertical_trans=0.05,
+        init_horizon_trans=None,
+        init_vertical_trans=None,
         init_transform_frame="grip",
         uniform_evaluation=None,
         using_minus_vertical=False,
-        init_rot=60,
+        init_rot=None,
         use_max_rot=False,
         use_max_trans=False,
         using_max_v_trans=False,
@@ -30,7 +30,6 @@ class Environment(object):
         angle_eps = 0.4,
         dist_eps=0.001,
         depth_info=None,
-        use_high_proportion_x=False,
         pose_and_orientations=None,
         _is_collect=False,
         conditioned_sampling=False,
@@ -114,10 +113,28 @@ class Environment(object):
         self.trans_vel = trans_vel
         self.rot_vel = rot_vel
 
-        self.init_horizon_trans = init_horizon_trans # m
-        self.init_vertical_trans=init_vertical_trans if self.dof==6 else 0   # m
+        # 保存参数列表用于动态选择
+        self.init_horizon_trans_list = init_horizon_trans # m
+        self.init_vertical_trans_list = init_vertical_trans
         self.init_transform_frame = init_transform_frame
+        self.init_rot_list = init_rot
         self.uniform_eval_settings=uniform_evaluation
+        
+        # 初始化参数（将在init()中动态更新）
+        self.init_horizon_trans = self.init_horizon_trans_list[0][0] if isinstance(self.init_horizon_trans_list[0], list) else self.init_horizon_trans_list[0]
+        self.init_vertical_trans = self.init_vertical_trans_list[0][0] if isinstance(self.init_vertical_trans_list[0], list) else self.init_vertical_trans_list[0]
+        init_rot = self.init_rot_list[0][:3] if isinstance(self.init_rot_list[0], list) else self.init_rot_list[0]
+
+        if self.dof == 3:
+            if isinstance(init_rot, list):
+                self.init_rot = np.array([0,0,init_rot[0]]) # degree
+            else:
+                self.init_rot = np.array([0,0,init_rot]) # degree
+        else:
+            if isinstance(init_rot, list) and len(init_rot) == 3:
+                self.init_rot = np.array(init_rot)  # degree
+            else:
+                self.init_rot = np.array([0,0,0])  # degree
 
         if self.dof == 3:
             assert isinstance(init_rot,(int, float))
@@ -182,7 +199,6 @@ class Environment(object):
         self.close_enough_flag=False
         self.vel_in_threshold_flag=False
         self.depth_info=depth_info if depth_info is not None else {"utilized":False,"normalize_scaler": 10}
-        self.use_high_proportion_x=use_high_proportion_x
         self._is_collect=_is_collect
 
         if isinstance(camera_config, str):
@@ -212,6 +228,8 @@ class Environment(object):
         if self.uniform_eval_settings["utilized"]:
             self.return_evenly_distributed_poses()
             self.evenly_posid=0
+        
+        self.episode = -1
 
 
     def determine_obj_idxes(self):
@@ -383,6 +401,34 @@ class Environment(object):
                     'dT': dT
                 })
 
+    def get_dynamic_params(self, param_list, episode):
+        """
+        根据episode动态选择参数
+        :param param_list: 参数列表，格式为[[value, epi_start, epi_end], ...] 或 [[theta1, theta2, theta3, epi_start, epi_end], ...]
+        :param episode: 当前episode
+        :return: 对应的参数值
+        """
+        for param_config in param_list:
+            if len(param_config) == 3:  # [value, epi_start, epi_end]
+                value, epi_start, epi_end = param_config
+                if epi_start <= episode <= epi_end:
+                    return value
+            elif len(param_config) == 5:  # [theta1, theta2, theta3, epi_start, epi_end]
+                theta1, theta2, theta3, epi_start, epi_end = param_config
+                if epi_start <= episode <= epi_end:
+                    return [theta1, theta2, theta3]
+        
+        # 如果没有找到匹配的episode范围，返回最后一个配置的值
+        if len(param_list) > 0:
+            last_config = param_list[-1]
+            if len(last_config) == 3:
+                return last_config[0]
+            elif len(last_config) == 5:
+                return last_config[:3]
+        
+        # 默认值
+        return param_list[0][0] if len(param_list) > 0 else 0
+
     def sample_init_pos(self):
         assert self.init_transform_frame in ["grip","cam"]
         # print("===============================")
@@ -402,12 +448,6 @@ class Environment(object):
         else:
             dT = np.eye(4)
             ori = random.uniform(0, np.pi * 2)
-            if self.use_high_proportion_x:
-                ori=np.pi/2
-                if random.uniform(0, 1) > 0.5:
-                    ori *=-1
-                if random.uniform(0, 1) < 0.3:
-                    ori+=np.pi/9* (random.randint(0, 1) - 0.5) * 2
 
             if not self.conditioned_sampling:
                 #rot
@@ -490,6 +530,20 @@ class Environment(object):
 
 
     def init(self):
+        self.episode += 1
+
+        # 动态选择参数
+        if hasattr(self, 'init_horizon_trans_list'):
+            self.init_horizon_trans = self.get_dynamic_params(self.init_horizon_trans_list, self.episode)
+        if hasattr(self, 'init_vertical_trans_list') and self.dof == 6:
+            self.init_vertical_trans = self.get_dynamic_params(self.init_vertical_trans_list, self.episode)
+        if hasattr(self, 'init_rot_list'):
+            rot_params = self.get_dynamic_params(self.init_rot_list, self.episode)
+            if self.dof == 3:
+                self.init_rot = np.array([0, 0, rot_params[0] if isinstance(rot_params, list) else rot_params])
+            else:
+                self.init_rot = np.array(rot_params)
+
         self.change_thirdview_campos()
         if self.obj_idx_pointer>=len(self.obj_idxs):
             self.obj_idx_pointer=0
@@ -504,6 +558,7 @@ class Environment(object):
         self.obj_idx_pointer+=1
         self.task_timer=time.time()
         self.vel_timer=time.time()
+        print(f"environment initialized for episode {self.episode}")
 
     def observation(self,random_light_dir=False,use_prob=False):
         if random_light_dir:# 50% percent random_light_dir

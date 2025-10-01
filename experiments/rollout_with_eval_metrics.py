@@ -11,7 +11,7 @@ import cv2
 import torch
 from networks.helpers import get_network_cls
 from utils.input_process import clip_image,conditioned_clip_and_resize
-from utils.plot import plot_rot_and_trans,plot_trajs,plot_vel,plot_time,plot_img_diff,plot_error_pose
+from utils.plot import plot_rot_and_trans,plot_trajs,plot_vel,plot_time,plot_img_diff,plot_error_pose,plot_6dvel
 from utils.statistics import calculate_success_rate,visualize_final_error
 from utils.policy import get_cur_goal_deltapos
 import atexit
@@ -213,6 +213,7 @@ if __name__ == '__main__':
             error_pos_list=[]
             z_error_lst=[]
             wgT_list=[]
+            vel_lst = []
             vel_tr_lst=[]
             vel_rot_lst=[]
             diff_list=[]
@@ -321,7 +322,9 @@ if __name__ == '__main__':
 
                 vel_tr_lst.append(np.linalg.norm(vel_tr)*1000) #mm
                 vel_rot_lst.append(abs(vel_rot) if dof == 3 else np.linalg.norm(vel_rot))
+                vel_lst.append(np.concatenate((vel_tr*1000, vel_rot),axis=0))
                 wgT_list.append(wgT)
+
                 if delta_pos is not None:
                     delta_pos_gt=get_cur_goal_deltapos(wgT,wgT_tar)["delta_pose"] #mm,deg
                     error_pos=compute_pos_error(pos_cur=delta_pos,pos_tar=delta_pos_gt)  #[6,]
@@ -334,6 +337,11 @@ if __name__ == '__main__':
                         error_pth = os.path.join(obj_pth, "error_curve")
                         os.makedirs(error_pth, exist_ok=True)
                         plot_rot_and_trans(error_rot_lst=error_rot_lst, error_trans_lst=error_trans_lst, use_time=use_time,obj_pth=error_pth,z_error_lst=z_error_lst,show=False)
+                        
+                        np.save(os.path.join(error_pth,f"{int(time.time())}_error_curve_trans.npy"),error_trans_lst,allow_pickle=True)
+                        np.save(os.path.join(error_pth,f"{int(time.time())}_error_curve_rot.npy"),error_rot_lst,allow_pickle=True)
+                        
+
                         print("last rot error: {}".format(error_rot_lst[-1]))
                         print("last trans error: {}".format(error_trans_lst[-1]))
                         if dof == 6:
@@ -346,7 +354,9 @@ if __name__ == '__main__':
                         print("last trans pose XYZ estimation error: {}".format(error_pos_list[-1][0]))
                         print("last trans pose Z estimation error: {}".format(error_pos_list[-1][1]))
                         print("last rot pose estimation error: {}".format(error_pos_list[-1][2]))
-
+                        
+                        np.save(os.path.join(error_pose_pth,f"{int(time.time())}_error_pose.npy"),error_pos_list,allow_pickle=True)
+                    
                     if eval_metrics["success_rate"]["utilized"] and use_eval_metrics:
                         success=1 if (error_rot_lst[-1]<=succ_rot and error_trans_lst[-1]<=succ_tr*1000) else 0
                         success_list.append([obj_id,success])
@@ -372,10 +382,19 @@ if __name__ == '__main__':
                         traj_pth=os.path.join(obj_pth, "traj")
                         os.makedirs(traj_pth, exist_ok=True)
                         plot_trajs(wgT_list=wgT_list, wgT_tar=env.wgT_tar, motion_type=expert_motion_type, obj_path=traj_pth,show=False)
+                        
+                        np.save(os.path.join(traj_pth,f"{int(time.time())}_traj.npy"),wgT_list,allow_pickle=True)
+                        
                     if eval_metrics["velocity"]["utilized"] and use_eval_metrics:
                         vel_pth = os.path.join(obj_pth, "vel")
                         os.makedirs(vel_pth, exist_ok=True)
                         plot_vel(vel_tr=vel_tr_lst,vel_rot=vel_rot_lst,use_time=use_time,obj_path=vel_pth,show=False)
+
+                        vel6d_pth = os.path.join(obj_pth, "vel6d")
+                        os.makedirs(vel6d_pth, exist_ok=True)
+                        plot_6dvel(vel=vel_lst, use_time=use_time, obj_path=vel6d_pth, show=False)
+
+                        np.save(os.path.join(vel6d_pth,f"{int(time.time())}_vel6d.npy"),vel_lst,allow_pickle=True)
 
                     final_error_info_dict["obj_id"]=obj_id
                     final_error_info_dict["final_trans_error"]=error_trans_lst[-1]

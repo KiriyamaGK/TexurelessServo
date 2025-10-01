@@ -16,7 +16,7 @@
         ],
         "activation": "ReLU",
         "output_activation": null,
-        "use_gmm": true,
+        "use_gmm": false,
         "encoder": {
           "name": "ResNet18",
           "num_cameras": 2,
@@ -56,7 +56,7 @@
           "weight_tcl_img": 10,
           "weight_tcl_act": 1,
           "weight_tcl_pos": 1,
-          "weight_tr": 0.5,
+          "weight_tr": 500,
           "weight_rot": 1.0,
           "weight_pose_estm": 10
         }

@@ -20,7 +20,7 @@
     },
     "overall_setting": {
         "dataset_base_dir": "/home/kiriyamagk/桌面/tmp0729",
-        "file_name": "25.09.22",
+        "file_name": "25.10.01",
         "demo_total_num": 600,
         "objs_descriptor": [5],
         "replace_existed_hdf5": true
@@ -41,17 +41,17 @@
             "utilized": true,
             "dagger_episodes": {
                 "_comment": "use_type: list of [start_episode, end_episode] - episodes in these ranges will use DAgger strategy",
-                "use_type": [[300,400],[551, 900], [900, 950],[1200, 1250]]
+                "use_type": [[100,200],[300, 400], [500, 550]]
             },
             "train": {
                 "_comment": "use_type: list of [episode_idx, num_train_epochs, dagger_proportion] - dagger_proportion in [0,1] or null to not specify",
-                "use_type": [[299,20,null],[550,20,0.4],[799, 40, 0.3], [1199, 70, null], [1299, 40, 0.8]]
+                "use_type": [[99,5,null],[299,10,0.4],[499, 15, 0.3]]
             },
             "task_termination": {
                 "min_position_threshold": [0.002, 0.08],
                 "pose_error_threshold": {
-                    "trans": 0.001,
-                    "rot": 1,
+                    "trans": 0.02,
+                    "rot": 15,
                     "time": 10
                 },
                 "use_time_upperbound":20
@@ -63,18 +63,19 @@
         "init": {
             "init_transform_frame": "grip",
             "init_horizon_trans": {
-                "value": 0.02,
-                "use_max_trans": false,
-                "use_high_proportion_x":false
-            },
-
+                "_comment": "value format: [value, start_episode, end_episode] - value: 水平平移距离(mm), start_episode: 起始episode, end_episode: 结束episode",
+                "value": [[0.02, 0, 349], [0.005, 350, 600]],
+                "use_max_h_trans": false
+                },
             "init_vertical_trans": {
-                "value":0.02,
+                "_comment": "value format: [value, start_episode, end_episode] - value: 垂直平移距离(mm), start_episode: 起始episode, end_episode: 结束episode",
+                "value": [[0.02, 0, 349], [0.005, 350, 600]],
                 "using_max_v_trans": false,
                 "using_minus": false
-            },
-            "init_rot":{
-                "value":[8,8,40],
+                },
+            "init_rot": {
+                "_comment": "value format: [theta1, theta2, theta3, start_episode, end_episode] - theta1,theta2,theta3: 三个旋转角度(度), start_episode: 起始episode, end_episode: 结束episode",
+                "value": [[8, 8, 40, 0, 349], [5 ,5 ,5, 350, 600]],
                 "use_max_rot": false
                 },
             "pose_and_orientations": {

@@ -3,7 +3,7 @@ import numpy as np
 import json
 import threading
 
-from sympy.physics.units import velocity
+
 
 from real.environment import Environment
 from utils.transform import rotation_matrix_z,rmat2euler_rz_degree,compute_pos_error,error_pos_transform
@@ -14,7 +14,7 @@ import cv2
 import torch
 from networks.helpers import get_network_cls
 from utils.input_process import clip_image,conditioned_clip_and_resize
-from utils.plot import plot_rot_and_trans,plot_trajs,plot_vel,plot_time,plot_img_diff,plot_error_pose
+from utils.plot import plot_rot_and_trans,plot_trajs,plot_vel,plot_time,plot_img_diff,plot_error_pose,plot_6dvel
 from utils.statistics import calculate_success_rate,visualize_final_error
 from utils.policy import get_cur_goal_deltapos
 import atexit
@@ -168,6 +168,16 @@ def teleop_and_pic(img_gt_1, img_gt_2,img_size):
 if __name__ == '__main__':
     #===================================manually_set_info===================================
     initial_teleop = False
+    do_filter = True
+    if do_filter:
+        # from utils.kalman_filter import create_visual_servo_filter
+        # kf = create_visual_servo_filter()
+        # from utils.kalman_filter import AdaptiveStrengthFilter
+        # kf = AdaptiveStrengthFilter()
+        from utils.jerk_supress import butter_filter
+        _filter = butter_filter(0.001,0.05)
+
+
     init_pos = np.array(
         [-555.3695678710938, -48.81327438354492, 176.91848754882812, 180.0,0., 13.89868450164795])
     goal_img_base_dir = "/media/kiriyamagk/One Touch/AlignAnything_real/25.06.22/hdf5/goal_images" #if initial_teleop
@@ -269,6 +279,7 @@ if __name__ == '__main__':
             error_pos_list=[]
             z_error_lst=[]
             wgT_list=[]
+            vel_lst = []
             vel_tr_lst=[]
             vel_rot_lst=[]
             diff_list=[]
@@ -344,6 +355,16 @@ if __name__ == '__main__':
                 # predictions/=4
                 vel_tr=predictions[0:2]*motion_scaler if dof == 3 else predictions[0:3]
                 vel_rot=predictions[-1]*motion_scaler if dof == 3 else predictions[3:]
+
+                if do_filter:
+                    raw_cmd = np.concatenate((vel_tr,vel_rot),axis=0)
+                    print(f"raw_cmd:{raw_cmd}")
+                    # filtered = kf.predict_and_update(raw_cmd)[0].reshape(-1,)
+                    filtered = _filter.process(raw_cmd)
+                    print(f"filtered:{filtered}")
+                    vel_tr = filtered[0:3]
+                    vel_rot = filtered[3:]
+
                 dT[0:3,3]=np.concatenate((vel_tr,np.array[0]),axis=0) if dof == 3 else vel_tr
                 dT[0:3,0:3]=rotation_matrix_z(vel_rot/180*np.pi) if dof==3 else R.from_rotvec(vel_rot/180*np.pi).as_matrix()
                 # print("vel_rot:{}".format(vel_rot))
@@ -361,12 +382,14 @@ if __name__ == '__main__':
 
                 vel_tr_lst.append(np.linalg.norm(vel_tr)) #mm
                 vel_rot_lst.append(abs(vel_rot) if dof == 3 else np.linalg.norm(vel_rot))
+                vel_lst.append(np.concatenate((vel_tr, vel_rot),axis=0))
                 wgT_list.append(wgT)
 
                 if delta_pos is not None:
                     delta_pos_gt=get_cur_goal_deltapos(wgT,wgT_tar)["delta_pose"] #mm,deg
                     error_pos=compute_pos_error(pos_cur=delta_pos,pos_tar=delta_pos_gt)  #[6,]
                     error_pos_list.append(error_pos_transform(error_pos))      #[delta_xyz,delta_z,delta_theta][3,]
+
 
                 if rtn_dict["need_reinit"]:
                     use_time=time.time()-t_0
@@ -375,6 +398,10 @@ if __name__ == '__main__':
                         error_pth = os.path.join(obj_pth, "error_curve")
                         os.makedirs(error_pth, exist_ok=True)
                         plot_rot_and_trans(error_rot_lst=error_rot_lst, error_trans_lst=error_trans_lst, use_time=use_time,obj_pth=error_pth,z_error_lst=z_error_lst,show=False)
+
+                        np.save(os.path.join(error_pth,f"{int(time.time())}_error_curve_trans.npy"),error_trans_lst,allow_pickle=True)
+                        np.save(os.path.join(error_pth,f"{int(time.time())}_error_curve_rot.npy"),error_rot_lst,allow_pickle=True)
+
                         print("last rot error: {}".format(error_rot_lst[-1]))
                         print("last trans error: {}".format(error_trans_lst[-1]))
                         if dof == 6:
@@ -387,6 +414,8 @@ if __name__ == '__main__':
                         print("last trans pose XYZ estimation error: {}".format(error_pos_list[-1][0]))
                         print("last trans pose Z estimation error: {}".format(error_pos_list[-1][1]))
                         print("last rot pose estimation error: {}".format(error_pos_list[-1][2]))
+
+                        np.save(os.path.join(error_pose_pth,f"{int(time.time())}_error_pose.npy"),error_pos_list,allow_pickle=True)
 
                     if eval_metrics["success_rate"]["utilized"] and use_eval_metrics:
                         success=1 if (error_rot_lst[-1]<=succ_rot and error_trans_lst[-1]<=succ_tr) else 0
@@ -413,10 +442,19 @@ if __name__ == '__main__':
                         traj_pth=os.path.join(obj_pth, "traj")
                         os.makedirs(traj_pth, exist_ok=True)
                         plot_trajs(wgT_list=wgT_list, wgT_tar=env.wgT_tar, motion_type=expert_motion_type, obj_path=traj_pth,show=False)
+
+                        np.save(os.path.join(traj_pth,f"{int(time.time())}_traj.npy"),wgT_list,allow_pickle=True)
+                        
                     if eval_metrics["velocity"]["utilized"] and use_eval_metrics:
                         vel_pth = os.path.join(obj_pth, "vel")
                         os.makedirs(vel_pth, exist_ok=True)
                         plot_vel(vel_tr=vel_tr_lst,vel_rot=vel_rot_lst,use_time=use_time,obj_path=vel_pth,show=False)
+
+                        vel6d_pth = os.path.join(obj_pth, "vel6d")
+                        os.makedirs(vel6d_pth, exist_ok=True)
+                        plot_6dvel(vel=vel_lst, use_time=use_time, obj_path=vel6d_pth, show=False)
+
+                        np.save(os.path.join(vel6d_pth,f"{int(time.time())}_vel6d.npy"),vel_lst,allow_pickle=True)
 
                     final_error_info_dict["obj_id"]=obj_id
                     final_error_info_dict["final_trans_error"]=error_trans_lst[-1]

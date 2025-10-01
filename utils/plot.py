@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from utils.transform import rmat2euler_rz_degree
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
+from scipy.spatial.transform import Rotation as R
 
 def plot_rot_and_trans(error_rot_lst,error_trans_lst,z_error_lst,use_time=10,obj_pth=None,show=False):
     dof = 6 if len(z_error_lst)!= 0 else 3
@@ -134,48 +135,92 @@ def plot_trajs(wgT_list, wgT_tar, motion_type, obj_path=None,show=False):
     wgT_list = np.array(wgT_list)
     assert len(wgT_list.shape) == 3, "wgT_list must be a 3D array"
 
-    xy_tar = wgT_tar[0:2, 3]
-    xy_0 = wgT_list[0, 0:2, 3]
-    rz_tar = rmat2euler_rz_degree(wgT_tar)
-    rz_0 = rmat2euler_rz_degree(wgT_list[0])
+    tar_pos = wgT_tar[0:3, 3]
+    tar_rot = R.from_matrix(wgT_tar[0:3, 0:3]).as_rotvec()
 
-    xys = []
-    rzs = []
+    x_lst = []
+    y_lst = []
+    z_lst = []
+    theta1_lst = []
+    theta2_lst = []
+    theta3_lst = []
 
     for wgT in wgT_list:
-        xy = wgT[0:2, 3]
-        rz = rmat2euler_rz_degree(wgT)
-        xys.append(xy)
-        rzs.append(rz)
+        x_lst.append(wgT[0, 3])
+        y_lst.append(wgT[1, 3])
+        z_lst.append(wgT[2, 3])
+        axis_angle = R.from_matrix(wgT[0:3, 0:3]).as_rotvec()
+        theta1_lst.append(axis_angle[0])
+        theta2_lst.append(axis_angle[1])
+        theta3_lst.append(axis_angle[2])
+    # 创建6个子图
+    fig, axes = plt.subplots(3, 2, figsize=(12, 12))
 
-    xys = np.array(xys)
-    rzs = np.array(rzs)
+    time_steps = range(len(wgT_list))
 
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111, projection='3d')
+    # 位置轨迹 - X轴
+    axes[0, 0].plot(time_steps, x_lst, label='X Position', linestyle='-', color='blue')
+    axes[0, 0].axhline(y=tar_pos[0], color='red', linestyle='--', label='Target X')
+    axes[0, 0].set_title('X Position Trajectory')
+    axes[0, 0].set_xlabel('Time Step')
+    axes[0, 0].set_ylabel('Position (mm)')
+    axes[0, 0].grid(True)
+    axes[0, 0].legend()
 
-    # 绘制轨迹
-    ax.plot(xys[:, 0], xys[:, 1], rzs, label='Predicted Trajectory', color='blue', marker='o', markersize=4)
+    # 位置轨迹 - Y轴
+    axes[0, 1].plot(time_steps, y_lst, label='Y Position', linestyle='-', color='green')
+    axes[0, 1].axhline(y=tar_pos[1], color='red', linestyle='--', label='Target Y')
+    axes[0, 1].set_title('Y Position Trajectory')
+    axes[0, 1].set_xlabel('Time Step')
+    axes[0, 1].set_ylabel('Position (mm)')
+    axes[0, 1].grid(True)
+    axes[0, 1].legend()
 
-    if motion_type != 'simultaneously':
-        ax.plot([xy_0[0], xy_tar[0]], [xy_0[1], xy_tar[1]], [rz_0, rz_0],
-                label='Expert Trajectory', color='red', linestyle='--', marker='o', markersize=4)
-        ax.plot([xy_tar[0], xy_tar[0]], [xy_tar[1], xy_tar[1]], [rz_0, rz_tar],
-                color='red', linestyle='--', marker='o', markersize=4)
-    else:
-        ax.plot([xy_0[0], xy_tar[0]], [xy_0[1], xy_tar[1]], [rz_0, rz_tar],
-                label='Expert Trajectory', color='red', linestyle='--', marker='o', markersize=4)
+    # 位置轨迹 - Z轴
+    axes[1, 0].plot(time_steps, z_lst, label='Z Position', linestyle='-', color='red')
+    axes[1, 0].axhline(y=tar_pos[2], color='red', linestyle='--', label='Target Z')
+    axes[1, 0].set_title('Z Position Trajectory')
+    axes[1, 0].set_xlabel('Time Step')
+    axes[1, 0].set_ylabel('Position (mm)')
+    axes[1, 0].grid(True)
+    axes[1, 0].legend()
 
-    ax.scatter(xy_0[0], xy_0[1], rz_0, color='green', label='Start', s=100, zorder=5)
-    ax.scatter(xy_tar[0], xy_tar[1], rz_tar, color='red', label='Target', s=100, zorder=5)
+    # 姿态轨迹 - theta1
+    axes[1, 1].plot(time_steps, theta1_lst, label='theta1', linestyle='-', color='blue')
+    axes[1, 1].axhline(y=tar_rot[0], color='red', linestyle='--', label='Target theta1')
+    axes[1, 1].set_title('Rotation Theta1 Trajectory')
+    axes[1, 1].set_xlabel('Time Step')
+    axes[1, 1].set_ylabel('Rotation (rad)')
+    axes[1, 1].grid(True)
+    axes[1, 1].legend()
 
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Rz (degrees)')
-    ax.set_title('Trajectories')
-    ax.legend()
+    # 姿态轨迹 - theta2
+    axes[2, 0].plot(time_steps, theta2_lst, label='theta2', linestyle='-', color='green')
+    axes[2, 0].axhline(y=tar_rot[1], color='red', linestyle='--', label='Target theta2')
+    axes[2, 0].set_title('Rotation Theta2 Trajectory')
+    axes[2, 0].set_xlabel('Time Step')
+    axes[2, 0].set_ylabel('Rotation (rad)')
+    axes[2, 0].grid(True)
+    axes[2, 0].legend()
 
-    plt.savefig(os.path.join(obj_path, '{}.png'.format({int(time.time())})), dpi=50)
+    # 姿态轨迹 - theta3
+    axes[2, 1].plot(time_steps, theta3_lst, label='theta3', linestyle='-', color='red')
+    axes[2, 1].axhline(y=tar_rot[2], color='red', linestyle='--', label='Target theta3')
+    axes[2, 1].set_title('Rotation Theta3 Trajectory')
+    axes[2, 1].set_xlabel('Time Step')
+    axes[2, 1].set_ylabel('Rotation (rad)')
+    axes[2, 1].grid(True)
+    axes[2, 1].legend()
+
+    # 添加运动类型信息
+    plt.suptitle(f'Trajectory Analysis - {motion_type}', fontsize=16)
+
+    plt.tight_layout()
+
+    if obj_path is not None:
+        timestamp = int(time.time())
+        plt.savefig(os.path.join(obj_path, f'trajs_{timestamp}.png'), dpi=50, bbox_inches='tight')
+
     if show:
         plt.show()
     plt.close()
@@ -206,6 +251,54 @@ def plot_vel(vel_tr,vel_rot,use_time,obj_path=None,show=False):
 
     plt.tight_layout()
     plt.savefig(os.path.join(obj_path,'{}.png'.format({int(time.time())})), dpi=50, bbox_inches='tight')
+    if show:
+        plt.show()
+    plt.close()
+
+
+def plot_6dvel(vel, use_time, obj_path=None, show=False):
+    """
+    简化版6维速度曲线（只显示分量）
+    """
+    vel = np.array(vel)
+    vel_tr = vel[:, :3]  # 旋转速度
+    vel_rot = vel[:, 3:]  # 平移速度
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+
+    # 旋转速度（3个分量）
+    time_steps = range(len(vel_rot))
+    ax1.plot(time_steps, vel_rot[:, 0], label='theta1', linestyle='-', color='blue')
+    ax1.plot(time_steps, vel_rot[:, 1], label='theta2', linestyle='-', color='green')
+    ax1.plot(time_steps, vel_rot[:, 2], label='theta2', linestyle='-', color='red')
+    ax1.set_title('Rotation Velocity (theta1, theta2, theta3)')
+    ax1.set_xlabel('Time Step')
+    ax1.set_ylabel('Velocity (°/s)')
+    ax1.grid(True)
+    ax1.legend()
+
+    # 平移速度（3个分量）
+    ax2.plot(time_steps, vel_tr[:, 0], label='X', linestyle='-', color='blue')
+    ax2.plot(time_steps, vel_tr[:, 1], label='Y', linestyle='-', color='green')
+    ax2.plot(time_steps, vel_tr[:, 2], label='Z', linestyle='-', color='red')
+    ax2.set_title('Translation Velocity (X, Y, Z)')
+    ax2.set_xlabel('Time Step')
+    ax2.set_ylabel('Velocity (mm/s)')
+    ax2.grid(True)
+    ax2.legend()
+
+    # 添加用时信息
+    plt.annotate(f'Use Time: {use_time:.2f} (s)',
+                 xy=(len(vel_tr) - 1, 0),
+                 xytext=(len(vel_tr), 0),
+                 color='black')
+
+    plt.tight_layout()
+
+    if obj_path is not None:
+        timestamp = int(time.time())
+        plt.savefig(os.path.join(obj_path, f'{timestamp}.png'), dpi=50, bbox_inches='tight')
+
     if show:
         plt.show()
     plt.close()

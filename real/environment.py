@@ -89,8 +89,6 @@ class Environment:
         self.wgT=None
         self.gwT=None
 
-        self.episode = -1
-
     def get_dynamic_params(self, param_list, episode):
         """
         根据episode动态选择参数
