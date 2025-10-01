@@ -46,6 +46,9 @@ def ensure_dir_with_timestamp(base_dir,num):
     return full_path
 
 def get_epoch_num_from_pthname(strin):
+    if "dagger" in strin:
+        epoch_num = strin.split("episode_")[1].split("_epoch")[0]
+        return epoch_num
     start_id=6
     for i in range(5):
         if strin[start_id+i+1]!='_':
