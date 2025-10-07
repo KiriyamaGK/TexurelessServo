@@ -15,7 +15,7 @@ from data.process_hdf5 import _disturb_abs_rot,_portion_last_episode,_add_end_ep
 from utils.dagger import compute_position_distance_sim, get_policy_action, train_policy, setup_policy_model, prepare_observation_for_policy
 from utils.dagger_params import is_in_dagger_episode, should_train_policy, print_dagger_status
 
-def build_ewc_fisher(model,batch_size,img_size,filter_key):
+def build_ewc_fisher(model,batch_size,img_size,filter_key,weight):
     from utils.ewc import EWC
     from dataset.dataset import dataset_factory
     from torch.utils.data import DataLoader
@@ -34,7 +34,7 @@ def build_ewc_fisher(model,batch_size,img_size,filter_key):
         num_workers=2,
         drop_last=False
     )
-    ewc_ins = EWC(model,ewc_train_loader)
+    ewc_ins = EWC(model=model,dataloader=ewc_train_loader,weight=weight)
     return ewc_ins
 
 
@@ -610,21 +610,21 @@ if __name__ == '__main__':
 
                     #=======================ewc===========================
                     #prepare ewc dataset
-                    ewc_batch_penalty = 0.00
+                    ewc_batch_penalty_func = None
                     is_ewc_epoch = use_ewc and idx in dagger_config['ewc']["ewc_epoch"]
                     if is_ewc_epoch:
                         #create ewc filter key
                         f_tmp = h5py.File(dataset_dir, 'r')
                         all_demos = sorted(list(f_tmp['data'].keys()))
                         f_tmp.close()
-                        create_hdf5_filter_key(hdf5_path=dataset_dir, demo_keys=all_demos, key_name=ewc_filter_key,
+                        create_hdf5_filter_key(hdf5_path=dataset_dir, demo_keys=all_demos, key_name=ewc_filter_key,  #todo:this setting should be improved
                                                return_length=False)
                         #create ewc instance
                         ewc_ins = build_ewc_fisher(model=policy_model, img_size=
                         model_config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"],
                                                    batch_size=model_config["training"]["batch_size"],
-                                                   filter_key=ewc_filter_key)
-                        ewc_batch_penalty = dagger_config['ewc']['ewc_weight'] * ewc_ins.penalty
+                                                   filter_key=ewc_filter_key,weight=dagger_config['ewc']['ewc_weight'])
+                        ewc_batch_penalty_func = ewc_ins.penalty
                     # =======================ewc===========================
 
                     #训练
@@ -642,7 +642,7 @@ if __name__ == '__main__':
                         episode_idx=idx,
                         filter_by_attribute=filter_key,
                         is_ewc_epoch = is_ewc_epoch,
-                        ewc_batch_penalty=ewc_batch_penalty
+                        ewc_batch_penalty_func=ewc_batch_penalty_func
                     )
 
 
