@@ -20,7 +20,7 @@
     },
     "overall_setting": {
         "dataset_base_dir": "/home/kiriyamagk/桌面/tmp0729",
-        "file_name": "25.10.01",
+        "file_name": "25.10.03",
         "demo_total_num": 600,
         "objs_descriptor": [5],
         "replace_existed_hdf5": true
@@ -39,13 +39,14 @@
         "record_pose": true,
         "dagger": {
             "utilized": true,
+            "expert_rectify_traj": true,
             "dagger_episodes": {
                 "_comment": "use_type: list of [start_episode, end_episode] - episodes in these ranges will use DAgger strategy",
-                "use_type": [[100,200],[300, 400], [500, 550]]
+                "use_type": [[300, 599]]
             },
             "train": {
                 "_comment": "use_type: list of [episode_idx, num_train_epochs, dagger_proportion] - dagger_proportion in [0,1] or null to not specify",
-                "use_type": [[99,5,null],[299,10,0.4],[499, 15, 0.3]]
+                "use_type": [[299, 15, 0],[599, 7, 0.5]]
             },
             "task_termination": {
                 "min_position_threshold": [0.002, 0.08],
@@ -57,25 +58,31 @@
                 "use_time_upperbound":20
             },
             "check_frame_interval": 2,
-            "model_path": null
+            "model_path": null,
+            "ewc": {
+                "use_ewc": false,
+                "ewc_epoch": [599],
+                "ewc_weight": 1000,
+                "_comment": "before each ewc_epoch starts,EWC.compute_fisher should be executed"
+            }
         },
 
         "init": {
             "init_transform_frame": "grip",
             "init_horizon_trans": {
                 "_comment": "value format: [value, start_episode, end_episode] - value: 水平平移距离(mm), start_episode: 起始episode, end_episode: 结束episode",
-                "value": [[0.02, 0, 349], [0.005, 350, 600]],
+                "value": [[0.02, 0, 600]],
                 "use_max_h_trans": false
                 },
             "init_vertical_trans": {
                 "_comment": "value format: [value, start_episode, end_episode] - value: 垂直平移距离(mm), start_episode: 起始episode, end_episode: 结束episode",
-                "value": [[0.02, 0, 349], [0.005, 350, 600]],
+                "value": [[0.02, 0, 600]],
                 "using_max_v_trans": false,
                 "using_minus": false
                 },
             "init_rot": {
                 "_comment": "value format: [theta1, theta2, theta3, start_episode, end_episode] - theta1,theta2,theta3: 三个旋转角度(度), start_episode: 起始episode, end_episode: 结束episode",
-                "value": [[8, 8, 40, 0, 349], [5 ,5 ,5, 350, 600]],
+                "value": [[8, 8, 40, 0, 600]],
                 "use_max_rot": false
                 },
             "pose_and_orientations": {
