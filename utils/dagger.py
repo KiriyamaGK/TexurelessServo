@@ -240,7 +240,7 @@ def setup_policy_model(config_path="../configs/train_mlp.json", checkpoint_path=
     
     return model, optimizer, criterion, config
 
-def train_policy(img_size, model, num_train_steps, optimizer, criterion, num_epochs=10, batch_size=16, data_cfg=None,train_cfg=None, save_path=None, episode_idx=None, filter_by_attribute=None,is_ewc_epoch = False,ewc_batch_penalty_func = None):
+def train_policy(img_size, model, num_train_steps, optimizer, criterion, num_epochs=10, batch_size=16, data_cfg=None,train_cfg=None, save_path=None, episode_idx=None, filter_by_attribute=None,is_ewc_episode = False,ewc_batch_penalty_func = None):
     # 创建训练数据集
     train_set = dataset_factory(
         data_cfg,
@@ -264,11 +264,13 @@ def train_policy(img_size, model, num_train_steps, optimizer, criterion, num_epo
     num_epochs_save = train_cfg.get("num_epochs_save", 10) if train_cfg else 10
     
     # 训练模型
+    if is_ewc_episode:
+        print("[DAgger] EWC model ready to train.")
     print(f"[DAgger] 开始训练，总轮数: {num_epochs}")
     for epoch in range(num_epochs):
         print("=============================")
         print(f"[DAgger] Epoch {epoch+1}/{num_epochs}")
-        train_loss_dict = bc_algorithm.train(train_loader, num_train_steps=num_train_steps, is_ewc_epoch = is_ewc_epoch, ewc_batch_penalty_func = ewc_batch_penalty_func)
+        train_loss_dict = bc_algorithm.train(train_loader, num_train_steps=num_train_steps, is_ewc_episode = is_ewc_episode, ewc_batch_penalty_func = ewc_batch_penalty_func)
         current_loss = train_loss_dict['loss']
         print(f"[DAgger] Epoch {epoch+1} 训练损失: {current_loss:.4f}")
         for k ,v in train_loss_dict.items():

@@ -96,11 +96,11 @@ class EWC:
 
         print(f"Computed Fisher information using {num_steps} steps.")
 
-    def compute_grad_on_batch(self, batch, is_ewc_epoch = False, ewc_batch_penalty = 0.00) -> dict:
+    def compute_grad_on_batch(self, batch, is_ewc_episode = False, ewc_batch_penalty = 0.00) -> dict:
         self.optimizer.zero_grad()
         predictions = self.model(batch["obs"])
         loss_dict = self.criterion(predictions, {k:batch[k] for k in batch if k != "obs"})
-        if is_ewc_epoch:
+        if is_ewc_episode:
             loss_dict["loss_ewc"] = ewc_batch_penalty
             loss_dict["loss"] += ewc_batch_penalty
         loss=loss_dict['loss']

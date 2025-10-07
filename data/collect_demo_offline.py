@@ -170,6 +170,7 @@ if __name__ == '__main__':
     model_config = None
     use_ewc = False
     expert_rectify_traj = False
+    ewc_batch_penalty_func = None
     if use_dagger:
         policy_model, optimizer, criterion, model_config = setup_policy_model(  #事实上model_cfg就是train_mlp
             config_path="../configs/train_mlp.json",
@@ -184,7 +185,6 @@ if __name__ == '__main__':
         time_upper_bound = dagger_config["task_termination"]["use_time_upperbound"]
         expert_rectify_traj = dagger_config["expert_rectify_traj"]
         use_ewc = dagger_config["ewc"]["use_ewc"]
-        ewc_filter_key = "train" if use_ewc else None #this key points to the key name
     #================================dagger===============================
 
     trans_vel=config["demo_collection"]["velocity"]['trans_vel'] #m
@@ -419,6 +419,7 @@ if __name__ == '__main__':
                 # add the obs-action pair of the last frame
                 if is_dagger_episode:
                     print("Final distance between gripper and object:", distance)
+                    print(f"Final error:trans:{reinit_res['dist']},rot:{reinit_res['angle']}")
                     action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
                     expert_action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
                 else:
@@ -609,22 +610,7 @@ if __name__ == '__main__':
                         filter_key = tmp_key
 
                     #=======================ewc===========================
-                    #prepare ewc dataset
-                    ewc_batch_penalty_func = None
-                    is_ewc_epoch = use_ewc and idx in dagger_config['ewc']["ewc_epoch"]
-                    if is_ewc_epoch:
-                        #create ewc filter key
-                        f_tmp = h5py.File(dataset_dir, 'r')
-                        all_demos = sorted(list(f_tmp['data'].keys()))
-                        f_tmp.close()
-                        create_hdf5_filter_key(hdf5_path=dataset_dir, demo_keys=all_demos, key_name=ewc_filter_key,  #todo:this setting should be improved
-                                               return_length=False)
-                        #create ewc instance
-                        ewc_ins = build_ewc_fisher(model=policy_model, img_size=
-                        model_config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"],
-                                                   batch_size=model_config["training"]["batch_size"],
-                                                   filter_key=ewc_filter_key,weight=dagger_config['ewc']['ewc_weight'])
-                        ewc_batch_penalty_func = ewc_ins.penalty
+                    is_ewc_episode = use_ewc and idx in dagger_config['ewc']["ewc_episode"]
                     # =======================ewc===========================
 
                     #训练
@@ -641,12 +627,33 @@ if __name__ == '__main__':
                         save_path=model_path,
                         episode_idx=idx,
                         filter_by_attribute=filter_key,
-                        is_ewc_epoch = is_ewc_epoch,
+                        is_ewc_episode = is_ewc_episode,
                         ewc_batch_penalty_func=ewc_batch_penalty_func
                     )
 
 
                 #===============================policy training===============================
+
+                # ===========================ewc===========================
+                is_ewc_build_fisher_episode = use_ewc and idx in dagger_config['ewc']['build_ewc_fisher_episode']
+                if is_ewc_build_fisher_episode:
+                    ewc_filter_key = f"ewc_filter_episode_{idx}"
+                    # create ewc filter key
+                    f_tmp = h5py.File(dataset_dir, 'r')
+                    all_demos = sorted(list(f_tmp['data'].keys()))
+                    f_tmp.close()
+                    create_hdf5_filter_key(hdf5_path=dataset_dir, demo_keys=all_demos, key_name=ewc_filter_key,
+                                           # todo:this setting should be improved
+                                           return_length=False)
+                    # create ewc instance
+                    ewc_ins = build_ewc_fisher(model=policy_model, img_size=
+                    model_config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"],
+                                               batch_size=model_config["training"]["batch_size"],
+                                               filter_key=ewc_filter_key, weight=dagger_config['ewc']['ewc_weight'])
+                    ewc_batch_penalty_func = ewc_ins.penalty
+                    print("[DAgger] created ewc model and filter key.")
+                # ===========================ewc===========================
+
                 break
     # add_env_meta(new_f_out,additional_itms={"pose_and_orientations":pose_and_orientations})
     if not is_hdf_open:

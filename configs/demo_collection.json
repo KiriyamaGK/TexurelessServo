@@ -60,10 +60,11 @@
             "check_frame_interval": 2,
             "model_path": null,
             "ewc": {
-                "use_ewc": false,
-                "ewc_epoch": [599],
+                "use_ewc": true,
+                "ewc_episode": [4,599],
+                "build_ewc_fisher_episode": [3,300],
                 "ewc_weight": 1000,
-                "_comment": "before each ewc_epoch starts,EWC.compute_fisher should be executed"
+                "_comment": "before each ewc_episode starts,EWC.compute_fisher should be executed"
             }
         },
 

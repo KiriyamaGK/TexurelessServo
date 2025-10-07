@@ -81,7 +81,7 @@ class BehaviorCloning():
 
 
 
-    def train(self, train_loader,num_train_steps, logger=None, is_ewc_epoch = False,ewc_batch_penalty_func = None):
+    def train(self, train_loader,num_train_steps, logger=None, is_ewc_episode = False,ewc_batch_penalty_func = None):
         """
         Trains the policy model using supervised learning on state-action pairs for one epoch.
 
@@ -108,7 +108,7 @@ class BehaviorCloning():
                 if k !="obs":
                     batch[k] = batch[k].to(self.device)
 
-            batch_loss_dict = self.train_on_batch(batch,is_ewc_epoch = is_ewc_epoch,ewc_batch_penalty_func = ewc_batch_penalty_func)
+            batch_loss_dict = self.train_on_batch(batch,is_ewc_episode = is_ewc_episode,ewc_batch_penalty_func = ewc_batch_penalty_func)
             if idx==0:
                 for k,v in batch_loss_dict.items():
                     epoch_loss_dict[k]=v
@@ -169,7 +169,7 @@ class BehaviorCloning():
                 epoch_loss_dict[k] /= num_eval_steps
             return epoch_loss_dict
 
-    def train_on_batch(self, batch, is_ewc_epoch = False, ewc_batch_penalty_func = None) -> dict:
+    def train_on_batch(self, batch, is_ewc_episode = False, ewc_batch_penalty_func = None) -> dict:
         self.model.train()
         self.optimizer.zero_grad()
         # if isinstance(self.model, CenterNet_ResNet18):
@@ -181,7 +181,7 @@ class BehaviorCloning():
         # else:
         predictions = self.model(batch["obs"])
         loss_dict = self.criterion(predictions, {k:batch[k] for k in batch if k != "obs"})
-        if is_ewc_epoch:
+        if is_ewc_episode:
             loss_dict["loss_ewc"] = ewc_batch_penalty_func(self.model)
             loss_dict["loss"] += ewc_batch_penalty_func(self.model)
         loss=loss_dict['loss']
