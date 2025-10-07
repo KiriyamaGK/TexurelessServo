@@ -16,7 +16,7 @@
         ],
         "activation": "ReLU",
         "output_activation": null,
-        "use_gmm": false,
+        "use_gmm": true,
         "encoder": {
           "name": "ResNet18",
           "num_cameras": 2,

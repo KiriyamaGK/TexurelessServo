@@ -176,6 +176,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         # sort demo keys
         inds = np.argsort([int(elem[5:]) for elem in self.demos])
         self.demos = [self.demos[i] for i in inds]
+        print(f"chosen demos:{self.demos}")
 
         self.n_demos = len(self.demos)
 

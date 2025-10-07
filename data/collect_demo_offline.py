@@ -35,6 +35,7 @@ def build_ewc_fisher(model,batch_size,img_size,filter_key):
         drop_last=False
     )
     ewc_ins = EWC(model,ewc_train_loader)
+    return ewc_ins
 
 
 def filter_translation(input,thres):
@@ -167,6 +168,8 @@ if __name__ == '__main__':
     optimizer = None
     criterion = None
     model_config = None
+    use_ewc = False
+    expert_rectify_traj = False
     if use_dagger:
         policy_model, optimizer, criterion, model_config = setup_policy_model(  #事实上model_cfg就是train_mlp
             config_path="../configs/train_mlp.json",
@@ -179,6 +182,9 @@ if __name__ == '__main__':
         min_position_threshold = dagger_config["task_termination"]["min_position_threshold"]
         pose_error_threshold = dagger_config["task_termination"]["pose_error_threshold"]  # m,deg,sec
         time_upper_bound = dagger_config["task_termination"]["use_time_upperbound"]
+        expert_rectify_traj = dagger_config["expert_rectify_traj"]
+        use_ewc = dagger_config["ewc"]["use_ewc"]
+        ewc_filter_key = "train" if use_ewc else None #this key points to the key name
     #================================dagger===============================
 
     trans_vel=config["demo_collection"]["velocity"]['trans_vel'] #m
@@ -225,7 +231,7 @@ if __name__ == '__main__':
 
     #================================dagger===============================
     # DAgger相关变量
-    end_episode = False
+    end_dagger_traj = False
     first_in_error = False
     #================================dagger===============================
     
@@ -278,7 +284,8 @@ if __name__ == '__main__':
         im_dep2_lst=[]
         rz_list=[]
         delta_pose_list=[]
-        end_episode = False
+        end_dagger_traj = False
+        first_dagger_print = False
 
         #get goal info
         init_transform_dict = env.return_cur_pos_info()
@@ -367,13 +374,19 @@ if __name__ == '__main__':
                 collision_res = compute_position_distance_sim(env.objId, env.gripId)
                 distance = collision_res["min_distance"]
                 contact_flag = collision_res["is_colliding"]
-                print(f"distance: {distance}")
+                # print(f"distance: {distance}")
                 
                 if distance < min_position_threshold[0] or distance > min_position_threshold[1] or contact_flag or time.time()-task_start_time>=time_upper_bound:
-                    print(f"[DAgger] Position minimum threshold reached at frame {frame_counter}, distance: {distance}, threshold: {min_position_threshold}")
-                    end_episode = True
+                    if not first_dagger_print:
+                        print(f"[DAgger] Position minimum threshold reached at frame {frame_counter}, distance: {distance}, threshold: {min_position_threshold}")
+                    end_dagger_traj = True
+                    if expert_rectify_traj and not first_dagger_print:
+                        print("[DAgger] Switching to expert trajectory.")
+                    first_dagger_print = True
             #================================dagger===============================
-            
+
+            if end_dagger_traj and expert_rectify_traj:
+                dT = construct_dT_from_action(expert_action, dof=dof)
             # 正常的移动
             env.action(dT)
             reinit_res = env.reinit()
@@ -381,14 +394,18 @@ if __name__ == '__main__':
             if is_dagger_episode:
                 tr = reinit_res["dist"]
                 rot = reinit_res["angle"]
-                print(f"------------error:trans:{tr},rot:{rot}-----------------")
+                # print(f"------------error:trans:{tr},rot:{rot}-----------------")
                 if tr > pose_error_threshold["trans"] or rot > pose_error_threshold["rot"]:
                     if first_in_error:
                         dt = time.time() - error_timer
                         if dt > pose_error_threshold["time"]:
-                            print(
-                                f"[DAgger] Pose error reached at frame {frame_counter}, trans: {tr}, rot: {rot} for over {dt} seconds.")
-                            end_episode = True
+                            if not first_dagger_print:
+                                print(
+                                    f"[DAgger] Pose error reached at frame {frame_counter}, trans: {tr}, rot: {rot} for over {dt} seconds.")
+                            end_dagger_traj = True
+                            if expert_rectify_traj and not first_dagger_print:
+                                print("[DAgger] Switching to expert trajectory.")
+                            first_dagger_print = True
                     else:
                         error_timer = time.time()
                         first_in_error = True
@@ -396,7 +413,7 @@ if __name__ == '__main__':
                     first_in_error = False
 
 
-            if reinit_res["close_enough"] or end_episode:
+            if reinit_res["close_enough"] or (end_dagger_traj and not expert_rectify_traj):
                 if not reinit_res["close_enough"]:
                     env.init()
                 # add the obs-action pair of the last frame
@@ -590,6 +607,26 @@ if __name__ == '__main__':
                         tmp_key = f"dagger_mix_ep_{idx}"
                         create_hdf5_filter_key(hdf5_path=dataset_dir, demo_keys=mixed, key_name=tmp_key,return_length=False)
                         filter_key = tmp_key
+
+                    #=======================ewc===========================
+                    #prepare ewc dataset
+                    ewc_batch_penalty = 0.00
+                    is_ewc_epoch = use_ewc and idx in dagger_config['ewc']["ewc_epoch"]
+                    if is_ewc_epoch:
+                        #create ewc filter key
+                        f_tmp = h5py.File(dataset_dir, 'r')
+                        all_demos = sorted(list(f_tmp['data'].keys()))
+                        f_tmp.close()
+                        create_hdf5_filter_key(hdf5_path=dataset_dir, demo_keys=all_demos, key_name=ewc_filter_key,
+                                               return_length=False)
+                        #create ewc instance
+                        ewc_ins = build_ewc_fisher(model=policy_model, img_size=
+                        model_config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"],
+                                                   batch_size=model_config["training"]["batch_size"],
+                                                   filter_key=ewc_filter_key)
+                        ewc_batch_penalty = dagger_config['ewc']['ewc_weight'] * ewc_ins.penalty
+                    # =======================ewc===========================
+
                     #训练
                     policy_model = train_policy(
                         img_size=model_config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"],
@@ -603,7 +640,9 @@ if __name__ == '__main__':
                         data_cfg=data_cfg,
                         save_path=model_path,
                         episode_idx=idx,
-                        filter_by_attribute=filter_key
+                        filter_by_attribute=filter_key,
+                        is_ewc_epoch = is_ewc_epoch,
+                        ewc_batch_penalty=ewc_batch_penalty
                     )
 
 
