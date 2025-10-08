@@ -105,7 +105,7 @@ class EWC:
             loss_dict["loss"] += ewc_batch_penalty
         loss=loss_dict['loss']
         loss.backward()
-        # self.optimizer.step()   #this notation is crucial
+        # self.optimizer.step()   #NN gradient should NOT be updated when obtaining fisher matrix
         for k, v in loss_dict.items():
             loss_dict[k] = v.item()  #torch.tensor->float
         return loss_dict

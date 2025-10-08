@@ -470,8 +470,8 @@ class Environment(object):
                 if not self.using_max_v_trans:
                     dT[2, 3]*=random.uniform(0, 1)
                 if self.using_minus_vertical:
-                    if random.randint(0,1)>0.65:
-                        dT[2,3]=dT[2,3]*(-1)*random.uniform(0.6, 1)
+                    if random.randint(0,1)>0.5:
+                        dT[2,3]=dT[2,3]*(-1)
             else:
                 # print("1")
                 trans_xy_points, trans_z_points, rot_points = self.cond_sample_init_pos_algo()
