@@ -151,6 +151,7 @@ if __name__ == '__main__':
     if "dagger" in config["demo_collection"]:
         dagger_config = config["demo_collection"]["dagger"]
         use_dagger = dagger_config["utilized"]
+        train_latest_dagger_episodes = dagger_config["train"]["extract_latest_dagger_episodes"]
     # print("use_dagger: ", use_dagger)
     
     # start_episode: 整数，表示从第几个episode开始使用DAgger策略。在此之前的episode会使用普通的行为克隆方式收集数据。
@@ -589,11 +590,16 @@ if __name__ == '__main__':
                         f_tmp.close()
                         dagger_ranges = dagger_config.get('dagger_episodes', {}).get('use_type', [])
                         dagger_set = set()
+                        dagger_list = [] #[[demo_0,..,demo_k],[demo_u,..,demo_v],...]
                         for s, e in dagger_ranges:
+                            dagger_layer_list = []
                             for ep in range(s, e + 1):
                                 demo_id = f"demo_{ep+existed_demo_num}"
                                 if demo_id in all_demos:
                                     dagger_set.add(demo_id)
+                                    dagger_layer_list.append(demo_id)
+                            dagger_list.append(dagger_layer_list)
+
                         dagger_demos = [d for d in all_demos if d in dagger_set]
                         non_dagger_demos = [d for d in all_demos if d not in dagger_set]
 
@@ -602,7 +608,12 @@ if __name__ == '__main__':
                         num_non_dagger_target = max(0, num_total - num_dagger_target)
 
                         rng = np.random.default_rng(seed=idx)
-                        chosen_dagger = rng.choice(dagger_demos, size=min(len(dagger_demos), num_dagger_target), replace=False).tolist()
+                        if not train_latest_dagger_episodes:
+                            chosen_dagger = rng.choice(dagger_demos, size=min(len(dagger_demos), num_dagger_target), replace=False).tolist()
+                        else:
+                            chosen_dagger = rng.choice(dagger_list[-1], size=min(len(dagger_list[-1]), num_dagger_target),
+                                                       replace=False).tolist()
+
                         chosen_non_dagger = rng.choice(non_dagger_demos, size=min(len(non_dagger_demos), num_non_dagger_target), replace=False).tolist()
                         mixed = sorted(chosen_dagger + chosen_non_dagger)
                         tmp_key = f"dagger_mix_ep_{idx}"

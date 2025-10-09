@@ -520,7 +520,7 @@ class Environment(object):
                 cmT=self.cwT_tar@mid_frame.copy()
                 c2mT = self.c2wT_tar@mid_frame.copy()
 
-                mid_frame= mid_frame @ dT
+                mid_frame = mid_frame @ dT
                 self.cwT=cmT@np.linalg.inv(mid_frame)
                 self.wcT=np.linalg.inv(self.cwT)
                 self.c2wT = c2mT @ np.linalg.inv(mid_frame)
