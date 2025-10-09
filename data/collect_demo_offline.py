@@ -396,7 +396,7 @@ if __name__ == '__main__':
                 tr = reinit_res["dist"]
                 rot = reinit_res["angle"]
                 # print(f"------------error:trans:{tr},rot:{rot}-----------------")
-                if tr > pose_error_threshold["trans"] or rot > pose_error_threshold["rot"]:
+                if tr > pose_error_threshold["trans"] or rot > pose_error_threshold["rot"]: # in error too long
                     if first_in_error:
                         dt = time.time() - error_timer
                         if dt > pose_error_threshold["time"]:
@@ -413,6 +413,8 @@ if __name__ == '__main__':
                 else:
                     first_in_error = False
 
+                if env.wgT[2,3] < env.wgT_tar[2,3] - 0.02: #touch ground
+                    end_dagger_traj = True
 
             if reinit_res["close_enough"] or (end_dagger_traj and not expert_rectify_traj):
                 if not reinit_res["close_enough"]:
