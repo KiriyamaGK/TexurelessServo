@@ -1,0 +1,129 @@
+{
+    "intrinsic": {
+        "width": 640,
+        "height": 480,
+        "build_with_K": "True",
+        "K": [
+            606.502,
+            0.0,
+            320.373,
+            0.0,
+            606.239,
+            253.444,
+            0.0,
+            0.0,
+            1.0
+        ],
+        "near": 0.02,
+        "far": 1,
+        "fov": 60
+    },
+    "overall_setting": {
+        "dataset_base_dir": "/home/kiriyamagk/桌面/tmp0729",
+        "file_name": "25.10.14",
+        "demo_total_num": 600,
+        "objs_descriptor": [5],
+        "replace_existed_hdf5": true
+    },
+    "demo_collection": {
+        "dof": 6,
+        "third_view_camera": false,
+        "trans_and_rot_type": "simultaneously",
+        "conditioned_sampling": false,
+        "random_light_dir": true,
+        "use_random_light_img_key": true,
+        "depth": {
+            "utilized": false,
+            "normalize_scaler": 1
+        },
+        "record_pose": true,
+        "dagger": {
+            "utilized": true,
+            "expert_rectify_traj": true,
+            "dagger_episodes": {
+                "_comment": "use_type: list of [start_episode, end_episode] - episodes in these ranges will use DAgger strategy",
+                "use_type": [[100,200],[300,400],[500,550]]
+            },
+            "train": {
+                "_comment": "use_type: list of [episode_idx, num_train_epochs, dagger_proportion] - dagger_proportion in [0,1] or null to not specify",
+                "use_type": [[99, 5, null],[299, 10, 0.4],[599, 15, 0.35]]
+            },
+            "task_termination": {
+                "min_position_threshold": [0.002, 0.08]
+            },
+            "check_frame_interval": 2,
+            "model_path": null
+        },
+
+        "init": {
+            "init_transform_frame": "grip",
+            "init_horizon_trans": {
+                "_comment": "value format: [value, start_episode, end_episode] - value: 水平平移距离(mm), start_episode: 起始episode, end_episode: 结束episode",
+                "value": [[0.02, 0, 600]],
+                "use_max_h_trans": false
+                },
+            "init_vertical_trans": {
+                "_comment": "value format: [value, start_episode, end_episode] - value: 垂直平移距离(mm), start_episode: 起始episode, end_episode: 结束episode",
+                "value": [[0.02, 0, 600]],
+                "using_max_v_trans": false,
+                "using_minus": false
+                },
+            "init_rot": {
+                "_comment": "value format: [theta1, theta2, theta3, start_episode, end_episode] - theta1,theta2,theta3: 三个旋转角度(度), start_episode: 起始episode, end_episode: 结束episode",
+                "value": [[8,8,40, 0, 600]],
+                "use_max_rot": false
+                },
+            "pose_and_orientations": {
+                "cam1":{
+                    "cwT_trans":[0,-0.098,2.05],
+                    "rotation": 45
+                },
+                "cam2": {
+                    "c2wT_trans": [0, -0.098, 2.05],
+                    "rotation": 45
+                },
+                "grip": {
+                    "start_pos_z": 2.20,
+                    "offset_z": [-0.05,-0.05,-0.02,-0.05,-0.05,0,-0.05,-0.05,-0.02,-0.05,-0.05,-0.05,-0.05,-0.05,-0.05,-0.02,-0.05,-0.02,0,-0.05,-0.05,-0.05,-0.05]
+                }
+            }
+        },
+
+        "velocity": {
+            "trans_vel": {
+                "utilized":true,
+                "value": [0.0006,0.0006]
+            },
+            "rot_vel": {
+                "utilized":true,
+                "value": 0.5
+            },
+            "uniform_vel": {
+                "utilized":false,
+                "value": 3
+            }
+        },
+
+        "stop_policy":{
+            "angle_eps": 0.5,
+            "dist_eps": 0.001
+        }
+    }  ,
+    "post_process": {
+        "disturb_abs_rot": {
+            "utilized": false
+        },
+        "portion_last_episode":{
+            "utilized": true,
+            "portion_last_num":3
+        },
+        "add_end_episode":{
+            "utilized": false,
+            "add_num":5
+        },
+        "add_medium_episode":{
+            "utilized": false,
+            "add_num":2
+        }
+    }
+}
