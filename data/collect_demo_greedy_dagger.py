@@ -600,7 +600,8 @@ if __name__ == '__main__':
                 pos = None
                 if not is_dagger_traj_iter:
                     pos = cur_fail_pool.popleft()
-                env.init(pos)
+                init_dT = np.linalg.inv(env.wgT) @ pos
+                env.init(init_dT)
                 break
 
     # add_env_meta(new_f_out,additional_itms={"pose_and_orientations":pose_and_orientations})
