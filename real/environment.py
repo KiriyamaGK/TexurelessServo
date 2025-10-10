@@ -73,7 +73,6 @@ class Environment:
             print("max_rot_points:",self.max_rot_points)
             self.demo_cond_p=0
 
-        self.init_flag = False
         self.vel_in_threshold_flag = False
         self.episode = -1
 
@@ -363,7 +362,6 @@ class Environment:
                 self.init_rot = np.array(rot_params)
         
         self.sample_init_pos()
-        self.init_flag = True
         self.task_timer = time.time()
         self.vel_timer = time.time()
         print(f"environment initialized for episode {self.episode}")
@@ -397,8 +395,6 @@ class Environment:
         res_dict = self.need_reinit()
         if  res_dict["close_enough"]:
             self.init()
-        else:
-            self.init_flag=False
         return res_dict
 
     def reinit_eval(self,all_epochs_num=None,cur_epoch=None,freq_per_pos=None):
@@ -408,8 +404,6 @@ class Environment:
             if self.uniform_eval_settings["utilized"] and (1+cur_epoch) % freq_per_pos == 0 and cur_epoch<all_epochs_num-1:
                 self.evenly_posid += 1
             self.init()
-        else:
-            self.init_flag=False
         return rtn_dict
 
     def need_reinit(self):

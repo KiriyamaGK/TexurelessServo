@@ -35,7 +35,8 @@ class Environment(object):
         conditioned_sampling=False,
         trans_vel=None,
         rot_vel=None,
-        third_view_camera=False
+        third_view_camera=False,
+        manually_init = False,
     ):
         '''
         self.obj_idx:当前物体id
@@ -195,7 +196,6 @@ class Environment(object):
                 # self.wc2T=self.wc2T_tar
                 # self.c2wT=self.c2wT_tar
 
-        self.init_flag=False
         self.close_enough_flag=False
         self.vel_in_threshold_flag=False
         self.depth_info=depth_info if depth_info is not None else {"utilized":False,"normalize_scaler": 10}
@@ -230,6 +230,7 @@ class Environment(object):
             self.evenly_posid=0
         
         self.episode = -1
+        self.manually_init = manually_init
 
 
     def determine_obj_idxes(self):
@@ -429,71 +430,74 @@ class Environment(object):
         # 默认值
         return param_list[0][0] if len(param_list) > 0 else 0
 
-    def sample_init_pos(self):
+    def sample_init_pos(self,pos = None):
         assert self.init_transform_frame in ["grip","cam"]
         # print("===============================")
         # print(self.evenly_posid)
-        if self.uniform_eval_settings["utilized"]:
-            dT=self.all_even_poses[self.evenly_posid]["dT"]
-            x = self.all_even_poses[self.evenly_posid]["x"]
-            y = self.all_even_poses[self.evenly_posid]["y"]
-            z = self.all_even_poses[self.evenly_posid]["z"]
-            rx=self.all_even_poses[self.evenly_posid]["rx"]
-            ry=self.all_even_poses[self.evenly_posid]["ry"]
-            rz=self.all_even_poses[self.evenly_posid]["rz"]
-            print("------------------------------------")
-            print(x, y, z, rx, ry, rz)
-            print("------------------------------------")
-
+        if pos is not None:
+            dT = pos
         else:
-            dT = np.eye(4)
-            ori = random.uniform(0, np.pi * 2)
+            if self.uniform_eval_settings["utilized"]:
+                dT=self.all_even_poses[self.evenly_posid]["dT"]
+                x = self.all_even_poses[self.evenly_posid]["x"]
+                y = self.all_even_poses[self.evenly_posid]["y"]
+                z = self.all_even_poses[self.evenly_posid]["z"]
+                rx=self.all_even_poses[self.evenly_posid]["rx"]
+                ry=self.all_even_poses[self.evenly_posid]["ry"]
+                rz=self.all_even_poses[self.evenly_posid]["rz"]
+                print("------------------------------------")
+                print(x, y, z, rx, ry, rz)
+                print("------------------------------------")
 
-            if not self.conditioned_sampling:
-                #rot
-                if (self.init_rot==np.array([0,0,0])).all():
-                    dT[0:3,0:3]=np.eye(3)
-                else:
-                    if not self.use_max_rot:
-                        if random.uniform(0, 1) < 0.95:
-                            ang = np.array([random.uniform(0, self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
-                        else:
-                            ang = np.array([self.init_rot[i] * (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
-                    else:
-                        ang =np.array([self.init_rot[i]* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
-                    # print("angle:",ang)
-                    dT[0:3, 0:3] = R.from_rotvec(ang * np.pi / 180).as_matrix()
-                #trans
-                trans_dev=self.init_horizon_trans if self.use_max_trans else np.sqrt(random.uniform(0, self.init_horizon_trans**2))
-                dT[0:3,3]=np.array([cos(ori)*trans_dev, sin(ori)*trans_dev,-self.init_vertical_trans])
-
-                if not self.using_max_v_trans:
-                    dT[2, 3]*=random.uniform(0, 1)
-                if self.using_minus_vertical:
-                    if random.randint(0,1)>0.5:
-                        dT[2,3]=dT[2,3]*(-1)
             else:
-                # print("1")
-                trans_xy_points, trans_z_points, rot_points = self.cond_sample_init_pos_algo()
-                trans_dev = trans_xy_points*self.trans_vel[0]
-                vertical_dev=trans_z_points*self.trans_vel[1]
-                if self.using_minus_vertical:
-                    if random.uniform(0,1)>0.65:
-                        vertical_dev=vertical_dev*(-1)
-                # dr = np.array([random.uniform(0, 5) for _ in range(3)])#TODO:记得注释这四行
-                # rot_dev_mat = R.from_rotvec(self.init_rot * np.pi / 180).as_matrix() @ R.from_rotvec(
-                #     dr * np.pi / 180).as_matrix()
-                # rot_dev_vec = R.from_matrix(rot_dev_mat).as_rotvec()
-                # rot_dev_vec /= np.linalg.norm(rot_dev_vec) / (rot_points * self.rot_vel)
+                dT = np.eye(4)
+                ori = random.uniform(0, np.pi * 2)
 
-                rot_dev_vec = np.array([random.uniform(0.5*self.init_rot[i], self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
-                rot_dev_vec/=np.linalg.norm(rot_dev_vec)/(rot_points*self.rot_vel) #TODO:记得解注释这两行
-                print("trans_dev:",trans_dev)
-                print("vertical_dev:",vertical_dev)
-                print("rot_dev_vec:",rot_dev_vec)
+                if not self.conditioned_sampling:
+                    #rot
+                    if (self.init_rot==np.array([0,0,0])).all():
+                        dT[0:3,0:3]=np.eye(3)
+                    else:
+                        if not self.use_max_rot:
+                            if random.uniform(0, 1) < 0.95:
+                                ang = np.array([random.uniform(0, self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+                            else:
+                                ang = np.array([self.init_rot[i] * (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+                        else:
+                            ang =np.array([self.init_rot[i]* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+                        # print("angle:",ang)
+                        dT[0:3, 0:3] = R.from_rotvec(ang * np.pi / 180).as_matrix()
+                    #trans
+                    trans_dev=self.init_horizon_trans if self.use_max_trans else np.sqrt(random.uniform(0, self.init_horizon_trans**2))
+                    dT[0:3,3]=np.array([cos(ori)*trans_dev, sin(ori)*trans_dev,-self.init_vertical_trans])
 
-                dT[0:3, 0:3] = R.from_rotvec(rot_dev_vec * np.pi / 180).as_matrix()
-                dT[0:3, 3] = np.array([cos(ori) * trans_dev, sin(ori) * trans_dev, -vertical_dev])
+                    if not self.using_max_v_trans:
+                        dT[2, 3]*=random.uniform(0, 1)
+                    if self.using_minus_vertical:
+                        if random.randint(0,1)>0.5:
+                            dT[2,3]=dT[2,3]*(-1)
+                else:
+                    # print("1")
+                    trans_xy_points, trans_z_points, rot_points = self.cond_sample_init_pos_algo()
+                    trans_dev = trans_xy_points*self.trans_vel[0]
+                    vertical_dev=trans_z_points*self.trans_vel[1]
+                    if self.using_minus_vertical:
+                        if random.uniform(0,1)>0.65:
+                            vertical_dev=vertical_dev*(-1)
+                    # dr = np.array([random.uniform(0, 5) for _ in range(3)])#TODO:记得注释这四行
+                    # rot_dev_mat = R.from_rotvec(self.init_rot * np.pi / 180).as_matrix() @ R.from_rotvec(
+                    #     dr * np.pi / 180).as_matrix()
+                    # rot_dev_vec = R.from_matrix(rot_dev_mat).as_rotvec()
+                    # rot_dev_vec /= np.linalg.norm(rot_dev_vec) / (rot_points * self.rot_vel)
+
+                    rot_dev_vec = np.array([random.uniform(0.5*self.init_rot[i], self.init_rot[i])* (random.randint(0, 1) - 0.5) * 2 for i in range(self.init_rot.shape[0])])
+                    rot_dev_vec/=np.linalg.norm(rot_dev_vec)/(rot_points*self.rot_vel) #TODO:记得解注释这两行
+                    print("trans_dev:",trans_dev)
+                    print("vertical_dev:",vertical_dev)
+                    print("rot_dev_vec:",rot_dev_vec)
+
+                    dT[0:3, 0:3] = R.from_rotvec(rot_dev_vec * np.pi / 180).as_matrix()
+                    dT[0:3, 3] = np.array([cos(ori) * trans_dev, sin(ori) * trans_dev, -vertical_dev])
 
         if self.init_transform_frame=="grip":
             self.wgT=self.wgT_tar@dT #绕夹爪系
@@ -529,7 +533,7 @@ class Environment(object):
                 self.gwT = np.linalg.inv(self.wgT)
 
 
-    def init(self):
+    def init(self,pos = None):
         self.episode += 1
 
         # 动态选择参数
@@ -549,12 +553,11 @@ class Environment(object):
             self.obj_idx_pointer=0
         self.obj_idx=self.obj_idxs[self.obj_idx_pointer]
         self.update_goal_position()
-        self.sample_init_pos()
+        self.sample_init_pos(pos)
         # print("init_wgT_tar:", self.wgT_tar)
         # print("init_wgT:", self.wgT)
         # print("init_error(mm):", np.linalg.norm(self.wgT_tar[0:3, 3] - self.wgT[0:3, 3]) * 1000)
         self.gen_scene()
-        self.init_flag = True
         self.obj_idx_pointer+=1
         self.task_timer=time.time()
         self.vel_timer=time.time()
@@ -638,10 +641,8 @@ class Environment(object):
 
     def reinit(self):
         res_dict = self.need_reinit()
-        if  res_dict["close_enough"]:
+        if  res_dict["close_enough"] and not self.manually_init:
             self.init()
-        else:
-            self.init_flag=False
         return res_dict
 
     def reinit_eval(self,all_epochs_num=None,cur_epoch=None,freq_per_pos=None):
@@ -651,8 +652,6 @@ class Environment(object):
             if self.uniform_eval_settings["utilized"] and (1+cur_epoch) % freq_per_pos == 0 and cur_epoch<all_epochs_num-1:
                 self.evenly_posid += 1
             self.init()
-        else:
-            self.init_flag=False
         return rtn_dict
 
     def clear_axes(self):

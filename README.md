@@ -19,7 +19,7 @@ python experiments/rollout_real.py
 
 ## **Data Collection** 
 ```
-python data/collect_demo_offline.py
+python data/collect_demo.py
 ```
 
 ## **Real-world Data Augmentation** 
