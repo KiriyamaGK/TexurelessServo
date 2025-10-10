@@ -1,7 +1,6 @@
 import os
-
+from collections import deque
 from scipy.spatial.transform import Rotation as R
-
 from utils.hdf5 import add_useless_things, split_train_val_from_hdf5, add_env_meta, compute_num_samples, add_config, create_hdf5_filter_key
 import h5py
 import numpy as np
@@ -15,6 +14,72 @@ import cv2
 from utils.input_process import clip_image
 from utils.policy import get_expert_policy
 from utils.dagger import compute_position_distance_sim, get_policy_action, train_policy, setup_policy_model, prepare_observation_for_policy
+
+
+def greedy_state_selection(states, student_actions,
+                           expert_actions, num_selected_pts, w1=1.0, w2=1.0,s1=1.0,s2=1.0,a1=1.0,a2=1.0):
+    """
+    使用贪心策略选择需要咨询专家的状态
+
+    Args:
+        student_trajectory_states: 学生轨迹中的状态列表 [s1, s2, ..., sT]
+        student_trajectory_actions: 学生轨迹中的动作列表 [a1, a2, ..., aT]
+        expert_policy: 专家策略函数，输入状态返回专家动作
+        num_selected_pts: 需要选择的状态数量
+        w1, w2: 误差和隔离度的权重参数
+
+    Returns:
+        selected_states: 选中的状态列表
+    """
+    if len(states) <= num_selected_pts:
+        return states.copy()
+
+    # 计算每个状态的动作误差
+    action_errors = []
+    for i, state in enumerate(states):
+        expert_action = expert_actions[i]
+        student_action = student_actions[i]
+        error = determine_action_error(student_action, expert_action, a1=a1, a2=a2)
+        action_errors.append(error)
+
+    action_errors = np.array(action_errors)
+
+    # 贪心选择过程
+    selected_states = []
+    selected_indices = []
+
+    for _ in range(num_selected_pts):
+        best_score = -np.inf
+        best_idx = -1
+
+        for i, state in enumerate(states):
+            if i in selected_indices:
+                continue
+
+            # 计算误差项
+            error_term = w1 * action_errors[i]
+
+            # 计算隔离度项
+            isolation_term = 0
+            if selected_states:
+                # 计算当前状态与所有已选状态的最小距离
+                distances = [determine_state_error(state,selected_state,s1=s1, s2=s2) for selected_state in selected_states]
+                isolation_term = w2 * np.min(distances)
+            else:
+                isolation_term = w2 * 0  # 第一个状态给一个基础值
+
+            # 综合得分
+            score = error_term + isolation_term
+
+            if score > best_score:
+                best_score = score
+                best_idx = i
+
+        if best_idx != -1:
+            selected_states.append(states[best_idx])
+            selected_indices.append(best_idx)
+
+    return selected_states
 
 def filter_translation(input,thres):
     assert thres>0
@@ -92,6 +157,24 @@ def process_and_append_observations(img, img2, img_light, img2_light, im_dep, im
     if im_dep2 is not None:
         im_dep2 = clip_image(im_dep2, img_h)
         im_dep2_lst.append(im_dep2[..., np.newaxis])
+
+def determine_mat_error(T1:np.ndarray,T2:np.ndarray,a1,a2):
+    dR = np.linalg.inv(T1[0:3,0:3]) @ T2[0:3,0:3]
+    rot_error = R.from_matrix(dR).as_rotvec() #rad
+    trans_error = np.linalg.norm(T1[0:3,3] - T2[0:3,3])
+    return a1 * trans_error + a2 * rot_error
+
+def determine_state_error(T1:np.ndarray,T2:np.ndarray,s1,s2):
+    return determine_mat_error(T1,T2,s1,s2)
+
+def determine_action_error(arr1,arr2,a1,a2):
+    T1 = np.eye(4)
+    T2 = np.eye(4)
+    T1[0:3,3] = arr1[0:3]
+    T2[0:3,3] = arr2[0:3]
+    T1[0:3,0:3] = R.from_rotvec(arr1[3:6]).as_matrix()
+    T2[0:3,0:3] = R.from_rotvec(arr2[3:6]).as_matrix()
+    return determine_mat_error(T1,T2,a1,a2)
 
 if __name__ == '__main__':
     img_w=300
@@ -172,7 +255,7 @@ if __name__ == '__main__':
     dist_eps = config["demo_collection"]["stop_policy"]['dist_eps']
 
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
-    env=Environment(camera_config=camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,using_max_v_trans = use_max_v_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,init_transform_frame=init_transform_frame,dof=dof,angle_eps=angle_eps,dist_eps=dist_eps,depth_info=depth_info,pose_and_orientations=pose_and_orientations,_is_collect=True,conditioned_sampling=conditioned_sampling,trans_vel=trans_vel["value"],rot_vel=rot_vel["value"],third_view_camera=third_view_camera,uniform_evaluation={"utilized":False})
+    env=Environment(camera_config=camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,using_max_v_trans = use_max_v_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,init_transform_frame=init_transform_frame,dof=dof,angle_eps=angle_eps,dist_eps=dist_eps,depth_info=depth_info,pose_and_orientations=pose_and_orientations,_is_collect=True,conditioned_sampling=conditioned_sampling,trans_vel=trans_vel["value"],rot_vel=rot_vel["value"],third_view_camera=third_view_camera,uniform_evaluation={"utilized":False},manually_init=True)
     env.init()
 
     database_dir = os.path.join(base_dir, 'AlignAnything', current_date, 'hdf5')
@@ -190,12 +273,31 @@ if __name__ == '__main__':
     existed_demo_num = 0
 
     #================================dagger===============================
-    # DAgger相关变量
+    # DAgger varibles
     end_dagger_traj = False
     first_in_error = False
+    num_rollout_trajs = 0
+    num_expert_trajs = 0
+    total_fail_pool_size = 0
+    rest_fail_pool_size = 100000
+    cur_fail_pool = deque()
+
+    # pre-defined params
+    n_base_expert_trajs = 100
+    num_selected_pts = 10
+    n_fail_pool_size = 100
+    s_tr = 1
+    s_rot = 1
+    a_tr = 1
+    a_rot = 1
+    w1 = 1
+    w2 = 1
+
     #================================dagger===============================
     
     for idx in range(demo_total_num):
+        assert rest_fail_pool_size >= 0
+
         if not is_hdf_open:
             new_f_out = h5py.File(dataset_dir, "r+")
             is_hdf_open = True
@@ -204,12 +306,11 @@ if __name__ == '__main__':
         
         #================================dagger===============================
         first_in_error = False
-        is_dagger_traj = False #todo: remember to convert: should be set manually
-        should_train = False #todo: remember to convert: determined by the rollout pool size
+        is_dagger_traj_iter = False
         train_epochs = 3 #todo: set constant for now,can be self-adaptive in the future
                 
-        if is_dagger_traj:
-            print("[INFO] Using DAgger strategy for traj {}".format(idx))
+        if is_dagger_traj_iter:
+            print("[INFO] Using DAgger strategy for iteration {}".format(idx))
         #================================dagger===============================
 
         if idx==0:
@@ -225,6 +326,7 @@ if __name__ == '__main__':
             action_path = 'data/demo_{}/actions'.format(idx)
             pos_path = 'data/demo_{}/delta_pos_curgoal'.format(idx)
 
+        wgT_list = []
         action_list=[]
         expert_action_list=[] # 专家动作列表（用于DAgger的标签）
         img_lst=[]
@@ -281,7 +383,7 @@ if __name__ == '__main__':
             dT = expert_dT
             action = expert_action
             
-            if is_dagger_traj and policy_model is not None:
+            if is_dagger_traj_iter and policy_model is not None:
                 obs_dict = prepare_observation_for_policy(
                     img_size=save_img_size,
                     hdf_img_size=img_h,
@@ -304,8 +406,9 @@ if __name__ == '__main__':
             
             # 保存动作（对于普通收集是实际执行的动作，对于DAgger是专家动作）
             action_list.append(action)
-            if is_dagger_traj:
+            if is_dagger_traj_iter:
                 expert_action_list.append(expert_action)
+            wgT_list.append(env.wgT)
             
             if record_pose:
                 delta_pose_list.append(expert_act_dict['cur_goal_delta_pose'])
@@ -321,7 +424,7 @@ if __name__ == '__main__':
             
             #================================dagger===============================
             # DAgger策略检查物体和夹爪位置
-            if is_dagger_traj and frame_counter % dagger_config["check_frame_interval"] == 0:
+            if is_dagger_traj_iter and frame_counter % dagger_config["check_frame_interval"] == 0:
                 collision_res = compute_position_distance_sim(env.objId, env.gripId)
                 distance = collision_res["min_distance"]
                 contact_flag = collision_res["is_colliding"]
@@ -339,7 +442,7 @@ if __name__ == '__main__':
             env.action(dT)
             reinit_res = env.reinit()
             
-            if is_dagger_traj: #out of distribution
+            if is_dagger_traj_iter: #out of distribution
                 if env.wgT[2,3] < env.wgT_tar[2,3] - 0.02: #touch ground
                     end_dagger_traj = True
                 tar_mat = env.wgT_tar
@@ -352,16 +455,15 @@ if __name__ == '__main__':
                     end_dagger_traj = True
 
             if reinit_res["close_enough"] or end_dagger_traj:
-                if not reinit_res["close_enough"]:
-                    env.init()
                 # add the obs-action pair of the last frame
-                if is_dagger_traj:
+                if is_dagger_traj_iter:
                     print("Final distance between gripper and object:", distance)
                     print(f"Final error:trans:{reinit_res['dist']},rot:{reinit_res['angle']}")
                     action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
                     expert_action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
                 else:
                     action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
+                wgT_list.append(np.eye(4))
 
                 process_and_append_observations(
                     img=goal_dict["img_goal"],
@@ -411,7 +513,7 @@ if __name__ == '__main__':
                     new_f_out.create_dataset(pos_path, data=delta_pose_list)
 
                 # 在DAgger中，保存的动作取决于是否是DAgger模式
-                if is_dagger_traj:
+                if is_dagger_traj_iter:
                     new_f_out.create_dataset(action_path, data=expert_action_list)
                     print("expert_action_lst-1:", expert_action_list[-1])
                 else:
@@ -420,12 +522,27 @@ if __name__ == '__main__':
                 
                 print("[INFO] demo_{} collected successfully.".format(idx))
                 #================================dagger===============================
-                if is_dagger_traj:
+                if is_dagger_traj_iter:
                     print(f"[DAgger] Iteration {idx} completed successfully")
                 # ================================dagger===============================
 
                 #===============================policy training=============================
-                # 使用之前计算的训练状态
+
+                # old iteration setting
+                if is_dagger_traj_iter:
+                    num_rollout_trajs += 1
+                    selected_states = greedy_state_selection(wgT_list,action_list,expert_action_list,num_selected_pts,w1,w2,s_tr,s_rot,a_tr,a_rot)
+                    rest_fail_pool_size += len(selected_states)
+                    total_fail_pool_size += len(selected_states)
+                    for state in selected_states:
+                        cur_fail_pool.append(state)
+
+                else:
+                    num_expert_trajs += 1
+                    rest_fail_pool_size -= 1
+
+                should_train = (total_fail_pool_size >= n_fail_pool_size and rest_fail_pool_size == 0 and not is_dagger_traj_iter) or idx == n_base_expert_trajs -1
+
                 if should_train and policy_model is not None:
                     print(f"[DAgger] Training policy model at iteration {idx} with {train_epochs} epochs")
 
@@ -461,11 +578,31 @@ if __name__ == '__main__':
                         episode_idx=idx,
                         filter_by_attribute=filter_key,
                     )
-
-
                 #===============================policy training===============================
 
+                #switch to new iteration
+                if idx < n_base_expert_trajs - 1:
+                    is_dagger_traj_iter = False
+                elif idx == n_base_expert_trajs -1:
+                    is_dagger_traj_iter = True
+                else:
+                    if is_dagger_traj_iter:
+                        if total_fail_pool_size >= n_fail_pool_size:
+                            is_dagger_traj_iter = False
+                            print(f"[DAgger] Policy switched form dagger to expert in iteration {idx}.")
+                    if should_train and idx >= n_base_expert_trajs:
+                        is_dagger_traj_iter = True
+                        total_fail_pool_size = 0  #rest_fail_pool_size is set 0 above
+                        assert len(cur_fail_pool) == 0
+                        print(f"[DAgger] Policy switched from expert to dagger in iteration {idx}.")
+
+                # new iteration setting
+                pos = None
+                if not is_dagger_traj_iter:
+                    pos = cur_fail_pool.popleft()
+                env.init(pos)
                 break
+
     # add_env_meta(new_f_out,additional_itms={"pose_and_orientations":pose_and_orientations})
     if not is_hdf_open:
         new_f_out = h5py.File(dataset_dir, "r+")
