@@ -14,9 +14,7 @@ import time
 import cv2
 from utils.input_process import clip_image
 from utils.policy import get_expert_policy
-from data.process_hdf5 import _disturb_abs_rot,_portion_last_episode,_add_end_episode,_add_medium_episode,insert_imgs
 from utils.dagger import compute_position_distance_sim, get_policy_action, train_policy, setup_policy_model, prepare_observation_for_policy
-from utils.dagger_params import is_in_dagger_episode, should_train_policy, print_dagger_status
 
 def filter_translation(input,thres):
     assert thres>0
@@ -38,7 +36,7 @@ def pixel_cord_from_frame1_to_frame3(h,w,h_hat,u1,v1):
 def get_goal_info(env):
     env.act_to_goal()
     if not use_light_key:
-        rtn_dict = env.observation(random_light_dir=random_light_dir, use_prob=True)  # TODO:记得修改
+        rtn_dict = env.observation(random_light_dir=random_light_dir, use_prob=True)
         img_light = None
         img2_light = None
     else:
@@ -111,7 +109,7 @@ if __name__ == '__main__':
     objs_descriptor=config['overall_setting']['objs_descriptor']
     current_date=config['overall_setting']['file_name']
     demo_total_num = config['overall_setting']['demo_total_num']
-    replace_existed_hdf5=config["overall_setting"]["replace_existed_hdf5"] #TODO:remember to use
+    replace_existed_hdf5=config["overall_setting"]["replace_existed_hdf5"]
 
     #demo collection
     dof = config["demo_collection"]["dof"]
@@ -133,16 +131,10 @@ if __name__ == '__main__':
         use_dagger = dagger_config["utilized"]
 
     # print("use_dagger: ", use_dagger)
-    
-    # start_episode: 整数，表示从第几个episode开始使用DAgger策略。在此之前的episode会使用普通的行为克隆方式收集数据。
-    # frequency: 整数，表示每多少个非DAgger的episode后执行一次DAgger收集过程。例如，值为5表示每5个正常episode后执行一次DAgger。
-    # episodes_per_dagger: 整数，表示每次触发DAgger时连续执行的DAgger episode数量。例如，值为10表示每次触发DAgger时会连续收集10个使用策略模型的episodes。
 
-    # min_position_threshold: list，表示在DAgger模式下，当夹爪与目标物体之间的最小位置距离不在此范围时，当前episode会提前结束。单位是米。
+    # min_position_threshold: list，表示在DAgger模式下，当夹爪与目标物体之间的最小位置范围。
     # check_frame_interval: 整数，表示在DAgger模式下每隔多少帧检查一次夹爪与物体的距离。
-    
-    # train_frequency: 整数，表示每完成多少个DAgger episodes后进行一次模型训练。
-    # train_epochs: 整数，表示每次训练模型时执行的轮数。
+
     
     # 如果使用DAgger，设置策略模型
     policy_model = None
@@ -179,13 +171,6 @@ if __name__ == '__main__':
     angle_eps =config["demo_collection"]["stop_policy"]['angle_eps']
     dist_eps = config["demo_collection"]["stop_policy"]['dist_eps']
 
-    #post process
-    disturb_abs_rot = config['post_process']['disturb_abs_rot']
-    portion_last_episode = config['post_process']['portion_last_episode']
-    add_end_episode = config['post_process']['add_end_episode']
-    add_medium_episode = config['post_process']['add_medium_episode']
-    assert (not portion_last_episode["utilized"]) or (not add_end_episode["utilized"])
-
     camera_intrinsic = CameraIntrinsic.from_dict(config["intrinsic"])
     env=Environment(camera_config=camera_intrinsic,objs_descriptor=objs_descriptor,use_max_rot=use_max_rot,use_max_trans=use_max_trans,using_max_v_trans = use_max_v_trans,init_horizon_trans=init_horizon_trans,init_vertical_trans=init_vertical_trans,using_minus_vertical=using_minus_vertical,init_rot=init_rot,init_transform_frame=init_transform_frame,dof=dof,angle_eps=angle_eps,dist_eps=dist_eps,depth_info=depth_info,pose_and_orientations=pose_and_orientations,_is_collect=True,conditioned_sampling=conditioned_sampling,trans_vel=trans_vel["value"],rot_vel=rot_vel["value"],third_view_camera=third_view_camera,uniform_evaluation={"utilized":False})
     env.init()
@@ -219,12 +204,12 @@ if __name__ == '__main__':
         
         #================================dagger===============================
         first_in_error = False
-        is_dagger_episode = False #todo: remember to convert: should be set manually
+        is_dagger_traj = False #todo: remember to convert: should be set manually
         should_train = False #todo: remember to convert: determined by the rollout pool size
-        train_epochs = 3 #todo: set constant for now
+        train_epochs = 3 #todo: set constant for now,can be self-adaptive in the future
                 
-        if is_dagger_episode:
-            print("[INFO] Using DAgger strategy for episode {}".format(idx))
+        if is_dagger_traj:
+            print("[INFO] Using DAgger strategy for traj {}".format(idx))
         #================================dagger===============================
 
         if idx==0:
@@ -267,7 +252,7 @@ if __name__ == '__main__':
             frame_counter += 1
             
             if not use_light_key:
-                rtn_dict=env.observation(random_light_dir=random_light_dir,use_prob=True) #TODO:记得修改
+                rtn_dict=env.observation(random_light_dir=random_light_dir,use_prob=True)
                 img_light = None
                 img2_light = None
             else:
@@ -296,7 +281,7 @@ if __name__ == '__main__':
             dT = expert_dT
             action = expert_action
             
-            if is_dagger_episode and policy_model is not None:
+            if is_dagger_traj and policy_model is not None:
                 obs_dict = prepare_observation_for_policy(
                     img_size=save_img_size,
                     hdf_img_size=img_h,
@@ -319,7 +304,7 @@ if __name__ == '__main__':
             
             # 保存动作（对于普通收集是实际执行的动作，对于DAgger是专家动作）
             action_list.append(action)
-            if is_dagger_episode:
+            if is_dagger_traj:
                 expert_action_list.append(expert_action)
             
             if record_pose:
@@ -336,7 +321,7 @@ if __name__ == '__main__':
             
             #================================dagger===============================
             # DAgger策略检查物体和夹爪位置
-            if is_dagger_episode and frame_counter % dagger_config["check_frame_interval"] == 0:
+            if is_dagger_traj and frame_counter % dagger_config["check_frame_interval"] == 0:
                 collision_res = compute_position_distance_sim(env.objId, env.gripId)
                 distance = collision_res["min_distance"]
                 contact_flag = collision_res["is_colliding"]
@@ -354,7 +339,7 @@ if __name__ == '__main__':
             env.action(dT)
             reinit_res = env.reinit()
             
-            if is_dagger_episode: #out of distribution
+            if is_dagger_traj: #out of distribution
                 if env.wgT[2,3] < env.wgT_tar[2,3] - 0.02: #touch ground
                     end_dagger_traj = True
                 tar_mat = env.wgT_tar
@@ -370,7 +355,7 @@ if __name__ == '__main__':
                 if not reinit_res["close_enough"]:
                     env.init()
                 # add the obs-action pair of the last frame
-                if is_dagger_episode:
+                if is_dagger_traj:
                     print("Final distance between gripper and object:", distance)
                     print(f"Final error:trans:{reinit_res['dist']},rot:{reinit_res['angle']}")
                     action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
@@ -400,85 +385,6 @@ if __name__ == '__main__':
                     rz_list.append(0)
                 if record_pose:
                     delta_pose_list.append(np.zeros(6))
-
-
-                #post process
-                if disturb_abs_rot["utilized"]:
-                    rz_list,_=_disturb_abs_rot(rz_list,action_list)
-
-                if portion_last_episode["utilized"]:
-                    action_list,_=_portion_last_episode(action_list,portion_last_episode["portion_last_num"],dof)
-                    if is_dagger_episode:
-                        expert_action_list,_=_portion_last_episode(expert_action_list,portion_last_episode["portion_last_num"],dof)
-
-                if add_end_episode["utilized"]:
-                    pick_id=len(img_lst)-1
-                    insert_id=len(img_lst)-1
-                    add_num=add_end_episode["add_num"]
-
-                    rz_list, action_list,delta_pose_list=_add_end_episode(add_num=add_num,disturb_abs_rot=disturb_abs_rot["utilized"],abs_rot_list=rz_list,act_lst=action_list,pose_list=delta_pose_list)
-                    if is_dagger_episode:
-                        # 对专家动作列表也进行相同的处理
-                        _, expert_action_list, _ = _add_end_episode(add_num=add_num,disturb_abs_rot=disturb_abs_rot["utilized"],abs_rot_list=rz_list,act_lst=expert_action_list,pose_list=delta_pose_list)
-                    
-                    img_lst=insert_imgs(img_lst,pick_id,insert_id,add_num)
-                    if len(img_light_list) != 0:
-                        img_light_list=insert_imgs(img_light_list,pick_id,insert_id,add_num)
-                    if len(img2_lst) != 0:
-                        img2_lst=insert_imgs(img2_lst,pick_id,insert_id,add_num)
-                    if len(img2_light_list) != 0:
-                        img2_light_list=insert_imgs(img2_light_list,pick_id,insert_id,add_num)
-                    if len(im_dep_lst) != 0:
-                        im_dep_lst=insert_imgs(im_dep_lst,pick_id,insert_id,add_num)
-                    if len(im_dep2_lst) != 0:
-                        im_dep2_lst=insert_imgs(im_dep2_lst,pick_id,insert_id,add_num)
-
-                if add_medium_episode["utilized"]:
-                    action_list, rz_list, delta_pose_list,need_add_medium, trans_id, rot_id=_add_medium_episode(act_lst=action_list, abs_rot_list=rz_list, ac_dim=dof,add_num=add_medium_episode["add_num"],pose_list=delta_pose_list)
-                    if is_dagger_episode and need_add_medium:
-                        # 对专家动作列表也进行相同的处理
-                        expert_action_list, _, _, _, _, _ = _add_medium_episode(act_lst=expert_action_list, abs_rot_list=rz_list, ac_dim=dof, add_num=add_medium_episode["add_num"], pose_list=delta_pose_list)
-                    
-                    if need_add_medium:
-                        print("+++++++++++++++++++++++++++++++++++++++++")
-                        pick_id = trans_id + 1
-                        insert_id = rot_id
-                        add_num = add_medium_episode["add_num"]
-
-                        img_lst = insert_imgs(img_lst, pick_id, insert_id, add_num)
-                        if len(img_light_list) != 0:
-                            img_light_list = insert_imgs(img_light_list, pick_id, insert_id, add_num)
-                        if len(img2_lst) != 0:
-                            img2_lst = insert_imgs(img2_lst, pick_id, insert_id, add_num)
-                        if len(img2_light_list) != 0:
-                            img2_light_list = insert_imgs(img2_light_list, pick_id, insert_id, add_num)
-                        if len(im_dep_lst) != 0:
-                            im_dep_lst = insert_imgs(im_dep_lst, pick_id, insert_id, add_num)
-                        if len(im_dep2_lst) != 0:
-                            im_dep2_lst = insert_imgs(im_dep2_lst, pick_id, insert_id, add_num)
-                
-                # 如果是DAgger模式，保存到临时数据中
-                if is_dagger_episode:
-                    # 创建该episode的数据字典
-                    episode_data = {
-                        "obs": {
-                            "robot0_eye_in_hand_image": np.array(img_lst)
-                        },
-                        "actions": np.array(expert_action_list),  # 使用专家动作作为标签
-                    }
-                    
-                    if len(img2_lst)!=0:
-                        episode_data["obs"]["robot0_eye_in_hand_image_2"] = np.array(img2_lst)
-                    if use_light_key:
-                        episode_data["obs"]["robot0_eye_in_hand_image_light"] = np.array(img_light_list)
-                    if len(img2_light_list)!=0:
-                        episode_data["obs"]["robot0_eye_in_hand_image_2_light"] = np.array(img2_light_list)
-                    if len(im_dep_lst)!=0:
-                        episode_data["obs"]["depth_image"] = np.array(im_dep_lst)
-                    if len(im_dep2_lst)!=0:
-                        episode_data["obs"]["depth_image_2"] = np.array(im_dep2_lst)
-                    if len(delta_pose_list)!=0:
-                        episode_data["delta_pos_curgoal"] = np.array(delta_pose_list)
                 
                 #save hdf5
                 epi_length=len(img_lst)
@@ -505,7 +411,7 @@ if __name__ == '__main__':
                     new_f_out.create_dataset(pos_path, data=delta_pose_list)
 
                 # 在DAgger中，保存的动作取决于是否是DAgger模式
-                if is_dagger_episode:
+                if is_dagger_traj:
                     new_f_out.create_dataset(action_path, data=expert_action_list)
                     print("expert_action_lst-1:", expert_action_list[-1])
                 else:
@@ -514,14 +420,14 @@ if __name__ == '__main__':
                 
                 print("[INFO] demo_{} collected successfully.".format(idx))
                 #================================dagger===============================
-                if is_dagger_episode:
-                    print(f"[DAgger] Episode {idx} completed successfully")
+                if is_dagger_traj:
+                    print(f"[DAgger] Iteration {idx} completed successfully")
                 # ================================dagger===============================
 
                 #===============================policy training=============================
                 # 使用之前计算的训练状态
                 if should_train and policy_model is not None:
-                    print(f"[DAgger] Training policy model at episode {idx} with {train_epochs} epochs")
+                    print(f"[DAgger] Training policy model at iteration {idx} with {train_epochs} epochs")
 
                     # 训练模型
                     new_f_out.close()

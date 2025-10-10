@@ -108,22 +108,5 @@
             "angle_eps": 0.5,
             "dist_eps": 0.001
         }
-    }  ,
-    "post_process": {
-        "disturb_abs_rot": {
-            "utilized": false
-        },
-        "portion_last_episode":{
-            "utilized": true,
-            "portion_last_num":3
-        },
-        "add_end_episode":{
-            "utilized": false,
-            "add_num":5
-        },
-        "add_medium_episode":{
-            "utilized": false,
-            "add_num":2
-        }
     }
 }
