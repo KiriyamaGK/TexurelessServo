@@ -160,8 +160,8 @@ def process_and_append_observations(img, img2, img_light, img2_light, im_dep, im
 
 def determine_mat_error(T1:np.ndarray,T2:np.ndarray,a1,a2):
     dR = np.linalg.inv(T1[0:3,0:3]) @ T2[0:3,0:3]
-    rot_error = R.from_matrix(dR).as_rotvec() #rad
-    trans_error = np.linalg.norm(T1[0:3,3] - T2[0:3,3])
+    rot_error = np.linalg.norm(R.from_matrix(dR).as_rotvec()) #rad
+    trans_error = np.linalg.norm(T1[0:3,3] - T2[0:3,3]) #m
     return a1 * trans_error + a2 * rot_error
 
 def determine_state_error(T1:np.ndarray,T2:np.ndarray,s1,s2):
@@ -181,7 +181,7 @@ if __name__ == '__main__':
     img_h=300
     visualize_img = False
 
-    config_dir= "../configs/demo_collection.json"
+    config_dir= "../configs/demo_collection_greedy_dagger.json"
 
     with open(config_dir, "r") as j:
         config = json.load(j)
@@ -274,24 +274,26 @@ if __name__ == '__main__':
 
     #================================dagger===============================
     # DAgger varibles
+    is_dagger_traj_iter = False
     end_dagger_traj = False
     first_in_error = False
     num_rollout_trajs = 0
     num_expert_trajs = 0
     total_fail_pool_size = 0
-    rest_fail_pool_size = 100000
+    rest_fail_pool_size = 0
     cur_fail_pool = deque()
 
     # pre-defined params
-    n_base_expert_trajs = 100
-    num_selected_pts = 10
-    n_fail_pool_size = 100
-    s_tr = 1
-    s_rot = 1
-    a_tr = 1
-    a_rot = 1
-    w1 = 1
-    w2 = 1
+    n_base_expert_trajs = dagger_config["n_base_expert_trajs"]
+    num_selected_pts = dagger_config["num_selected_pts"]
+    n_fail_pool_size = dagger_config["n_fail_pool_size"]
+    s_tr = dagger_config["weights"]["s_tr"]
+    s_rot = dagger_config["weights"]["s_rot"]
+    a_tr = dagger_config["weights"]["a_tr"]
+    a_rot = dagger_config["weights"]["a_rot"]
+    w1 = dagger_config["weights"]["w1"]
+    w2 = dagger_config["weights"]["w2"]
+    train_epochs = dagger_config["train_epochs"]  # todo: set constant for now,can be self-adaptive in the future
 
     #================================dagger===============================
     
@@ -306,8 +308,6 @@ if __name__ == '__main__':
         
         #================================dagger===============================
         first_in_error = False
-        is_dagger_traj_iter = False
-        train_epochs = 3 #todo: set constant for now,can be self-adaptive in the future
                 
         if is_dagger_traj_iter:
             print("[INFO] Using DAgger strategy for iteration {}".format(idx))
@@ -408,13 +408,13 @@ if __name__ == '__main__':
             action_list.append(action)
             if is_dagger_traj_iter:
                 expert_action_list.append(expert_action)
-            wgT_list.append(env.wgT)
+            wgT_list.append(wgT.copy())
             
             if record_pose:
                 delta_pose_list.append(expert_act_dict['cur_goal_delta_pose'])
 
             if dof==3:
-                rz = rmat2euler_rz_degree(wgT)
+                rz = rmat2euler_rz_degree(wgT.copy())
                 rz_list.append(rz)
 
             #postprocess
@@ -443,16 +443,18 @@ if __name__ == '__main__':
             reinit_res = env.reinit()
             
             if is_dagger_traj_iter: #out of distribution
-                if env.wgT[2,3] < env.wgT_tar[2,3] - 0.02: #touch ground
+                if wgT.copy()[2,3] < wgT_tar.copy()[2,3] - 0.02: #touch ground
                     end_dagger_traj = True
-                tar_mat = env.wgT_tar
-                cur_mat = env.wgT
+                    print(f"[DAgger] Gripper almost touch ground,stop iteration.")
+                tar_mat = wgT_tar.copy()
+                cur_mat = wgT.copy()
                 error_dT = np.linalg.inv(tar_mat) @ cur_mat
                 error_trans_xy = np.linalg.norm(tar_mat[0:2,3]-cur_mat[0:2,3])
                 error_trans_z = abs(tar_mat[2,2]-cur_mat[2,2])
                 error_rotvec = R.from_matrix(error_dT[0:3,0:3]).as_rotvec()
                 if not end_dagger_traj and (error_trans_xy > 1.5 * env.init_horizon_trans or error_trans_z>env.init_vertical_trans or any([abs(th)>1.5*env.init_rot[i] for i,th in enumerate(error_rotvec)])):
                     end_dagger_traj = True
+                    print(f"[DAgger] Gripper out of initial error,stop iteration.")
 
             if reinit_res["close_enough"] or end_dagger_traj:
                 # add the obs-action pair of the last frame
@@ -463,7 +465,7 @@ if __name__ == '__main__':
                     expert_action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
                 else:
                     action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
-                wgT_list.append(np.eye(4))
+                wgT_list.append(wgT_tar.copy())
 
                 process_and_append_observations(
                     img=goal_dict["img_goal"],
@@ -539,7 +541,8 @@ if __name__ == '__main__':
 
                 else:
                     num_expert_trajs += 1
-                    rest_fail_pool_size -= 1
+                    if idx >= n_base_expert_trajs:
+                        rest_fail_pool_size -= 1
 
                 should_train = (total_fail_pool_size >= n_fail_pool_size and rest_fail_pool_size == 0 and not is_dagger_traj_iter) or idx == n_base_expert_trajs -1
 
@@ -598,9 +601,15 @@ if __name__ == '__main__':
 
                 # new iteration setting
                 pos = None
-                if not is_dagger_traj_iter:
+                if not is_dagger_traj_iter and idx >= n_base_expert_trajs:
                     pos = cur_fail_pool.popleft()
-                init_dT = np.linalg.inv(env.wgT) @ pos
+                init_dT = np.linalg.inv(wgT_tar) @ pos if pos is not None else None
+                if init_dT is not None:
+                    tr_in = pos[0:3,3] - wgT_tar[0:3,3]
+                    rot_in = R.from_matrix(init_dT[0:3,0:3]).as_rotvec()
+                    print(f"wgT:{pos}")
+                    print(f"initital trans_dev:{tr_in}")
+                    print(f"initital rot_dev:{rot_in}")
                 env.init(init_dT)
                 break
 
