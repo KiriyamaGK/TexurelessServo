@@ -17,7 +17,7 @@ from utils.dagger import compute_position_distance_sim, get_policy_action, train
 
 
 def greedy_state_selection(states, student_actions,
-                           expert_actions, num_selected_pts, w1=1.0, w2=1.0,s1=1.0,s2=1.0,a1=1.0,a2=1.0):
+                           expert_actions, num_selected_pts, w1=1.0, w2=1.0,s1=1.0,s2=1.0,a1=1.0,a2=1.0,action_error_threshold = 0.01):
     """
     使用贪心策略选择需要咨询专家的状态
 
@@ -31,29 +31,42 @@ def greedy_state_selection(states, student_actions,
     Returns:
         selected_states: 选中的状态列表
     """
-    if len(states) <= num_selected_pts:
-        return states.copy()
-
     # 计算每个状态的动作误差
     action_errors = []
+    state_6ds = []
+    action_error_trs = []
+    action_error_rots = []
     for i, state in enumerate(states):
         expert_action = expert_actions[i]
         student_action = student_actions[i]
         error = determine_action_error(student_action, expert_action, a1=a1, a2=a2)
         action_errors.append(error)
 
+        state_6d = np.zeros(6)
+        state_6d[0:3] = state[0:3,3].copy()*1000
+        state_6d[3:6] = R.from_matrix(state[0:3,0:3].copy()).as_rotvec() /np.pi*180
+        state_6ds.append(state_6d)
+
+        error_tr = (student_action[0:3].copy() - expert_action[0:3].copy()) * 1000
+        error_rot = np.linalg.norm((R.from_rotvec(student_action[3:6]).inv() * R.from_rotvec(expert_action[3:6])).as_rotvec())/np.pi*180
+        action_error_trs.append(error_tr)
+        action_error_rots.append(error_rot)
+
     action_errors = np.array(action_errors)
 
     # 贪心选择过程
     selected_states = []
     selected_indices = []
+    selected_errors = []
+    selected_distances = []
+    print(f"[Greedy Selection] Greedy selection started.")
 
-    for _ in range(num_selected_pts):
+    for selection_round in range(min(num_selected_pts,len(states))):
         best_score = -np.inf
         best_idx = -1
 
         for i, state in enumerate(states):
-            if i in selected_indices:
+            if i in selected_indices or action_errors[i] <= action_error_threshold:
                 continue
 
             # 计算误差项
@@ -74,11 +87,22 @@ def greedy_state_selection(states, student_actions,
             if score > best_score:
                 best_score = score
                 best_idx = i
+                best_isolation_term = isolation_term
 
         if best_idx != -1:
             selected_states.append(states[best_idx])
             selected_indices.append(best_idx)
+            selected_errors.append(action_errors[best_idx])
+            selected_distances.append(best_isolation_term / w2 if w2 > 0 else 0)  # 还原实际距离
 
+            print(f"Round {selection_round + 1}: selected state {best_idx}, "
+                  f"err_act_tr(mm) = [{action_error_trs[best_idx][0]:.3f}, {action_error_trs[best_idx][1]:.3f}, {action_error_trs[best_idx][2]:.3f}], "
+                  f"err_act_rot(deg) = {action_error_rots[best_idx]:.3f}, "
+                  f"min_distance(mm,deg) = {selected_distances[-1]:.3f}, "
+                  f"score = {best_score:.3f}, "
+                  f"state_6d(mm,deg) = [{state_6ds[best_idx][0]:.1f}, {state_6ds[best_idx][1]:.1f}, {state_6ds[best_idx][2]:.1f}, {state_6ds[best_idx][3]:.1f}, {state_6ds[best_idx][4]:.1f}, {state_6ds[best_idx][5]:.1f}]")
+
+    print(f"[Greedy Selection] Selected {len(selected_states)} in total.")
     return selected_states
 
 def filter_translation(input,thres):
@@ -234,7 +258,7 @@ if __name__ == '__main__':
         save_img_size = model_config["algorithm"]["policy"]["params"]["encoder"]["params"]["img_size"]
 
         min_position_threshold = dagger_config["task_termination"]["min_position_threshold"]
-
+        time_upper_bound = dagger_config["task_termination"]["use_time_upperbound"]
     #================================dagger===============================
 
     trans_vel=config["demo_collection"]["velocity"]['trans_vel'] #m
@@ -293,6 +317,7 @@ if __name__ == '__main__':
     a_rot = dagger_config["weights"]["a_rot"]
     w1 = dagger_config["weights"]["w1"]
     w2 = dagger_config["weights"]["w2"]
+    action_error_threshold = dagger_config["action_error_threshold"]
     train_epochs = dagger_config["train_epochs"]  # todo: set constant for now,can be self-adaptive in the future
 
     #================================dagger===============================
@@ -429,9 +454,12 @@ if __name__ == '__main__':
                 distance = collision_res["min_distance"]
                 contact_flag = collision_res["is_colliding"]
                 # print(f"distance: {distance}")
-                if  distance < min_position_threshold[0]:
+                if  distance < min_position_threshold[0] or time.time()-task_start_time>=time_upper_bound:
                     if not first_dagger_print:
-                        print(f"[DAgger] Collision detected, distance: {distance}")
+                        if distance < min_position_threshold[0]:
+                            print(f"[DAgger] Collision detected, distance: {distance}")
+                        else:
+                            print(f"[DAgger] Time up to limit: {time.time()-task_start_time}s is used")
                     end_dagger_traj = True
                     first_dagger_print = True
             #================================dagger===============================
@@ -450,7 +478,7 @@ if __name__ == '__main__':
                 cur_mat = wgT.copy()
                 error_dT = np.linalg.inv(tar_mat) @ cur_mat
                 error_trans_xy = np.linalg.norm(tar_mat[0:2,3]-cur_mat[0:2,3])
-                error_trans_z = abs(tar_mat[2,2]-cur_mat[2,2])
+                error_trans_z = abs(tar_mat[2,3]-cur_mat[2,3])
                 error_rotvec = R.from_matrix(error_dT[0:3,0:3]).as_rotvec()
                 if not end_dagger_traj and (error_trans_xy > 1.5 * env.init_horizon_trans or error_trans_z>env.init_vertical_trans or any([abs(th)>1.5*env.init_rot[i] for i,th in enumerate(error_rotvec)])):
                     end_dagger_traj = True
@@ -460,7 +488,11 @@ if __name__ == '__main__':
                 # add the obs-action pair of the last frame
                 if is_dagger_traj_iter:
                     print("Final distance between gripper and object:", distance)
-                    print(f"Final error:trans:{reinit_res['dist']},rot:{reinit_res['angle']}")
+                    tar_mat = wgT_tar.copy()
+                    cur_mat = wgT.copy()
+                    error_trans = tar_mat[0:3, 3] - cur_mat[0:3, 3]
+                    print("Final distance between gripper and object:", distance)
+                    print(f"Final error:trans:{error_trans},rot:{reinit_res['angle']}")
                     action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
                     expert_action_list.append(np.array([0,0,0]) if dof==3 else np.array([0,0,0,0,0,0]))
                 else:
@@ -533,7 +565,7 @@ if __name__ == '__main__':
                 # old iteration setting
                 if is_dagger_traj_iter:
                     num_rollout_trajs += 1
-                    selected_states = greedy_state_selection(wgT_list,action_list,expert_action_list,num_selected_pts,w1,w2,s_tr,s_rot,a_tr,a_rot)
+                    selected_states = greedy_state_selection(wgT_list,action_list,expert_action_list,num_selected_pts,w1,w2,s_tr,s_rot,a_tr,a_rot,action_error_threshold)
                     rest_fail_pool_size += len(selected_states)
                     total_fail_pool_size += len(selected_states)
                     for state in selected_states:

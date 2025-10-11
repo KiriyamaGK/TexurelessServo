@@ -52,8 +52,10 @@
                 "w1": 1,
                 "w2": 1
             },
+            "action_error_threshold": 0.1,
             "task_termination": {
-                "min_position_threshold": [0.002, 0.08]
+                "min_position_threshold": [0.002, 0.08],
+                "use_time_upperbound": 15
             },
             "check_frame_interval": 2,
             "model_path": null
