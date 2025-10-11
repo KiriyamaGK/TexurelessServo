@@ -206,12 +206,12 @@ if __name__ == '__main__':
         success_list = []
         final_error_list = []
         time_list = []
+        max_trans_err = 0.
+        max_rot_err = 0.
+        max_transz_err = 0.
         for idx in range(eval_epoch_num):
             # print("=========================")
             # print(idx)
-            max_trans_err = 0.
-            max_rot_err = 0.
-            max_transz_err = 0.
             final_error_info_dict = {}
             model.buffer=[]
             error_rot_lst=[]
