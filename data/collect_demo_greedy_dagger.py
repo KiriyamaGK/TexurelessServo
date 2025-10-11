@@ -38,7 +38,11 @@ def greedy_state_selection(states, student_actions,
     action_error_rots = []
     for i, state in enumerate(states):
         expert_action = expert_actions[i]
+        expert_action[3:6] *= np.pi/180.
+
         student_action = student_actions[i]
+        student_action[3:6] *= np.pi/180.
+
         error = determine_action_error(student_action, expert_action, a1=a1, a2=a2)
         action_errors.append(error)
 
