@@ -209,6 +209,9 @@ if __name__ == '__main__':
         for idx in range(eval_epoch_num):
             # print("=========================")
             # print(idx)
+            max_trans_err = 0.
+            max_rot_err = 0.
+            max_transz_err = 0.
             final_error_info_dict = {}
             model.buffer=[]
             error_rot_lst=[]
@@ -349,6 +352,14 @@ if __name__ == '__main__':
                         print("last trans error: {}".format(error_trans_lst[-1]))
                         if dof == 6:
                             print("last z error: {}".format(z_error_lst[-1]))
+
+                        max_trans_err = max(max_trans_err,error_trans_lst[-1])
+                        max_rot_err = max(max_rot_err,error_rot_lst[-1])
+                        print("current max_trans_err: {}".format(max_trans_err))
+                        print("current max_rot_err: {}".format(max_rot_err))
+                        if dof == 6:
+                            max_transz_err = max(max_transz_err,z_error_lst[-1])
+                            print("current max_transz_err: {}".format(max_transz_err))
 
                     if eval_metrics["error_delta_pose"]["utilized"] and use_eval_metrics:
                         error_pose_pth = os.path.join(obj_pth, "error_pose")
