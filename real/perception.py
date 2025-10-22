@@ -1,3 +1,5 @@
+import time
+
 import pyrealsense2 as rs
 import numpy as np
 import cv2
@@ -22,6 +24,7 @@ class Camera:
                  width: int = 640,
                  height: int = 480,
                  fps: int = 30):
+
         self.print_connected_realsense_serial_numbers()
         # 参数验证
         if not isinstance(devices, dict) or not isinstance(use_devices_type, list):
@@ -199,39 +202,74 @@ class Camera:
 
 if __name__ == "__main__":
     # 设备配置
-    bad_pos=False
     devices = {
         "img_1": "215222073421",
         "img_2": "233622076143"
     }
+    task = "make_dataset"  #"make_dataset" or "vis_detect"
+    use_tracker = True
+    yolo_model_pth = "/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train4/weights/best.pt"
+
+    _do_make_dataset = task == "make_dataset"
+    _do_vis_detect = task == "vis_detect"
+    #if make dataset
+    if _do_make_dataset:
+        save_base_dir = "/home/kiriyamagk/桌面/track_dataset/raw" # if do make dataset
+        take_pic_inteval = 0.5 # if do make dataset, unit is second
+
+    #if vis detect
+    if _do_vis_detect:
+        from utils.detection import get_detect_result
+        if yolo_model_pth is not None:
+            from ultralytics import YOLO
+            detect_model = YOLO(yolo_model_pth)
+        else:
+            detect_model = None
+    else:
+        yolo_model_pth = None
+
+    if _do_make_dataset:
+        import os
+        import datetime
+        current_time = datetime.datetime.now()
+        timestamp = current_time.strftime("%Y-%m-%d_%H-%M-%S")
+        save_dir = os.path.join(save_base_dir, timestamp)
+        os.makedirs(save_dir, exist_ok=True)
+        last_t = time.time()
+        initial_pic = True
+        idx = 0
 
     try:
         # 创建相机实例
         camera = Camera(
             devices=devices,
-            use_devices_type=["img_1","img_2"],
+            use_devices_type=["img_1"],
             width=640,
             height=480,
-            fps=30
+            fps=30,
         )
-        i=0
         while True:
             # 获取帧
             frames = camera.get_frame()
             if frames:
                 for name, img in frames.items():
-                    cv2.imshow(name, img)
+                    if _do_vis_detect:
+                        res_dict = get_detect_result(detect_model = detect_model,img=img,tracker_enabled=use_tracker)
+                        dect_img = res_dict["res_img"]
+                    # cv2.imshow(name, img)
+                    cv2.imshow(name, img) if not _do_vis_detect else cv2.imshow(name, dect_img)
                     cv2.waitKey(1)
-                    print(name)
-                    # if i==5:
-                    #     cv2.imwrite(f"/home/kiriyamagk/桌面/0628_FORMAL_RESULTS/goal_image1/{name}"+"_badpos"+".jpg",img) if bad_pos else cv2.imwrite(f"/home/kiriyamagk/桌面/0628_FORMAL_RESULTS/goal_image1/{name}"+".jpg",img)
+                    if _do_make_dataset and ((time.time() - last_t) >= take_pic_inteval or initial_pic):
+                        if initial_pic:
+                            os.makedirs(os.path.join(save_dir, name), exist_ok=True)
+                        spec_save_dir = os.path.join(save_dir, name, str(idx).zfill(5)+".png")
+                        cv2.imwrite(spec_save_dir, img)
+                        idx += 1
+                        last_t = time.time()
+                        if initial_pic:
+                            initial_pic = False
             else:
-                print(1)
-
-            # 获取相机信息
-            info = camera.get_camera_info("wrist")
-            print(f"Camera info: {info}")
-            i+=1
+                print("Error occured while getting frame.")
 
     finally:
         # 释放资源
