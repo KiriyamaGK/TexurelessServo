@@ -14,9 +14,9 @@
     },
 
     "logs_dir":  "trained_models/trial/2025-10-01_20-00-00/config.json",
-    "ckpts_dir": "dagger_episode_499_epoch_14_loss_0.0020.pth",
+    "ckpts_dir": ["epoch_30_validation_loss_0.0017821450950577856.pth","epoch_50_best_validation_loss_0.0007837620301870629.pth"],
     "objs_descriptor": [5],
-    "eval_epoch_num": 300,
+    "eval_epoch_num": 2,
     "bgr2rgb": false,
     "time_threshold": 30,
     "cv2_visualize": true,

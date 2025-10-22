@@ -44,7 +44,9 @@ def determine_index_from_ckpt_name(ckpt_name):
             idx+=ckpt_name[i]
         else:
             break
-    return int(idx)
+    if idx != "":
+        return int(idx)
+    return -1
 
 def determine_ckpt_dirs(cfg,ckpt_base):
     '''
@@ -69,6 +71,8 @@ def determine_ckpt_dirs(cfg,ckpt_base):
         for test_epoch in cfg:
             if str(test_epoch) in all_epochs.keys():
                 ckpts_dirs.append(os.path.join(ckpt_base, all_epochs[str(test_epoch)]))
+            elif test_epoch in all_dirs:
+                ckpts_dirs.append(os.path.join(ckpt_base, test_epoch))
     return ckpts_dirs
 
 if __name__ == '__main__':
