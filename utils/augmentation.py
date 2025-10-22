@@ -230,20 +230,63 @@ def process_image_with_yolo(img, model,color_channel_inv=False):
         return mask
 
 
-def draw_bounding_box(img, mask, color=(0, 255, 0), thickness=2):
+def draw_bounding_box(img, mask=None, bbox=None, color=(0, 255, 0), thickness=2, label=None):
     """
-    Draw the bounding box of the mask on the image
+    Draw the bounding box of the mask on the image with optional label
+
+    参数:
+        img: 输入图像
+        mask: 掩码 (可选)
+        bbox: 边界框坐标 [x_min, y_min, x_max, y_max] (可选)
+        color: 边界框颜色
+        thickness: 边界框线宽
+        label: 标签文本 (可选)
     """
     # Find the bounding box coordinates
-    y, x = np.where(mask > 0)
-    if len(y) == 0 or len(x) == 0:
-        return img  # No mask to draw
+    assert (mask is not None and bbox is None) or (mask is None and bbox is not None)
+    if mask is not None:
+        y, x = np.where(mask > 0)
+        if len(y) == 0 or len(x) == 0:
+            return img  # No mask to draw
 
-    x_min, x_max = np.min(x), np.max(x)
-    y_min, y_max = np.min(y), np.max(y)
+        x_min, x_max = np.min(x), np.max(x)
+        y_min, y_max = np.min(y), np.max(y)
+    else:
+        x_min, y_min, x_max, y_max = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
 
     img_with_bbox = img.copy()
+
+    # 绘制边界框
     cv2.rectangle(img_with_bbox, (x_min, y_min), (x_max, y_max), color, thickness)
+
+    # 如果有标签，在边界框上方绘制标签
+    if label is not None:
+        # 设置标签字体和大小
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6
+        font_thickness = 2
+
+        # 计算标签文本大小
+        (text_width, text_height), baseline = cv2.getTextSize(label, font, font_scale, font_thickness)
+
+        # 计算标签背景矩形位置
+        label_bg_y1 = max(y_min - text_height - 10, 0)  # 确保不超出图像上边界
+        label_bg_y2 = y_min
+        label_bg_x1 = x_min
+        label_bg_x2 = x_min + text_width + 5
+
+        # 绘制标签背景
+        cv2.rectangle(img_with_bbox,
+                      (label_bg_x1, label_bg_y1),
+                      (label_bg_x2, label_bg_y2),
+                      color, -1)  # -1 表示填充
+
+        # 绘制标签文本
+        text_y = y_min - 5 if y_min - 5 > text_height else y_min + text_height
+        cv2.putText(img_with_bbox, label,
+                    (x_min + 2, text_y),
+                    font, font_scale, (255, 255, 255), font_thickness)
+
     return img_with_bbox
 
 
@@ -306,8 +349,8 @@ class AugmentationModule():
         # 5. Draw the bounding box if requested
         if self.draw_box:
             img_aug = draw_bounding_box(
-                img_aug,
-                target_mask,
+                img = img_aug,
+                mask = target_mask,
                 color=self.box_color,
                 thickness=self.box_thickness
             )
