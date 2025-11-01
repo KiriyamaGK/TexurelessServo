@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 import cv2
 import random
 import os
@@ -50,7 +49,7 @@ def augment_lighting_for_image_np(
 
 def augment_lighting_for_image(img_np, scale_range_min=0.3, scale_range_max=1.8,
                                offset_range_min=-0.3, offset_range_max=0.3, noise_std=0.1):
-
+    import torch
     # 转换为PyTorch张量并移到GPU
     img_tensor = torch.from_numpy(img_np).permute(2, 0, 1).float().cuda() / 255.0 # [3,H,W]
 
@@ -362,7 +361,10 @@ class AugmentationModule():
 if __name__ == '__main__':
     color_channel_inv = False
     img_pth = "imgs/demo_100/img1/012.png"
-    img = cv2.imread(img_pth)
+    img_name = "012.png"
+
+    real_img_name,suffix = img_name.split(".")
+    img = cv2.imread(img_pth + "/" + img_name)
     augmentation1_module = AugmentationModule(
         pretrained_model_pth="/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train/weights/best.pt",
         scale_range_min=0.87,
@@ -372,9 +374,11 @@ if __name__ == '__main__':
         noise_std=0.07,
         draw_box=False,  # todo:cautious!
         box_color=(0, 255, 0),
-        box_thickness=2
+        box_thickness=2,
+        swap_and_apply_block=False
     )
     img = augmentation1_module.augment_image(img, color_channel_inv)
+    cv2.imwrite(img_pth + "/" + real_img_name + "_stage1" + suffix, img)
     augmentation2_module = AugmentationModule(
         pretrained_model_pth="/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train/weights/best.pt",
         scale_range_min=0.999,
@@ -386,3 +390,5 @@ if __name__ == '__main__':
         box_color=(0, 255, 0),
         box_thickness=2
     )
+    img = augmentation2_module.augment_image(img, color_channel_inv)
+    cv2.imwrite(img_pth + "/" + real_img_name + "_stage2" + suffix, img)
