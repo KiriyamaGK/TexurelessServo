@@ -295,7 +295,7 @@ class AugmentationModule():
                  pretrained_model_pth,
                  scale_range_min=0.3, scale_range_max=1.8,
                  offset_range_min=-0.3, offset_range_max=0.3,
-                 noise_std=0.1, draw_box=False, box_color=(0, 255, 0), box_thickness=2):
+                 noise_std=0.1, draw_box=False, box_color=(0, 255, 0), box_thickness=2,swap_and_apply_block = True):
         os.environ['YOLO_VERBOSE'] = 'False' #abandon yolo logger printing
         from ultralytics import YOLO
 
@@ -308,6 +308,7 @@ class AugmentationModule():
         self.draw_box = draw_box
         self.box_color = box_color
         self.box_thickness = box_thickness
+        self.swap_and_apply_block = swap_and_apply_block
 
     def augment_image(self,img, color_channel_inv=False):
         """
@@ -340,32 +341,48 @@ class AugmentationModule():
             noise_std=self.noise_std
         )
 
-        # 3. Apply rectangle swap augmentation to non-target area (with safety checks)
-        img_aug, swap_success = swap_random_rectangles_non_target(img_aug, target_mask)
+        if self.swap_and_apply_block:
+            # 3. Apply rectangle swap augmentation to non-target area (with safety checks)
+            img_aug, swap_success = swap_random_rectangles_non_target(img_aug, target_mask)
 
-        # 4. Apply solid color rectangle to non-target area (with safety checks)
-        img_aug, solid_success = apply_solid_color_rectangle_non_target(img_aug, target_mask)
+            # 4. Apply solid color rectangle to non-target area (with safety checks)
+            img_aug, solid_success = apply_solid_color_rectangle_non_target(img_aug, target_mask)
 
-        # 5. Draw the bounding box if requested
-        if self.draw_box:
-            img_aug = draw_bounding_box(
-                img = img_aug,
-                mask = target_mask,
-                color=self.box_color,
-                thickness=self.box_thickness
-            )
+            # 5. Draw the bounding box if requested
+            if self.draw_box:
+                img_aug = draw_bounding_box(
+                    img = img_aug,
+                    mask = target_mask,
+                    color=self.box_color,
+                    thickness=self.box_thickness
+                )
         return img_aug
 
 
 if __name__ == '__main__':
-    img = cv2.imread('/media/noematrix/One Touch/AlignAnything_real/25.06.22/hdf5/goal_images/img1/0.png')
-    img=img[:,:,::-1].copy()
-    # img_aug = augment_lighting_for_image(img_np=img)
-    cv2.imshow("img",img)
-    cv2.waitKey(0)
-
-    from skimage import exposure
-    # adjusted = exposure.adjust_gam ma(img, gamma=0.5)  # 伽马校正
-    adjusted = simple_retinex(img)
-    cv2.imshow('adjusted', adjusted)
-    cv2.waitKey(0)
+    color_channel_inv = False
+    img_pth = "imgs/demo_100/img1/012.png"
+    img = cv2.imread(img_pth)
+    augmentation1_module = AugmentationModule(
+        pretrained_model_pth="/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train/weights/best.pt",
+        scale_range_min=0.87,
+        scale_range_max=1.15,
+        offset_range_min=-0.1,
+        offset_range_max=0.1,
+        noise_std=0.07,
+        draw_box=False,  # todo:cautious!
+        box_color=(0, 255, 0),
+        box_thickness=2
+    )
+    img = augmentation1_module.augment_image(img, color_channel_inv)
+    augmentation2_module = AugmentationModule(
+        pretrained_model_pth="/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train/weights/best.pt",
+        scale_range_min=0.999,
+        scale_range_max=1.001,
+        offset_range_min=-0.001,
+        offset_range_max=0.001,
+        noise_std=0.00007,
+        draw_box=False,  # todo:cautious!
+        box_color=(0, 255, 0),
+        box_thickness=2
+    )
