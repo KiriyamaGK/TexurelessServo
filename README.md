@@ -1,4 +1,8 @@
 # AlignAnything
+## **Setup Python Path**
+```
+export PYTHONPATH="/path/to/your/modules:$PYTHONPATH"
+```
 
 ## **Training** 
 
