@@ -90,7 +90,7 @@ class NetworkBase(ABC, nn.Module):
             assert self.batch_size >= shape[0]
             b, seq = shape[0], 1
         elif len(shape) == 5:
-            assert self.batch_size >= shape[0] and self.seq_length == shape[1]
+            assert self.batch_size >= shape[0] and self.seq_length >= shape[1]
             b, seq = shape[0], shape[1]
         else:
             raise RuntimeError('x_img.shape should between 3 and 5')
