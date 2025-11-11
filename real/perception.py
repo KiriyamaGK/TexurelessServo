@@ -1,5 +1,5 @@
 import time
-
+import os
 import pyrealsense2 as rs
 import numpy as np
 import cv2
@@ -206,12 +206,26 @@ if __name__ == "__main__":
         "img_1": "215222073421",
         "img_2": "233622076143"
     }
-    task = "make_dataset"  #"make_dataset" or "vis_detect"
+    # task = "make_dataset"  #"make_dataset" or "vis_detect"
+    task = None
     use_tracker = True
-    yolo_model_pth = "/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train4/weights/best.pt"
+    #主要比较yolov8,train5,midbigdown,light
+    # yolo_model_pth = "/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train5/weights/best.pt"
+    # yolo_model_pth = "/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train6(yolov8)/weights/best.pt"
+    yolo_model_pth = "/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train11(yolo_midbigdown)/weights/best.pt"
+    # yolo_model_pth = "/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train8(yolo_light)/weights/best.pt"
 
+    # yolo_model_pth = "/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train12(yolo_newnew)/weights/best.pt"
+    # yolo_model_pth = "/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train9(yolo_mid)/weights/best.pt"
+    # yolo_model_pth = "/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train10(yolo_midbig)/weights/best.pt"
+    color_channel_inv = False
+    do_save_detect_results = False
+
+    save_freq = 2
     _do_make_dataset = task == "make_dataset"
     _do_vis_detect = task == "vis_detect"
+    do_save_detect_results = do_save_detect_results and _do_vis_detect
+
     #if make dataset
     if _do_make_dataset:
         save_base_dir = "/home/kiriyamagk/桌面/track_dataset/raw" # if do make dataset
@@ -237,28 +251,42 @@ if __name__ == "__main__":
         os.makedirs(save_dir, exist_ok=True)
         last_t = time.time()
         initial_pic = True
-        idx = 0
+    if do_save_detect_results:
+        save_base = os.path.dirname(os.path.dirname(yolo_model_pth)) + f"/{int(time.time())}"
+        save_base_raw = save_base + "/eval_results/raw"
+        save_base_dect = save_base + "/eval_results/dect"
+        os.makedirs(save_base_dect, exist_ok=True)
+        os.makedirs(save_base_raw, exist_ok=True)
 
     try:
         # 创建相机实例
         camera = Camera(
             devices=devices,
-            use_devices_type=["img_1"],
+            use_devices_type=["img_1","img_2"],
             width=640,
             height=480,
             fps=30,
         )
+        last_save_t = time.time()
+        idx = 0
         while True:
             # 获取帧
             frames = camera.get_frame()
             if frames:
                 for name, img in frames.items():
                     if _do_vis_detect:
-                        res_dict = get_detect_result(detect_model = detect_model,img=img,tracker_enabled=use_tracker)
+                        res_dict = get_detect_result(detect_model = detect_model,img=img,tracker_enabled=use_tracker,color_channel_inv=color_channel_inv)
                         dect_img = res_dict["res_img"]
                     # cv2.imshow(name, img)
                     cv2.imshow(name, img) if not _do_vis_detect else cv2.imshow(name, dect_img)
                     cv2.waitKey(1)
+
+                    if do_save_detect_results and time.time() - last_save_t > 1/save_freq:
+                        cv2.imwrite(save_base_dect + f"/{str(idx).zfill(5)}.png",dect_img)
+                        cv2.imwrite(save_base_raw + f"/{str(idx).zfill(5)}.png", img)
+                        last_save_t = time.time()
+                        idx += 1
+
                     if _do_make_dataset and ((time.time() - last_t) >= take_pic_inteval or initial_pic):
                         if initial_pic:
                             os.makedirs(os.path.join(save_dir, name), exist_ok=True)

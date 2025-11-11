@@ -413,10 +413,12 @@ class Environment:
         err_dict = self.compute_error(self.wgT_tar, self.wgT) #eval stage,to get accurate z_zrror,compute dT = g_tar,gT is more acceptable
 
         if time.time()-self.task_timer>=self.time_up_bound:
+            print("time limit reached,reinit.....")
             need_reinit=True
         else:
             if time.time()-self.vel_timer>=self.in_threshold_range_time and self.vel_in_threshold_flag:
                 need_reinit=True
+                print(f"velocity too small,reinit.....,vel_timer:{self.vel_timer}")
             else:
                 need_reinit=False
 

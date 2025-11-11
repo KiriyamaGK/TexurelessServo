@@ -148,8 +148,9 @@ def plot_trajs(wgT_list, wgT_tar, motion_type, obj_path=None, show=False, is_mm=
         y_lst.append(wgT[1, 3])
         z_lst.append(wgT[2, 3])
         axis_angle = R.from_matrix(wgT[0:3, 0:3]).as_rotvec() * 180 / np.pi
-        if axis_angle[0] > 0:
-            axis_angle[0] -= 360
+        if axis_angle[3] > 0:
+            ori_norm = np.linalg.norm(axis_angle[3:6])
+            axis_angle[3:6] *= -(360 - ori_norm) / ori_norm
         theta1_lst.append(axis_angle[0])
         theta2_lst.append(axis_angle[1])
         theta3_lst.append(axis_angle[2])

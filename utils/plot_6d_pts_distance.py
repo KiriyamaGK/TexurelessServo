@@ -41,8 +41,9 @@ def plot_6d_pts(X: np.ndarray, dim=2, method=None, color_list=None):
         if dim == 2:
             for color, points in color_groups.items():
                 points = np.array(points)
+                label = "Base Expert" if color == "r" else "Dagger Traj" if color == "g" else "Aggregated Expert Traj"
                 plt.scatter(points[:, 0], points[:, 1],
-                            c=color, alpha=0.6, s=30, label=f'Color {color}')
+                            c=color, alpha=0.6, s=30, label=label)
 
             plt.xlabel(f'{method.upper()} Component 1')
             plt.ylabel(f'{method.upper()} Component 2')
@@ -52,8 +53,9 @@ def plot_6d_pts(X: np.ndarray, dim=2, method=None, color_list=None):
 
             for color, points in color_groups.items():
                 points = np.array(points)
+                label = "Base Expert" if color == "r" else "Dagger Traj" if color == "g" else "Aggregated Expert Traj"
                 ax.scatter(points[:, 0], points[:, 1], points[:, 2],
-                           c=color, alpha=0.6, s=30, label=f'Color {color}')
+                           c=color, alpha=0.6, s=30, label=label)
 
             ax.set_xlabel(f'{method.upper()} Component 1')
             ax.set_ylabel(f'{method.upper()} Component 2')

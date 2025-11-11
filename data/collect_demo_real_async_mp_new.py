@@ -145,7 +145,12 @@ def control_process(config, dagger_config, state, goal_state, is_dagger_episode,
         img2 = rtn_dict['img_2'] if 'img_2' in rtn_dict else None
         return img, img2
 
-    goal_pose = [-555.3695678710938, -48.81327438354492, 176.91848754882812, 180.0,0., 13.89868450164795]
+    # goal_pose = None
+    goal_pose = [-482.7015380859375, -40.29251480102539, 181.0076141357422, -180., 0., -12.172778129577637]
+    if goal_pose is None:
+        goal_pose = env.robot_ins.get_gripper_TCP_pose()
+    goal_pose[3] = -180.0
+    goal_pose[4] = 0.0
     # Convert to meters and radians
     env.robot_ins.move_cart(goal_pose, tool=2, user=0, vel=40)
 
