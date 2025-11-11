@@ -297,3 +297,20 @@ def construct_dT_from_action(action,dof = 6):
         from scipy.spatial.transform import Rotation as R
         dT[0:3, 0:3] = R.from_rotvec(rot_vec).as_matrix()
     return dT
+
+def normalize_rotvec(aa_arr ,is_deg = True):
+    """
+    Normalize a rotation vector,outputs a rotvec whose angle is between 0-180.
+    :param aa_arr: rotvec array
+    :param is_deg: bool,determines the input angle type
+    :return: normalized rotvec
+    """
+    aa_arr = np.array(aa_arr)
+    assert aa_arr.shape == (3,)
+    if not is_deg:
+        aa_arr *= 180/np.pi
+    aa_arr_norm = np.linalg.norm(aa_arr)
+    while (np.linalg.norm(aa_arr) > 180):
+        aa_arr[3:6] *= -1
+        aa_arr[3:6] *= 360.-aa_arr_norm
+    return aa_arr if is_deg else aa_arr * np.pi / 180

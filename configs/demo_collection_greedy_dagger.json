@@ -34,7 +34,7 @@
         "use_random_light_img_key": true,
         "depth": {
             "utilized": false,
-            "normalize_scaler": 1
+            "normalize_scaler": 200
         },
         "record_pose": true,
         "dagger": {
@@ -46,11 +46,11 @@
             "train_epochs": 3,
             "weights": {
                 "s_tr": 1000,
-                "s_rot": 565.2,
+                "s_rot": 57.32,
                 "a_tr": 1000,
-                "a_rot": 565.2,
+                "a_rot": 57.32,
                 "w1": 1,
-                "w2": 1
+                "w2": 2
             },
             "action_error_threshold": 0.1,
             "task_termination": {

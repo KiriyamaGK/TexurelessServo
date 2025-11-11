@@ -115,6 +115,7 @@ class Coarse_Locolization:
     def main_tracker(self):
         self.detach_pt = None
         new_need_track = False
+        idx = 0
         while self.state_dict["nearest_wpt_idx"] < len(self.wpts) -1 :
             ts =  time.time()
             img = self.cam.get_frame()["img_1"]
@@ -167,13 +168,14 @@ class Coarse_Locolization:
                     if self.do_record:
                         pos += [0]
                         self.record_pose_list.append(pos)
+                        cv2.imwrite(f"{idx}.png",bbox_img)
                     delta_motion = self.get_motion_vec_from_bbox(xc,yc)
                     pos[0] += delta_motion[1]
                     pos[1] += delta_motion[0]
                     self.rbt.servo_cart(pos,mode=0,vel=10.0)
-
             elapsed = 1/self.ctrl_freq - (time.time()-ts)
             time.sleep(elapsed) if elapsed > 0 else None
+            idx+=1
         if self.do_record:
             os.makedirs("coarse_positioning_results", exist_ok=True)
             np.save("coarse_locolization_results/"+f"{int(time.time())}.npy",self.record_pose_list,allow_pickle=True)
@@ -254,6 +256,7 @@ if __name__ == "__main__":
     bbox_center_thresh = 5 # if distance between image ct and bbox ct is within this value, the part is considered reached
     conf_thresh = 0.5 # the tracked obj's thresh should be above this value
     color_cn_inv = False
+    record_pose = True
 
     #about grasping
     do_down_to_grasp = True
@@ -273,7 +276,7 @@ if __name__ == "__main__":
         "use_devices_type":["img_1"]
     }
 
-    main_ins = Coarse_Locolization(cam_cfg = cam_cfg,rbt_cfg = rbt_cfg,p_s=p_s,p_e=p_e,num_devs=num_devs,ctrl_freq=ctrl_freq,model_pth=model_pth,motion_vel=motion_vel,wpt_radius=wpt_radius,bbox_center_thresh = bbox_center_thresh,conf_thresh = conf_thresh,color_cn_inv=color_cn_inv,init_pose = init_pose,do_down_to_grasp=do_down_to_grasp,grasp_offset_x=grasp_offset_x,grasp_offset_y=grasp_offset_y,grasp_offset_z = grasp_offset_z,place_pose = place_pose)
+    main_ins = Coarse_Locolization(cam_cfg = cam_cfg,rbt_cfg = rbt_cfg,p_s=p_s,p_e=p_e,num_devs=num_devs,ctrl_freq=ctrl_freq,model_pth=model_pth,motion_vel=motion_vel,wpt_radius=wpt_radius,bbox_center_thresh = bbox_center_thresh,conf_thresh = conf_thresh,color_cn_inv=color_cn_inv,init_pose = init_pose,do_down_to_grasp=do_down_to_grasp,grasp_offset_x=grasp_offset_x,grasp_offset_y=grasp_offset_y,grasp_offset_z = grasp_offset_z,place_pose = place_pose,record=record_pose)
     main_ins.main_tracker()
 
 

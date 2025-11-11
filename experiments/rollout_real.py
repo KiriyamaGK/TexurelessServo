@@ -50,6 +50,9 @@ def ensure_dir_with_timestamp(base_dir,num):
     return full_path
 
 def get_epoch_num_from_pthname(strin):
+    if "dagger" in strin:
+        epoch_num = strin.split("episode_")[1].split("_epoch")[0]
+        return epoch_num
     start_id=6
     for i in range(5):
         if strin[start_id+i+1]!='_':
@@ -168,7 +171,8 @@ def teleop_and_pic(img_gt_1, img_gt_2,img_size):
 if __name__ == '__main__':
     #===================================manually_set_info===================================
     initial_teleop = False
-    do_filter = True
+    do_filter = False
+    use_folder_goal = False
     if do_filter:
         # from utils.kalman_filter import create_visual_servo_filter
         # kf = create_visual_servo_filter()
@@ -194,7 +198,7 @@ if __name__ == '__main__':
 
     with open(config_dir, "r") as j:
         config = json.load(j)
-    model_config_dir=path_completion( config["logs_dir"],PROJECT_ROOT_DIR)
+    model_config_dir=path_completion(config["logs_dir"],PROJECT_ROOT_DIR)
     with open(model_config_dir, "r") as j:
         model_config = json.load(j)
 
@@ -244,7 +248,7 @@ if __name__ == '__main__':
 
     if not initial_teleop:
         # init_pos = robot_ins.get_gripper_TCP_pose()
-        in_desire_pt = init_pos
+        in_desire_pt = init_pos if init_pos is not None else robot_ins.get_gripper_TCP_pose()
         env.robot_ins.move_cart(in_desire_pt,tool=2, user=0, vel=40)
     else:
         img_1_gt = cv2.imread(os.path.join(goal_img_base_dir,"img1", f"{goal_idx}.png"))
@@ -288,11 +292,15 @@ if __name__ == '__main__':
             # get goal info
             im_goal_dict = get_goal_info(env)
 
-            img_goal=im_goal_dict['img_1']
-            img_goal2 = im_goal_dict['img_2'] if 'img_2' in im_goal_dict and num_cams==2 else None
+            if not use_folder_goal:
+                img_goal=im_goal_dict['img_1']
+                img_goal2 = im_goal_dict['img_2'] if 'img_2' in im_goal_dict and num_cams==2 else None
+            else:
+                img_goal = cv2.imread(os.path.join(goal_img_base_dir, "img1", f"{goal_idx}.png"))[:, :, ::-1]
+                img_goal2 = cv2.imread(os.path.join(goal_img_base_dir, "img2", f"{goal_idx}.png"))[:, :, ::-1]  # /255
 
             if cv2_visualize:
-                img_goal_vis = img_goal.copy()if img_goal2 is None else np.vstack((img_goal.copy(), img_goal2.copy()))
+                img_goal_vis = img_goal.copy() if img_goal2 is None else np.vstack((img_goal.copy(), img_goal2.copy()))
 
             img_goal=conditioned_clip_and_resize(img=img_goal, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size,keep_right=True)[:,:,::-1]
             img_goal2 = conditioned_clip_and_resize(img=img_goal2, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size,keep_right=True)[:,:,::-1] if img_goal2 is not None else None
@@ -342,6 +350,12 @@ if __name__ == '__main__':
                 if img2 is not None:
                     obs_dict["robot0_eye_in_hand_image_2"]=img2[:, :, ::-1]
                     obs_dict["robot0_eye_in_hand_image_2_goal"]=img_goal2[:, :, ::-1]
+                if not cv2_visualize:
+                    img_vis = img.copy() if img2 is None else np.vstack((img.copy(), img2.copy()))
+                    img_goal_vis = img_goal.copy() if img_goal2 is None else np.vstack((img_goal.copy(), img_goal2.copy()))
+                    combined_img = np.hstack((img_vis, img_goal_vis))
+                    cv2.imshow('Images:cur|goal', combined_img)
+                    cv2.waitKey(1)
 
                 obs_dict=input_dict_preprocess(obs_dict,rollout=True)
                 pred=model(obs_dict)
@@ -358,10 +372,10 @@ if __name__ == '__main__':
 
                 if do_filter:
                     raw_cmd = np.concatenate((vel_tr,vel_rot),axis=0)
-                    print(f"raw_cmd:{raw_cmd}")
+                    # print(f"raw_cmd:{raw_cmd}")
                     # filtered = kf.predict_and_update(raw_cmd)[0].reshape(-1,)
                     filtered = _filter.process(raw_cmd)
-                    print(f"filtered:{filtered}")
+                    # print(f"filtered vel:{filtered}")
                     vel_tr = filtered[0:3]
                     vel_rot = filtered[3:]
 
@@ -393,14 +407,15 @@ if __name__ == '__main__':
 
                 if rtn_dict["need_reinit"]:
                     use_time=time.time()-t_0
+                    cur_time = int(time.time())
                     #eval metrics
                     if eval_metrics["error_curve"]["utilized"] and use_eval_metrics:
                         error_pth = os.path.join(obj_pth, "error_curve")
                         os.makedirs(error_pth, exist_ok=True)
                         plot_rot_and_trans(error_rot_lst=error_rot_lst, error_trans_lst=error_trans_lst, use_time=use_time,obj_pth=error_pth,z_error_lst=z_error_lst,show=False)
 
-                        np.save(os.path.join(error_pth,f"{int(time.time())}_error_curve_trans.npy"),error_trans_lst,allow_pickle=True)
-                        np.save(os.path.join(error_pth,f"{int(time.time())}_error_curve_rot.npy"),error_rot_lst,allow_pickle=True)
+                        np.save(os.path.join(error_pth,f"{cur_time}_error_curve_trans.npy"),error_trans_lst,allow_pickle=True)
+                        np.save(os.path.join(error_pth,f"{cur_time}_error_curve_rot.npy"),error_rot_lst,allow_pickle=True)
 
                         print("last rot error: {}".format(error_rot_lst[-1]))
                         print("last trans error: {}".format(error_trans_lst[-1]))
@@ -415,7 +430,7 @@ if __name__ == '__main__':
                         print("last trans pose Z estimation error: {}".format(error_pos_list[-1][1]))
                         print("last rot pose estimation error: {}".format(error_pos_list[-1][2]))
 
-                        np.save(os.path.join(error_pose_pth,f"{int(time.time())}_error_pose.npy"),error_pos_list,allow_pickle=True)
+                        np.save(os.path.join(error_pose_pth,f"{cur_time}_error_pose.npy"),error_pos_list,allow_pickle=True)
 
                     if eval_metrics["success_rate"]["utilized"] and use_eval_metrics:
                         success=1 if (error_rot_lst[-1]<=succ_rot and error_trans_lst[-1]<=succ_tr) else 0
@@ -442,8 +457,8 @@ if __name__ == '__main__':
                         traj_pth=os.path.join(obj_pth, "traj")
                         os.makedirs(traj_pth, exist_ok=True)
                         plot_trajs(wgT_list=wgT_list, wgT_tar=env.wgT_tar, motion_type=expert_motion_type, obj_path=traj_pth,show=False,is_mm=True)
-
-                        np.save(os.path.join(traj_pth,f"{int(time.time())}_traj.npy"),wgT_list,allow_pickle=True)
+                        np.save(os.path.join(traj_pth, f"{cur_time}_wgT_tar.npy"), env.wgT_tar, allow_pickle=True)
+                        np.save(os.path.join(traj_pth,f"{cur_time}_traj.npy"),wgT_list,allow_pickle=True)
                         
                     if eval_metrics["velocity"]["utilized"] and use_eval_metrics:
                         vel_pth = os.path.join(obj_pth, "vel")
@@ -454,7 +469,7 @@ if __name__ == '__main__':
                         os.makedirs(vel6d_pth, exist_ok=True)
                         plot_6dvel(vel=vel_lst, use_time=use_time, obj_path=vel6d_pth, show=False)
 
-                        np.save(os.path.join(vel6d_pth,f"{int(time.time())}_vel6d.npy"),vel_lst,allow_pickle=True)
+                        np.save(os.path.join(vel6d_pth,f"{cur_time}_vel6d.npy"),vel_lst,allow_pickle=True)
 
                     final_error_info_dict["obj_id"]=obj_id
                     final_error_info_dict["final_trans_error"]=error_trans_lst[-1]

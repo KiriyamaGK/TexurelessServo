@@ -16,18 +16,26 @@ def augment_lighting_for_image_np(
     img_float = img_np.astype(np.float32) / 255.0  # [H, W, C]
 
     # 生成随机的缩放因子（每个通道独立）
-    scale = np.random.uniform(
-        scale_range_min,
-        scale_range_max,
-        size=(3,)
-    ).reshape(1, 1, 3)  # [1, 1, 3]
+    if isinstance(scale_range_min,(float,int)) and isinstance(scale_range_max,(float,int)):
+        scale = np.random.uniform(
+            scale_range_min,
+            scale_range_max,
+            size=(3,)
+        ).reshape(1, 1, 3)  # [1, 1, 3]
+    else:
+        assert isinstance(scale_range_min,list) and len(scale_range_min) == 3 and isinstance(scale_range_max,list) and len(scale_range_max) == 3
+        scale = np.array([random.uniform(scale_range_min[i],scale_range_max[i]) for i in range(3)]).reshape(1, 1, 3)
 
-    # 生成随机的偏移量（每个通道独立）
-    offset = np.random.uniform(
-        offset_range_min,
-        offset_range_max,
-        size=(3,)
-    ).reshape(1, 1, 3)  # [1, 1, 3]
+    if isinstance(offset_range_min, (float, int)) and isinstance(offset_range_max, (float, int)):
+        # 生成随机的偏移量（每个通道独立）
+        offset = np.random.uniform(
+            offset_range_min,
+            offset_range_max,
+            size=(3,)
+        ).reshape(1, 1, 3)  # [1, 1, 3]
+    else:
+        assert isinstance(offset_range_min,list) and len(offset_range_min) == 3 and isinstance(offset_range_max,list) and len(offset_range_max) == 3
+        offset = np.array([random.uniform(offset_range_min[i], offset_range_max[i]) for i in range(3)]).reshape(1, 1, 3)
 
     # 生成高斯噪声（均值为0，标准差=noise_std）
     noise = np.random.normal(
@@ -360,35 +368,36 @@ class AugmentationModule():
 
 if __name__ == '__main__':
     color_channel_inv = False
-    img_pth = "imgs/demo_100/img1/012.png"
-    img_name = "012.png"
+    img_pth = "/home/kiriyamagk/桌面/augmented_imgs"
+    img_name = "011_1.png"
 
     real_img_name,suffix = img_name.split(".")
     img = cv2.imread(img_pth + "/" + img_name)
     augmentation1_module = AugmentationModule(
         pretrained_model_pth="/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train/weights/best.pt",
-        scale_range_min=0.87,
-        scale_range_max=1.15,
-        offset_range_min=-0.1,
-        offset_range_max=0.1,
+        scale_range_min=[1.401,0.804,0.899],
+        scale_range_max=[1.402,0.805,0.9],
+        offset_range_min=[-0.06,-0.04,0.056],
+        offset_range_max=[-0.059,-0.039,0.057],
         noise_std=0.07,
         draw_box=False,  # todo:cautious!
         box_color=(0, 255, 0),
         box_thickness=2,
         swap_and_apply_block=False
     )
-    img = augmentation1_module.augment_image(img, color_channel_inv)
-    cv2.imwrite(img_pth + "/" + real_img_name + "_stage1" + suffix, img)
+    img1 = augmentation1_module.augment_image(img.copy(), color_channel_inv)
+    cv2.imwrite(img_pth + "/" + real_img_name + "_stage1." + suffix, img1)
     augmentation2_module = AugmentationModule(
         pretrained_model_pth="/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train/weights/best.pt",
-        scale_range_min=0.999,
-        scale_range_max=1.001,
-        offset_range_min=-0.001,
-        offset_range_max=0.001,
-        noise_std=0.00007,
+        scale_range_min=[1.401, 0.804, 0.899],
+        scale_range_max=[1.402, 0.805, 0.9],
+        offset_range_min=[-0.06, -0.04, 0.056],
+        offset_range_max=[-0.059, -0.039, 0.057],
+        noise_std=0.07,
         draw_box=False,  # todo:cautious!
         box_color=(0, 255, 0),
         box_thickness=2
     )
-    img = augmentation2_module.augment_image(img, color_channel_inv)
-    cv2.imwrite(img_pth + "/" + real_img_name + "_stage2" + suffix, img)
+    img2 = augmentation2_module.augment_image(img.copy(), color_channel_inv)
+    cv2.imwrite(img_pth + "/" + real_img_name + "_stage2." + suffix, img2)
+    print("Imgs processed done.")
