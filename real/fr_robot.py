@@ -8,17 +8,29 @@ class FR_Robot:
     def __init__(self,address='192.168.58.2'):
         self.robot = Robot.RPC(address)
 
+    @staticmethod
+    def check_pose_type(pose):
+        if isinstance(pose,np.ndarray):
+            assert pose.shape == (6,)
+        elif isinstance(pose,list):
+            assert len(pose) == 6
+        else:
+            raise TypeError('Pose must be a numpy array or list.')
+
     def move_cart(self,pose,tool,user,vel):
+        self.check_pose_type(pose)
         ret = self.robot.MoveCart(pose, tool=tool, user=user, vel=vel)
         if ret != 0:
             raise RuntimeError('point cannot arrive,error code:',ret)
 
     def move_l(self,pose,tool,user,vel):
+        self.check_pose_type(pose)
         ret = self.robot.MoveL(pose, tool=tool, user=user, vel=vel)
         if ret != 0:
             raise RuntimeError('point cannot arrive,error code:',ret)
 
     def servo_cart(self,desc_pos,mode,vel):
+        self.check_pose_type(desc_pos)
         ret = self.robot.ServoCart(desc_pos=desc_pos, mode=mode, vel=vel)
         if ret != 0:
             raise RuntimeError('point cannot arrive,error code:',ret)
@@ -69,17 +81,40 @@ class FR_Robot:
                     pos[i]+=180
         return pos
 
+    def go_vertical(self):
+        pos = fr_robot.get_gripper_TCP_pose()
+        pos[3] = -180.
+        pos[4] = 0.
+        self.move_cart(np.array(pos), tool=2, user=0, vel=40)
+
 if __name__ == '__main__':
+    # task = "go_vertical" #go_vertical/go_pose/print_pose
+    task = "go_pose"
+    # task = "print_pose"
+    # 1：320., 226.5
+    # 3:323.9  26.54
+    _dir = np.array([323.9 , 26.54]) - np.array([320., 226.5])
+    old = np.array([320., 226.5])
+    new = old + _dir/np.linalg.norm(_dir)*300.
+    print(new)
+    # init_pos = np.array(
+    #     [new[0], new[1], 160, 180.0, 0., 86.5])
+    init_pos  = [325.85005765, -68.5, 170., -180.0, 0., 86.5]
+    print(init_pos)
+
     fr_robot = FR_Robot()
-    init_pos = np.array(
-        [-555.3706665039062, -48.806392669677734, 169.33677673339844,180.0,0., 13.89781379699707])
-    # fr_robot.move_cart(np.array(init_pos),tool=2,user=0,vel=40)
-    # init_pos[2]-=300
-    # fr_robot.move_cart(np.array(init_pos), tool=2, user=0, vel=40)
-    pos = fr_robot.get_gripper_TCP_pose()
-    print(pos)
-    time.sleep(1)
-    print("move finished")
+    if task == "go_pose":
+        print("Go pose!")
+        fr_robot.move_cart(np.array(init_pos), tool=2, user=0, vel=5)
+    elif task == "print_pose":
+        print("Print pose!")
+        pos = fr_robot.get_gripper_TCP_pose()
+        print("current pos:",pos)
+    elif task == "go_vertical":
+        print("Go vertical!")
+        fr_robot.go_vertical()
+    else:
+        raise ValueError("Required task is not defined.")
     # while True:
     #     cur_pose = fr_robot.get_gripper_TCP_pose()
     #     fr_robot.servo_cart(cur_pose,mode=0,vel=10)
