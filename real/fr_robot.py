@@ -89,17 +89,9 @@ class FR_Robot:
 
 if __name__ == '__main__':
     # task = "go_vertical" #go_vertical/go_pose/print_pose
-    task = "go_pose"
-    # task = "print_pose"
-    # 1：320., 226.5
-    # 3:323.9  26.54
-    _dir = np.array([323.9 , 26.54]) - np.array([320., 226.5])
-    old = np.array([320., 226.5])
-    new = old + _dir/np.linalg.norm(_dir)*300.
-    print(new)
-    # init_pos = np.array(
-    #     [new[0], new[1], 160, 180.0, 0., 86.5])
-    init_pos  = [325.85005765, -68.5, 170., -180.0, 0., 86.5]
+    task = "print_pose"
+    # task = "go_pose"
+    init_pos = [325, -39, 160., -180.0, 0., 85]
     print(init_pos)
 
     fr_robot = FR_Robot()
@@ -115,9 +107,4 @@ if __name__ == '__main__':
         fr_robot.go_vertical()
     else:
         raise ValueError("Required task is not defined.")
-    # while True:
-    #     cur_pose = fr_robot.get_gripper_TCP_pose()
-    #     fr_robot.servo_cart(cur_pose,mode=0,vel=10)
-    #     time.sleep(1)
-    #     print(cur_pose)
-    #     time.sleep(0.1)
+

@@ -1,4 +1,6 @@
 from math import sin,cos,sqrt,atan2,pi
+from typing import Union,List
+
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
@@ -314,3 +316,15 @@ def normalize_rotvec(aa_arr ,is_deg = True):
         aa_arr[3:6] *= -1
         aa_arr[3:6] *= 360.-aa_arr_norm
     return aa_arr if is_deg else aa_arr * np.pi / 180
+
+def _6d_pose_to_mat(pose: Union[np.ndarray, List],degrees: bool = True) -> np.ndarray:
+    mat = np.eye(4)
+    mat[0:3,3] = pose[0:3]
+    mat[0:3, 0:3] = R.from_euler("xyz",pose[3:6],degrees = degrees).as_matrix()
+    return mat
+
+def mat_to_6d_pose(mat: np.ndarray,degrees: bool = True) -> np.ndarray:
+    pose = np.zeros(6)
+    pose[0:3] = mat[0:3,3]
+    pose[3:6] = R.from_matrix(mat[0:3, 0:3]).as_euler("xyz",degrees = degrees)
+    return pose

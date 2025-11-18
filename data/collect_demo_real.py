@@ -319,9 +319,9 @@ if __name__=='__main__':
             action_path = 'data/demo_{}/actions'.format(uu)
             pos_path = 'data/demo_{}/delta_pos_curgoal'.format(uu)
 
-        if uu!=0 and uu % desire_pt_change_cycle == 0:
-            teleop_and_pic(img_lst[-1], img2_lst[-1],img_size)
-            env.set_target_coordinate(use_cur=True)
+        # if uu!=0 and uu % desire_pt_change_cycle == 0:
+        #     teleop_and_pic(img_lst[-1], img2_lst[-1],img_size)
+        #     env.set_target_coordinate(use_cur=True)
 
         action_list = []
         expert_action_list=[] # 专家动作列表（用于DAgger的标签）
