@@ -5,23 +5,16 @@ import numpy as np
 import time
 import random
 from math import pi,sin,cos
-from utils.transform import make_an_angle_in_180, euler2Matrix, rmat2euler_degree
+from utils.transform import make_an_angle_in_180, euler2Matrix, rmat2euler_degree,_6d_pose_to_mat,mat_to_6d_pose
 from scipy.spatial.transform import Rotation as R
 from itertools import product
+from typing import Union,List
 
 class Environment:
-    def __init__(self,robot_address,w,h,fps,cam_devices,use_devices_type,dof,down_to_grasp_distance,init,stop_policy,velocity):
+    def __init__(self,robot_address,w,h,fps,cam_devices,use_devices_type,dof,down_to_grasp_distance,init,stop_policy,velocity,pick_and_place_from_slot = None):
         self.robot_ins=FR_Robot(robot_address)
         self.camera=Camera(devices=cam_devices,use_devices_type=use_devices_type,width=w, height=h, fps=fps)
-        # self.gripper=Gripper()
-
-        self.corner_1 = [-405.3097229003906, 199.8372497558593]  # 工作区域左上角点
-        self.corner_2 = [-707.1678466796875, -249.3986206054687]  # 工作区域右下角点
-
-        self.x_max = max(self.corner_1[0], self.corner_2[0])
-        self.x_min = min(self.corner_1[0], self.corner_2[0])
-        self.y_max = max(self.corner_1[1], self.corner_2[1])
-        self.y_min = min(self.corner_1[1], self.corner_2[1])
+        self.gripper=Gripper()
 
         self.down_dis = down_to_grasp_distance  # 夹爪下移距离，mm
 
@@ -88,6 +81,132 @@ class Environment:
         self.wgT=None
         self.gwT=None
 
+        #=======================pick and place========================
+        if pick_and_place_from_slot is not None and pick_and_place_from_slot["utilized"] == True:
+            self.safe_vel = pick_and_place_from_slot["velocity"]["safe"]
+            self.unsafe_vel = pick_and_place_from_slot["velocity"]["unsafe"]
+
+            self.wpts = pick_and_place_from_slot["slot"]["waypoints"]
+            self.num_wpts = len(self.wpts)
+
+            self.slot_wpts = []
+            slot_xy_rz = pick_and_place_from_slot["slot"]["slot_xy_rz"]
+            slot_down_hs = pick_and_place_from_slot["slot"]["slot_down_hs"]
+            for idx in range(len(slot_down_hs)):
+                if idx < len(slot_down_hs) -1 :
+                    self.slot_wpts.append([slot_xy_rz[0],slot_xy_rz[1],slot_down_hs[idx],-180.,0.,slot_xy_rz[2]])
+                else:
+                    self.slot_grasp_pose = [slot_xy_rz[0],slot_xy_rz[1],slot_down_hs[idx],-180.,0.,slot_xy_rz[2]]
+            self.num_slot_wpts = len(self.slot_wpts)
+
+            self.place_x_range = pick_and_place_from_slot["table"]["place_x_range"]
+            self.place_y_range = pick_and_place_from_slot["table"]["place_y_range"]
+            self.place_rz_range = pick_and_place_from_slot["table"]["place_rz_range"]
+            self.place_rxry_z = pick_and_place_from_slot["table"]["place_rxry_z"]
+
+            self.safeup_dev = pick_and_place_from_slot["deviation"]["safeup_z"]
+            self.tar_dev = pick_and_place_from_slot["deviation"]["tar_dev"]
+
+            self.g_place_T_safeup = np.eye(4)
+            self.g_place_T_safeup[2, 3] = self.safeup_dev
+
+            self.g_place_T_g_tar = _6d_pose_to_mat(self.tar_dev)
+        # =======================pick and place========================
+
+    def generate_table_pose(self):
+        _place_pose = np.zeros(6)
+        _place_pose[0] = random.uniform(self.place_x_range[0], self.place_x_range[1])
+        _place_pose[1] = random.uniform(self.place_y_range[0], self.place_y_range[1])
+        _place_pose[2] = self.place_rxry_z[2]
+        _place_pose[3] = self.place_rxry_z[0]
+        _place_pose[4] = self.place_rxry_z[1]
+        _place_pose[5] = random.uniform(self.place_rz_range[0], self.place_rz_range[1])
+
+        _w_T_g_place = _6d_pose_to_mat(_place_pose)
+        return _w_T_g_place,_place_pose
+
+
+    def pick_slot_and_place_table_once(self):
+        """
+        The function should be utilized only when the gripper is nearby the slot pose., and is finalized with the gripper at the goal pose.
+        :return:
+        """
+        # execute pre-grasp points
+        for idx in range(self.num_slot_wpts):
+            self.robot_ins.move_cart(pose=self.slot_wpts[idx], tool=2, user=0, vel=self.safe_vel)
+
+        # open gripper and go down
+        self.gripper.move_gripper(400, 60, 60)  # 考虑料盘的夹爪槽宽度，gripper 张开对应cmd400，闭合对应cmd600
+        time.sleep(3)
+        self.robot_ins.move_cart(pose=self.slot_grasp_pose, tool=2, user=0, vel=self.unsafe_vel)
+
+        # close gripper, go up and place on table
+        self.gripper.move_gripper(600, 60, 60)  # close
+        time.sleep(3)
+        print("Grasped part!")
+
+        for idx in range(self.num_slot_wpts):
+            self.robot_ins.move_cart(pose=self.slot_wpts[self.num_slot_wpts-1-idx], tool=2, user=0, vel=self.unsafe_vel if idx == 0 else self.safe_vel)
+
+        for idx in range(self.num_wpts):
+            self.robot_ins.move_cart(pose=self.wpts[self.num_wpts-1-idx], tool=2, user=0, vel=self.safe_vel)
+
+        _w_T_g_place, _place_pose = self.generate_table_pose()
+        self.robot_ins.move_cart(pose=_place_pose, tool=2, user=0, vel=self.safe_vel)
+        self.gripper.move_gripper(400, 60, 60)  # open
+        time.sleep(2)
+        print("Placed part!")
+
+        # go to safe pose and goal pose
+        w_T_safeup = _w_T_g_place @ self.g_place_T_safeup
+        safeup_pose = mat_to_6d_pose(w_T_safeup)
+        self.robot_ins.move_cart(pose=safeup_pose, tool=2, user=0, vel=self.safe_vel)
+        print("Went to safeup pose!")
+
+        _w_T_g_tar = _w_T_g_place @ self.g_place_T_g_tar
+        goal_pose = mat_to_6d_pose(_w_T_g_tar)
+        self.robot_ins.move_cart(pose=goal_pose, tool=2, user=0, vel=self.safe_vel)
+        print("Went to goal pose!")
+        self.set_target_coordinate() #goal pose set here
+        return _w_T_g_place, _place_pose
+
+    def pick_table_and_place_slot_once(self,_place_pose: Union[np.ndarray, List], _w_T_g_place: Union[np.ndarray, None]):
+        """
+        The function should be utilized only when the gripper is nearby the table goal pose , and is finalized with the gripper at the top of the slot pose.
+        :return:
+        """
+        # go to safe pose
+        if _w_T_g_place is None:
+            _w_T_g_place = _6d_pose_to_mat(_place_pose)
+        w_T_safeup = _w_T_g_place @ self.g_place_T_safeup
+        safeup_pose = mat_to_6d_pose(w_T_safeup)
+        self.robot_ins.move_cart(pose=safeup_pose, tool=2, user=0, vel=self.safe_vel)
+        print("Went to safeup pose!")
+
+        # open gripper and grasp
+        self.gripper.move_gripper(400, 60, 60)  # open
+        time.sleep(3)
+        self.robot_ins.move_cart(pose=_place_pose, tool=2, user=0, vel=self.safe_vel)
+        print("Went to table pose!")
+        self.gripper.move_gripper(600, 60, 60)  # close
+        time.sleep(3)
+        print("Grasped part!")
+
+        # execute pre-grasp points
+        for idx in range(self.num_wpts):
+            self.robot_ins.move_cart(pose=self.wpts[idx], tool=2, user=0, vel=self.safe_vel)
+        for idx in range(self.num_slot_wpts):
+            self.robot_ins.move_cart(pose=self.slot_wpts[idx], tool=2, user=0, vel=self.unsafe_vel if idx == self.num_slot_wpts-1 else self.safe_vel)
+
+        # plug in, open gripper and step back
+        self.robot_ins.move_cart(pose=self.slot_grasp_pose, tool=2, user=0, vel=self.unsafe_vel)
+        self.gripper.move_gripper(400, 60, 60)  # open
+        time.sleep(3)
+        print("Placed part in slot!")
+        for idx in range(self.num_slot_wpts):
+            self.robot_ins.move_cart(pose=self.slot_wpts[self.num_slot_wpts - 1 - idx], tool=2, user=0,vel=self.safe_vel)
+        print("Stepped back!")
+
     def get_dynamic_params(self, param_list, episode):
         """
         根据episode动态选择参数
@@ -115,46 +234,6 @@ class Environment:
         
         # 默认值
         return param_list[0][0] if len(param_list) > 0 else 0
-
-    def place(self,p_0):
-        '''
-        在工作空间内随机选取一点p_1,机器人从初始位置p_0抓取零件放置到p_1
-        :param p_0: 初始位置
-        :param down_dis: 预抓取时夹爪下移距离
-        :return: p_1:放置零件的新位置，p_1与p_0仅在x,y,rz上有差异
-        '''
-
-        #开始下去，抓零件
-        pose = p_0.copy()
-        pose[2] -= self.down_dis
-        self.gripper.move_gripper(0,60,60)
-        time.sleep(2)
-        self.robot_ins.move_l(pose, tool=2, user=0, vel=10)
-        self.gripper.move_gripper(3000, 60, 60)
-        time.sleep(2)
-
-        #开始上来
-        self.robot_ins.move_l(p_0, tool=2, user=0, vel=30)
-
-        # 开始平移到新位置
-        p_1=[0,0,0,0,0,0]
-        p_1[0]=random.uniform(self.x_min,self.x_max)
-        p_1[1]=random.uniform(self.y_min,self.y_max)
-        p_1[2]=p_0[2]
-        p_1[3]=p_0[3]
-        p_1[4]=p_0[4]
-        p_1[5]=random.randint(130, 175)*(random.randint(0, 1) - 0.5) * 2
-        self.robot_ins.move_l(p_1, tool=2, user=0, vel=30)
-
-        #开始下去
-        pose = p_1.copy()
-        pose[2] -= (self.down_dis*0.9)
-        self.robot_ins.move_l(pose, tool=1, user=0, vel=10)
-        self.gripper.move_gripper(0,60,60)
-        time.sleep(1)
-
-        self.robot_ins.move_l(p_1, tool=2, user=0, vel=10)
-        return p_1
 
     def cond_sample_init_pos_algo(self):
         if self.demo_cond_p == 0:

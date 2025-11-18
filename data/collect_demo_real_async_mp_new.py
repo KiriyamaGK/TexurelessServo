@@ -131,11 +131,17 @@ def control_process(config, dagger_config, state, goal_state, is_dagger_episode,
     from real.environment import Environment
     from utils.policy import get_expert_policy
 
+    desire_pt_change_cycle = config["overall_setting"]["desire_pt_change_cycle"]
+
+    place_pose = None
+    w_T_g_place = None
+
     # Initialize environment here only
     env = Environment(
         robot_address=config["hardware"]["robot_address"],
         **config["demo_collection"]["env"],
-        **config["hardware"]["camera"]
+        **config["hardware"]["camera"],
+        pick_and_place_from_slot=config["pick_and_place_from_slot"]
     )
 
     def get_goal_info():
@@ -145,14 +151,19 @@ def control_process(config, dagger_config, state, goal_state, is_dagger_episode,
         img2 = rtn_dict['img_2'] if 'img_2' in rtn_dict else None
         return img, img2
 
-    # goal_pose = None
-    goal_pose = [-482.7015380859375, -40.29251480102539, 181.0076141357422, -180., 0., -12.172778129577637]
-    if goal_pose is None:
-        goal_pose = env.robot_ins.get_gripper_TCP_pose()
-    goal_pose[3] = -180.0
-    goal_pose[4] = 0.0
-    # Convert to meters and radians
-    env.robot_ins.move_cart(goal_pose, tool=2, user=0, vel=40)
+    if not config["pick_and_place_from_slot"]["utilized"]:
+        # goal_pose = None
+        goal_pose = [-482.7015380859375, -40.29251480102539, 181.0076141357422, -180., 0., -12.172778129577637] #TODO:goal pose defined here
+        if goal_pose is None:
+            goal_pose = env.robot_ins.get_gripper_TCP_pose()
+        goal_pose[3] = -180.0
+        goal_pose[4] = 0.0
+        env.robot_ins.move_cart(goal_pose, tool=2, user=0, vel=40)
+    else:
+        for wpt in env.wpts:
+            env.robot_ins.move_cart(pose=wpt, tool=2, user=0, vel=env.safe_vel)
+
+        w_T_g_place, place_pose = env.pick_slot_and_place_table_once()
 
     # Initialize environment properly
     env.set_target_coordinate(use_cur=True)
@@ -305,6 +316,12 @@ def control_process(config, dagger_config, state, goal_state, is_dagger_episode,
                     print(f"Episode {current_episode} completed with {num_frames} frames.")
                     current_episode += 1
                     num_frames = 0
+
+                    # =======================pick and place========================
+                    if config["pick_and_place_from_slot"]["utilized"] and current_episode % desire_pt_change_cycle == 0:
+                        env.pick_table_and_place_slot_once(place_pose, w_T_g_place)
+                        w_T_g_place, place_pose = env.pick_slot_and_place_table_once()
+                    # =======================pick and place========================
 
                     # Reset for next episode
                     goal_img, goal_img2 = get_goal_info()
