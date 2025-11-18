@@ -17,14 +17,7 @@ def plot_6d_pts(X: np.ndarray, dim=2, method=None, color_list=None,point_size = 
     method: 降维方法 ('pca' 或 'tsne')
     color_list: 颜色列表，长度与X相同，用于分类着色
     """
-    if method == "tsne":
-        tech = TSNE(n_components=dim, random_state=42, perplexity=30)
-    else:
-        if not method == "pca":
-            raise ValueError("method must be 'pca' or 'tsne'")
-        tech = PCA(n_components=dim)
-
-    X_tech = tech.fit_transform(X)
+    X_tech = X
 
     # 设置图形大小
     fig = plt.figure(figsize=(12, 8))
@@ -41,27 +34,27 @@ def plot_6d_pts(X: np.ndarray, dim=2, method=None, color_list=None,point_size = 
         if dim == 2:
             for color, points in color_groups.items():
                 points = np.array(points)
-                label = "Base Expert" if color == "r" else "Dagger Traj" if color == "g" else "Aggregated Expert Traj"
+                label = "Base Expert Traj" if color == "r" else "Dagger Traj" if color == "g" else "Aggregated Expert Traj"
                 alpha = 0.6 if "Expert" in label else 0.6
                 ax.scatter(points[:, 0], points[:, 1],
                            c=color, alpha=alpha, s=point_size, label=label)
 
-            plt.xlabel(f'{method.upper()} Component 1')
-            plt.ylabel(f'{method.upper()} Component 2')
+            plt.xlabel('X')
+            plt.ylabel('Y')
 
         else:  # dim == 3
             ax = fig.add_subplot(111, projection='3d')
 
             for color, points in color_groups.items():
                 points = np.array(points)
-                label = "Base Expert" if color == "r" else "Dagger Traj" if color == "g" else "Aggregated Expert Traj"
+                label = "Base Expert Traj" if color == "r" else "Dagger Traj" if color == "g" else "Aggregated Expert Traj"
                 alpha = 0.6 if "Expert" in label else 0.6
                 ax.scatter(points[:, 0], points[:, 1], points[:, 2],
                            c=color, alpha=alpha, s=point_size, label=label)
 
-            ax.set_xlabel(f'{method.upper()} Component 1')
-            ax.set_ylabel(f'{method.upper()} Component 2')
-            ax.set_zlabel(f'{method.upper()} Component 3')
+            ax.set_xlabel('X')
+            ax.set_ylabel('Y')
+            ax.set_zlabel('Z')
 
         # 添加图例
         plt.legend()
@@ -79,7 +72,7 @@ def plot_6d_pts(X: np.ndarray, dim=2, method=None, color_list=None,point_size = 
             ax.set_ylabel(f'{method.upper()} Component 2')
             ax.set_zlabel(f'{method.upper()} Component 3')
 
-    plt.title(f'{method.upper()} Projection of 6D Vectors')
+    plt.title('3D Trajectories')
     plt.tight_layout()
     plt.savefig("res.png", dpi=300, bbox_inches='tight')
     plt.show()
@@ -113,30 +106,30 @@ def generate_poses_from_hdf5(hdf_pth:str,n_base_expert_demos = 1000000,traj_vis_
     color_lst = []
     f = h5py.File(hdf_pth, "r")
     for i in range(len(f['data'])):
-        if i>=-1 and i<2800000:
-            print(f"reading demo_{i}")
-            pos_list = f[f'data/demo_{i}/delta_pos_curgoal']  # 6d_pos(mm,deg) of the matrix g_gtar_T
-            is_base_expert_epi = i < n_base_expert_demos and vis_base_expert
-            is_dagger_epi = (np.linalg.norm(pos_list[-2][0:3]) > 2 or np.linalg.norm(pos_list[-2][3:6]) > 2) and i >= n_base_expert_demos and vis_dagger
-            is_aggregated_expert_epi = (not is_base_expert_epi) and (not is_dagger_epi) and vis_aggregated_expert
-            for idx,raw_pose in enumerate(pos_list):
-                if idx == 0 or idx % traj_vis_gap == 0:
-                    raw_pose = np.array(raw_pose)
-                    inv_T = np.eye(4)
-                    inv_T[:3, 3] = raw_pose[:3]
-                    inv_T[:3, :3] = R.from_rotvec(raw_pose[3:6] * np.pi / 180).as_matrix()
-                    T = np.linalg.inv(inv_T)
-                    new_pose = np.zeros(6)
-                    new_pose[:3] = T[:3, 3] / 1000 #mm2m
-                    new_pose[3:6] = R.from_matrix(T[:3, :3]).as_rotvec() / np.pi * 180 #rad2deg
-                    if is_base_expert_epi or is_aggregated_expert_epi or is_dagger_epi:
-                        X.append(new_pose)
-                        if is_base_expert_epi:
-                            color_lst.append('r')
-                        if is_dagger_epi:
-                            color_lst.append('g')
-                        if is_aggregated_expert_epi:
-                            color_lst.append('b')
+        print(f"reading demo_{i}")
+        pos_list = f[f'data/demo_{i}/delta_pos_curgoal']  # 6d_pos(mm,deg) of the matrix g_gtar_T
+        is_base_expert_epi = i < n_base_expert_demos and vis_base_expert
+        is_dagger_epi = (np.linalg.norm(pos_list[-2][0:3]) > 2 or np.linalg.norm(pos_list[-2][3:6]) > 2) and i >= n_base_expert_demos and vis_dagger
+        is_aggregated_expert_epi = (not is_base_expert_epi) and (not is_dagger_epi) and vis_aggregated_expert
+        for idx,raw_pose in enumerate(pos_list):
+            if idx == 0 or idx % traj_vis_gap == 0:
+                raw_pose = np.array(raw_pose)
+                inv_T = np.eye(4)
+                inv_T[:3, 3] = raw_pose[:3]
+                inv_T[:3, :3] = R.from_rotvec(raw_pose[3:6] * np.pi / 180).as_matrix()
+                T = np.linalg.inv(inv_T)
+                new_pose = np.zeros(6)
+                new_pose[:3] = T[:3, 3] / 1000 #mm2m
+                new_pose[2] = -new_pose[2]  # Z坐标符号互换
+                new_pose[3:6] = R.from_matrix(T[:3, :3]).as_rotvec() / np.pi * 180 #rad2deg
+                if is_base_expert_epi or is_aggregated_expert_epi or is_dagger_epi:
+                    X.append(new_pose[:3])
+                    if is_base_expert_epi:
+                        color_lst.append('r')
+                    if is_dagger_epi:
+                        color_lst.append('g')
+                    if is_aggregated_expert_epi:
+                        color_lst.append('b')
 
     X = np.array(X)
     f.close()
@@ -149,7 +142,7 @@ if __name__ == "__main__":
     hdf_pth = "/media/kiriyamagk/One Touch/AlignAnything/25.10.30/hdf5/mimic.hdf5"
     # if not random_gen
     n_base_expert_demos = 200
-    traj_vis_gap = 1 # interval of points to sample within one traj
+    traj_vis_gap = 3 # interval of points to sample within one traj
     point_size = 5
 
     #if random_gen
@@ -158,10 +151,10 @@ if __name__ == "__main__":
     #else:
     # traj_vis_type can be "all" or [(opt)"base_expert", (opt)"dagger", (opt)"aggregated_expert"]
     # traj_vis_type = ["dagger", "aggregated_expert"]
+    # traj_vis_type = ["base_expert"]
     # traj_vis_type = ["dagger"]
     # traj_vis_type = [ "aggregated_expert"]
-    traj_vis_type = [ "base_expert"]
-    # traj_vis_type = "all"
+    traj_vis_type = "all"
 
 
     if _random_gen:
