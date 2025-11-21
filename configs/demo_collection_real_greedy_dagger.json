@@ -1,0 +1,159 @@
+{
+    "hardware":{
+        "robot_address": "192.168.58.2",
+        "camera": {
+            "w": 640,
+            "h": 480,
+            "fps": 30,
+            "cam_devices": {
+               "img_1":"215222073421",
+                "img_2": "233622076143"
+            },
+            "use_devices_type": ["img_1","img_2"]
+        }
+    },
+    "overall_setting":{
+        "dataset_base_dir": "/home/user0/dataset",
+        "file_name": "25.11.21",
+        "demo_total_num": 1000,
+        "replace_existed_hdf5": false,
+        "delete_last_demo": false
+    },
+    "demo_collection":{
+        "env": {
+            "dof": 6,
+            "down_to_grasp_distance": 45,
+            "init": {
+                "uniform_evaluation": {
+                    "utilized": false
+                },
+                "conditioned_sampling": false,
+                "init_horizon_trans": {
+                    "_comment": "value format: [value, start_episode, end_episode] - value: 水平平移距离(mm), start_episode: 起始episode, end_episode: 结束episode",
+                    "value": [[20, 0, 1000]],
+                    "use_max_h_trans": false
+                },
+                "init_vertical_trans": {
+                    "_comment": "value format: [value, start_episode, end_episode] - value: 垂直平移距离(mm), start_episode: 起始episode, end_episode: 结束episode",
+                    "value": [[20, 0, 1000]],
+                    "using_max_v_trans": false,
+                    "using_minus": false
+                },
+                "init_rot": {
+                    "_comment": "value format: [theta1, theta2, theta3, start_episode, end_episode] - theta1,theta2,theta3: 三个旋转角度(度), start_episode: 起始episode, end_episode: 结束episode",
+                    "value": [[8, 8, 40, 0, 1000]],
+                    "use_max_rot": false
+                }
+            },
+            "stop_policy":{
+                "angle_eps": 0.35,
+                "dist_eps": 0.35
+            },
+            "velocity": {
+                "trans_vel": {
+                    "utilized":true,
+                    "value": [0.1,0.1]
+                },
+                "rot_vel": {
+                    "utilized": true,
+                    "value": 0.2
+                },
+                "uniform_vel": {
+                    "utilized":false,
+                    "value": 3
+                }
+            }
+        },
+
+        "data_collect_freq": 20,
+        "data_process_freq":1000,
+        "ctrl_freq": 20,
+        "frame_sampling_gap": 3,
+
+        "img": {
+            "save_type": "rgb",
+            "size": 300,
+            "augmentation": {
+                "utilized": true,
+                "pretrained_model_pth": "/home/kiriyamagk/桌面/AlignAnything/data/runs/detect/train/weights/best.pt",
+                "scale_range_min": 0.87,
+                "scale_range_max": 1.15,
+                "offset_range_min": -0.1,
+                "offset_range_max": 0.1,
+                "noise_std": 0.07
+            }
+        },
+        "record_pose": true,
+        "dagger": {
+            "utilized": true,
+            "expert_rectify_traj": true,
+            "n_base_expert_trajs": 1,
+            "num_selected_pts": 5,
+            "n_fail_pool_size": 20,
+            "train_epochs": 3,
+            "weights": {
+                "s_tr": 1,
+                "s_rot": 57.32,
+                "a_tr": 1,
+                "a_rot": 57.32,
+                "w1": 1,
+                "w2": 2
+            },
+            "check_freq": 2,
+            "action_error_threshold": 0.1,
+            "task_termination": {
+                "min_position_threshold": [5, 80],
+                "use_time_upperbound": 15,
+                "pose_error_threshold": {
+                    "trans": 20,
+                    "rot": 15,
+                    "time": 15
+                }
+            },
+            "model_path": "/media/kiriyamagk/One Touch/AlignAnything_real/25.11.21/models/dagger_episode_149_epoch_3_loss_0.0098.pth"
+        },
+        "post_process": {
+            "disturb_abs_rot": {
+                "utilized": false
+            },
+            "portion_last_episode":{
+                "utilized": true,
+                "portion_last_num":3
+            },
+            "add_end_episode":{
+                "utilized": false,
+                "add_num":5
+            },
+            "add_medium_episode":{
+                "utilized": false,
+                "add_num":2
+            }
+        }
+    },
+    "pick_and_place_from_slot": {
+        "utilized": true,
+        "desire_pt_change_cycle": 15,
+        "velocity": {
+            "safe": 30,
+            "unsafe": 5
+        },
+        "slot": {
+            "waypoints":
+                [[-299.08349609375, -38.92547607421875, 237.9884796142578, -180.0, 0.0, 92.00927734375],
+                [-202.46986389160156, -286.00341796875, 246.64797973632812, -180.0, 0.0, 47.87531280517578],
+                [189.10545349121094, -295.0101318359375, 246.65245056152344, -180.0, 0.0, 115.8315277099609]],
+            "slot_xy_rz": [325.0, -39.0, 85.0],
+            "slot_down_hs": [220.0,156.6,136.6]
+        },
+        "table": {
+            "place_x_range": [-522, -409],
+            "place_y_range": [-252, 167],
+            "place_rz_range": [-43, -3],
+            "place_rxry_z": [-180.0,0.0,165.0]
+        },
+        "deviation": {
+            "safeup_z": -30.0,
+            "tar_dev": [0.0, 0.0, -10.0, 0.0, 0.0, -18.0]
+        }
+    }
+}
