@@ -2,9 +2,7 @@ import os
 import numpy as np
 import json
 import threading
-
-
-
+from utils.transform import _6d_pose_to_mat,mat_to_6d_pose
 from real.environment import Environment
 from utils.transform import rotation_matrix_z,rmat2euler_rz_degree,compute_pos_error,error_pos_transform
 from utils.input_process import input_dict_preprocess
@@ -15,7 +13,7 @@ import torch
 from networks.helpers import get_network_cls
 from utils.input_process import clip_image,conditioned_clip_and_resize
 from utils.plot import plot_rot_and_trans,plot_trajs,plot_vel,plot_time,plot_img_diff,plot_error_pose,plot_6dvel
-from utils.statistics import calculate_success_rate,visualize_final_error
+from utils.statistics import calculate_success_rate,visualize_final_error,calculate_plug_success_rate
 from utils.policy import get_cur_goal_deltapos
 import atexit
 from utils.paths import path_completion,PROJECT_ROOT_DIR,determine_ckpt_dirs
@@ -27,6 +25,8 @@ def cleanup():
     # print("success list:",success_list)
     if eval_metrics["success_rate"]["utilized"]:
         calculate_success_rate(success_list, os.path.join(save_base_pth, "success_rate.json"))
+    if len(plug_success_list):
+        calculate_plug_success_rate(plug_success_list, os.path.join(save_base_pth, "plug_success_rate.json"))
     visualize_final_error(final_error_list, os.path.join(save_base_pth, "final_error.json"))
     np.save(os.path.join(save_base_pth, "even_distributed_successrate.npy"),np.array(success_even_distributed_list)) if len(success_even_distributed_list) else None
     plot_time(time_list,save_base_pth,show=False)
@@ -120,57 +120,25 @@ def get_goal_info(env):
 
 def _on_key_press(key):
     global global_start  # 声明修改全局变量
+    global plug_res
+
     try:
-        if key.char == 's':
-            print("============teleosperation started,press F for finish==========")
-            global_start = True
-            time.sleep(0.1)
+
+        if key.char == 's' and plug_res == "null":
+            print("Plug success.")
+            plug_res = "s"
+            # time.sleep(0.1)
+
+        elif key.char == 'f' and plug_res == "null":
+            print("Plug failed.")
+            plug_res = "f"
+            # time.sleep(0.1)
 
     except AttributeError:
         pass
 
-def teleop_and_pic(img_gt_1, img_gt_2,img_size):
-    global global_start  # 声明使用全局变量
-    global_start = False  # 重置状态
-
-    Teleop_ins = Teleop(robot_ins, trans_coeff=0.2, rot_coeff=0.1, use_rxry=True, use_z=True, use_camera=False,
-                        ctrl_freq=100, listen_finish=True)
-
-    print("============teleoperation process,print S for start============")
-    keyboard_listener = keyboard.Listener(on_press=_on_key_press)
-    keyboard_listener.start()
-
-    while not global_start:
-        pass
-    print("started")
-    keyboard_listener.stop()
-
-    teleop_thread = threading.Thread(target=Teleop_ins.operation, daemon=True)
-    teleop_thread.start()
-    while not Teleop_ins.stop_teleop:
-        rtn_dict = env.observation()
-        img = rtn_dict['img_1']
-        img2 = rtn_dict['img_2'] if 'img_2' in rtn_dict else None
-
-        # postprocess
-        img = clip_image(img, img_size, keep_right=True)
-        new_img=(0.5*img+0.5*img_gt_1).astype(np.uint8)
-        if img2 is not None:
-            img2 = clip_image(img2, img_size, keep_right=True)
-            new_img2 = (0.5 * img2 + 0.5 * img_gt_2).astype(np.uint8)
-            combined_img = np.hstack((new_img, new_img2))
-
-        else:
-            combined_img = new_img
-        cv2.imshow("Combined Image", combined_img)
-        cv2.waitKey(1)
-
-    time.sleep(0.1)
-    teleop_thread.join()
-
 if __name__ == '__main__':
     #===================================manually_set_info===================================
-    initial_teleop = False
     do_filter = False
     use_folder_goal = False
     if do_filter:
@@ -241,19 +209,42 @@ if __name__ == '__main__':
     model = _setup_model(model_config)
     velocity_dict ={"trans_vel": {"value": [0,0]},"rot_vel": {"value": 0}}
 
-    env = Environment(robot_address=config["hardware"]["robot_address"], dof=dof,down_to_grasp_distance=None,init=init,stop_policy={"angle_eps":0,"dist_eps":0},velocity=velocity_dict,
-                      **config["hardware"]["camera"])
+    # =======================pick and place========================
+    desire_pt_change_cycle = config["pick_and_place_from_slot"]["desire_pt_change_cycle"]
+    _plug_in = config["pick_and_place_from_slot"]["_plug_in"]
+    place_pose = None
+    w_T_g_place = None
+    # =======================pick and place========================
+
+    env = Environment(robot_address=config["hardware"]["robot_address"],
+                      dof=dof,down_to_grasp_distance=None,init=init,
+                      stop_policy={"angle_eps":0,"dist_eps":0},velocity=velocity_dict,
+                      **config["hardware"]["camera"],
+                      pick_and_place_from_slot=config["pick_and_place_from_slot"]
+                      )
     cam = env.camera
     robot_ins = env.robot_ins
 
-    if not initial_teleop:
-        # init_pos = robot_ins.get_gripper_TCP_pose()
+    # init_pos = robot_ins.get_gripper_TCP_pose()
+    if not config["pick_and_place_from_slot"]["utilized"]:
         in_desire_pt = init_pos if init_pos is not None else robot_ins.get_gripper_TCP_pose()
+        in_desire_pt[3] = -180.0
+        in_desire_pt[4] = 0.0
         env.robot_ins.move_cart(in_desire_pt,tool=2, user=0, vel=40)
     else:
-        img_1_gt = cv2.imread(os.path.join(goal_img_base_dir,"img1", f"{goal_idx}.png"))
-        img_2_gt = cv2.imread(os.path.join(goal_img_base_dir,"img2", f"{goal_idx}.png"))  # /255
-        teleop_and_pic(img_1_gt, img_2_gt,hdf5_img_size)
+        # =======================pick and place========================
+        for wpt in env.wpts:
+            env.robot_ins.move_cart(pose=wpt, tool=2, user=0, vel=env.safe_vel)
+
+        w_T_g_place, place_pose = env.pick_slot_and_place_table_once()
+        env.gripper.move_gripper(0, 60, 60)  # gripper is at opening 0 during data collection/rollout
+        time.sleep(4)
+        if config["pick_and_place_from_slot"]["_plug_in"]["utilized"]:
+            plug_res = "null"
+            plug_success_list = []
+            keyboard_listener = keyboard.Listener(on_press=_on_key_press)
+            keyboard_listener.start()
+        # =======================pick and place========================
     env.set_target_coordinate(use_cur=True)
     env.init()
     env.setup_stop_policy(stop_policy)
@@ -482,6 +473,52 @@ if __name__ == '__main__':
                         error_pos_list) != 0 else None
                     final_error_list.append(final_error_info_dict)
                     time_list.append([obj_id,use_time])
+                    # =======================pick and place========================
+                    if config["pick_and_place_from_slot"]["utilized"]:
+                        if not config["pick_and_place_from_slot"]["_plug_in"]["utilized"]:
+                            if (idx+1) % desire_pt_change_cycle == 0:
+                                env.pick_table_and_place_slot_once(place_pose, w_T_g_place)
+                                w_T_g_place, place_pose = env.pick_slot_and_place_table_once()
+                                env.gripper.move_gripper(0, 60, 60)  # gripper is at opening 0 during data collection/rollout
+                                time.sleep(4)
+                        else:
+                            cur_pose = env.robot_ins.get_gripper_TCP_pose()
+                            T_cur = _6d_pose_to_mat(cur_pose[:])
+                            T_pred_place = T_cur @ np.linalg.inv(env.g_place_T_g_tar)
+                            pred_place_pose = mat_to_6d_pose(T_pred_place)
+                            env.pick_table_and_place_slot_test(pred_place_pose, T_pred_place)
+                            print("Waiting for human feedback......")
+                            print(f"Rollout {idx}: Waiting for human feedback......")
+                            print(f"Rollout {idx}: plug_res current value: {plug_res}")
+                            # getting result.....
+                            while plug_res == "null":
+                                time.sleep(0.1)
+                            print(f"Rollout {idx}: Received plug_res: {plug_res}")
+                            if plug_res == "s":
+                                plug_success_list.append([obj_id,1])
+                                print(f"Rollout {idx}: Recorded success")
+                            else:
+                                assert plug_res == "f"
+                                plug_success_list.append([obj_id,0])
+                                print(f"Rollout {idx}: Recorded failure")
+
+                            plug_res = "null"
+                            print(f"Rollout {idx}: Reset plug_res to null")
+                            time.sleep(1)
+
+                            if (idx+1) % desire_pt_change_cycle == 0:
+                                w_T_g_place, place_pose = env.pick_slot_and_place_table_once()
+                                print(f"Rollout {idx}: Changed placement position")
+                            else:
+                                env.pick_slot_and_place_table_once(w_T_g_place, place_pose)
+                                print(f"Rollout {idx}: Used same placement position")
+
+                            env.gripper.move_gripper(0, 60,
+                                                     60)  # gripper is at opening 0 during data collection/rollout
+                            time.sleep(4)
+                    env.init()
+
+                    # =======================pick and place========================
                     if video_flag:
                         out.release()
                     break

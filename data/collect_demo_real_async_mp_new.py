@@ -131,10 +131,11 @@ def control_process(config, dagger_config, state, goal_state, is_dagger_episode,
     from real.environment import Environment
     from utils.policy import get_expert_policy
 
-    desire_pt_change_cycle = config["overall_setting"]["desire_pt_change_cycle"]
-
+    # =======================pick and place========================
+    desire_pt_change_cycle = config["pick_and_place_from_slot"]["desire_pt_change_cycle"]
     place_pose = None
     w_T_g_place = None
+    # =======================pick and place========================
 
     # Initialize environment here only
     env = Environment(
@@ -160,10 +161,14 @@ def control_process(config, dagger_config, state, goal_state, is_dagger_episode,
         goal_pose[4] = 0.0
         env.robot_ins.move_cart(goal_pose, tool=2, user=0, vel=40)
     else:
+        # =======================pick and place========================
         for wpt in env.wpts:
             env.robot_ins.move_cart(pose=wpt, tool=2, user=0, vel=env.safe_vel)
 
         w_T_g_place, place_pose = env.pick_slot_and_place_table_once()
+        env.gripper.move_gripper(0,60,60) # gripper is at opening 0 during data collection/rollout
+        time.sleep(4)
+        # =======================pick and place========================
 
     # Initialize environment properly
     env.set_target_coordinate(use_cur=True)
@@ -262,6 +267,14 @@ def control_process(config, dagger_config, state, goal_state, is_dagger_episode,
                         f"Episode {current_episode} completed with {num_frames} frames.")
                     current_episode += 1
                     num_frames = 0
+                    # =======================pick and place========================
+                    if config["pick_and_place_from_slot"]["utilized"] and current_episode % desire_pt_change_cycle == 0:
+                        env.pick_table_and_place_slot_once(place_pose, w_T_g_place)
+                        w_T_g_place, place_pose = env.pick_slot_and_place_table_once()
+                        env.gripper.move_gripper(0, 60, 60)  # gripper is at opening 0 during data collection/rollout
+                        time.sleep(4)
+                    # =======================pick and place========================
+                    
                     # Reset for next episode
                     goal_img, goal_img2 = get_goal_info()
                     goal_state["img_1"] = goal_img.copy()
@@ -321,6 +334,8 @@ def control_process(config, dagger_config, state, goal_state, is_dagger_episode,
                     if config["pick_and_place_from_slot"]["utilized"] and current_episode % desire_pt_change_cycle == 0:
                         env.pick_table_and_place_slot_once(place_pose, w_T_g_place)
                         w_T_g_place, place_pose = env.pick_slot_and_place_table_once()
+                        env.gripper.move_gripper(0, 60, 60)  # gripper is at opening 0 during data collection/rollout
+                        time.sleep(4)
                     # =======================pick and place========================
 
                     # Reset for next episode
@@ -388,8 +403,8 @@ def collision_detection_process(config,state,is_dagger_episode,collision_result,
     cali_T = np.eye(4)
     cali_T[1, 1] *= -1
     cali_T[2, 2] *= -1
-    cali_T[0, 3] = -0.006
-    cali_T[2, 3] = 0.085
+    cali_T[0, 3] = 0
+    cali_T[2, 3] = 0.075
     
     collision_detector = CollisionDetector(
         gripper_path, object_path,
@@ -404,6 +419,7 @@ def collision_detection_process(config,state,is_dagger_episode,collision_result,
     performance_monitor = []
     print_counter = 0
     last_wgT = None
+    last_wgT_tar = None
 
     threshold = config["demo_collection"]["dagger"]["task_termination"]["min_position_threshold"]
 
@@ -425,19 +441,22 @@ def collision_detection_process(config,state,is_dagger_episode,collision_result,
 
                 # Get state update
                 wgT = state['wgT']
+                wgT_tar = state['wgT_tar']
 
                 if wgT is None:
                     continue
 
                 if last_wgT is None:
-                    dT = np.linalg.inv(state['wgT_tar']) @ wgT
+                    #   First frame
+                    dT = np.linalg.inv(wgT_tar) @ wgT
                 else:
                     # Subsequent frames
-                    dT = np.linalg.inv(last_wgT) @ wgT
+                    dT = np.linalg.inv(last_wgT) @ last_wgT_tar @ np.linalg.inv(wgT_tar) @ wgT
 
                 dT[0:3, 3] /= 1000  # mm to meters
                 collision_detector.update_pos(dT)
                 last_wgT = wgT
+                last_wgT_tar = wgT_tar
 
                 # Perform collision detection
                 contact_flag, distance = collision_detector.check_collision(

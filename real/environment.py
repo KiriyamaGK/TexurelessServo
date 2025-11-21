@@ -126,7 +126,7 @@ class Environment:
         return _w_T_g_place,_place_pose
 
 
-    def pick_slot_and_place_table_once(self):
+    def pick_slot_and_place_table_once(self,_w_T_g_place = None, _place_pose = None):
         """
         The function should be utilized only when the gripper is nearby the slot pose., and is finalized with the gripper at the goal pose.
         :return:
@@ -151,7 +151,9 @@ class Environment:
         for idx in range(self.num_wpts):
             self.robot_ins.move_cart(pose=self.wpts[self.num_wpts-1-idx], tool=2, user=0, vel=self.safe_vel)
 
-        _w_T_g_place, _place_pose = self.generate_table_pose()
+        if _w_T_g_place is None and _place_pose is None:
+            _w_T_g_place, _place_pose = self.generate_table_pose()
+
         self.robot_ins.move_cart(pose=_place_pose, tool=2, user=0, vel=self.safe_vel)
         self.gripper.move_gripper(400, 60, 60)  # open
         time.sleep(2)
@@ -195,7 +197,7 @@ class Environment:
         # execute pre-grasp points
         for idx in range(self.num_wpts):
             self.robot_ins.move_cart(pose=self.wpts[idx], tool=2, user=0, vel=self.safe_vel)
-        for idx in range(self.num_slot_wpts):
+        for idx in range(self.num_slot_wpts): # len(“slot_down_hs") - 1
             self.robot_ins.move_cart(pose=self.slot_wpts[idx], tool=2, user=0, vel=self.unsafe_vel if idx == self.num_slot_wpts-1 else self.safe_vel)
 
         # plug in, open gripper and step back
@@ -206,6 +208,37 @@ class Environment:
         for idx in range(self.num_slot_wpts):
             self.robot_ins.move_cart(pose=self.slot_wpts[self.num_slot_wpts - 1 - idx], tool=2, user=0,vel=self.safe_vel)
         print("Stepped back!")
+
+    def pick_table_and_place_slot_test(self,_place_pose: Union[np.ndarray, List], _w_T_g_place: Union[np.ndarray, None]):
+        """
+        The function should be utilized only when the gripper is nearby the table goal pose , and is finalized with the gripper at the top of the slot pose.
+        :return:
+        """
+        # go to safe pose
+        if _w_T_g_place is None:
+            _w_T_g_place = _6d_pose_to_mat(_place_pose)
+        w_T_safeup = _w_T_g_place @ self.g_place_T_safeup
+        safeup_pose = mat_to_6d_pose(w_T_safeup)
+        self.robot_ins.move_cart(pose=safeup_pose, tool=2, user=0, vel=self.safe_vel)
+        print("Went to safeup pose!")
+
+        # open gripper and grasp
+        self.gripper.move_gripper(400, 60, 60)  # open
+        time.sleep(3)
+        self.robot_ins.move_cart(pose=_place_pose, tool=2, user=0, vel=self.safe_vel)
+        print("Went to table pose!")
+        self.gripper.move_gripper(600, 60, 60)  # close
+        time.sleep(3)
+        print("Grasped part!")
+
+        # execute pre-grasp points
+        for idx in range(self.num_wpts):
+            self.robot_ins.move_cart(pose=self.wpts[idx], tool=2, user=0, vel=self.safe_vel)
+        self.robot_ins.move_cart(pose=self.slot_wpts[0], tool=2, user=0, vel=self.safe_vel)
+        self.robot_ins.move_cart(pose=self.slot_wpts[1], tool=2, user=0, vel=1)
+        # open gripper
+        self.gripper.move_gripper(400, 60, 60)  # open
+        time.sleep(3)
 
     def get_dynamic_params(self, param_list, episode):
         """
@@ -482,7 +515,7 @@ class Environment:
         if need_reinit:
             if self.uniform_eval_settings["utilized"] and (1+cur_epoch) % freq_per_pos == 0 and cur_epoch<all_epochs_num-1:
                 self.evenly_posid += 1
-            self.init()
+            # self.init()
         return rtn_dict
 
     def need_reinit(self):

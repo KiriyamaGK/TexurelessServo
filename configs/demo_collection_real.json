@@ -31,18 +31,18 @@
                 "conditioned_sampling": false,
                 "init_horizon_trans": {
                     "_comment": "value format: [value, start_episode, end_episode] - value: 水平平移距离(mm), start_episode: 起始episode, end_episode: 结束episode",
-                    "value": [[20, 0, 349], [5, 350, 600]],
+                    "value": [[20, 0, 349], [5, 350, 700],[20, 701, 800]],
                     "use_max_h_trans": false
                 },
                 "init_vertical_trans": {
                     "_comment": "value format: [value, start_episode, end_episode] - value: 垂直平移距离(mm), start_episode: 起始episode, end_episode: 结束episode",
-                    "value": [[20, 0, 349], [5, 350, 600]],
+                    "value": [[20, 0, 349], [5, 350, 700],[20, 701, 800]],
                     "using_max_v_trans": true,
                     "using_minus": true
                 },
                 "init_rot": {
                     "_comment": "value format: [theta1, theta2, theta3, start_episode, end_episode] - theta1,theta2,theta3: 三个旋转角度(度), start_episode: 起始episode, end_episode: 结束episode",
-                    "value": [[8, 8, 40, 0, 349], [5 ,5 ,5, 350, 600]],
+                    "value": [[8, 8, 40, 0, 349], [5 ,5 ,5, 350, 700],[8, 8, 40, 701, 800]],
                     "use_max_rot": false
                 }
             },
@@ -89,7 +89,7 @@
             "utilized": true,
             "dagger_episodes": {
                 "_comment": "use_type: list of [start_episode, end_episode] - episodes in these ranges will use DAgger strategy",
-                "use_type": [[100,200],[300, 400], [500, 550]]
+                "use_type": [[100,200],[300, 400], [500, 550], [600, 750]]
             },
             "train": {
                 "_comment": "use_type: list of [episode_idx, num_train_epochs, dagger_proportion] - dagger_proportion in [0,1] or null to not specify",
@@ -127,9 +127,10 @@
     },
     "pick_and_place_from_slot": {
         "utilized": true,
+        "desire_pt_change_cycle": 30,
         "velocity": {
-            "safe": 12,
-            "unsafe": 2
+            "safe": 30,
+            "unsafe": 5
         },
         "slot": {
             "waypoints":
@@ -147,7 +148,7 @@
         },
         "deviation": {
             "safeup_z": -30.0,
-            "tar_dev": [0.0, 0.0, -50.0, 0.0, 0.0, -18.0]
+            "tar_dev": [0.0, 0.0, -10.0, 0.0, 0.0, -18.0]
         }
     }
 }
