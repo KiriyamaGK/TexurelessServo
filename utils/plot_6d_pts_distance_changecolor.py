@@ -100,7 +100,7 @@ def plot_6d_pts(X: np.ndarray, dim=2, method=None, color_list=None, point_size=5
     return X_tech
 
 
-def generate_poses_from_hdf5(hdf_pth: str, n_base_expert_demos=1000000, traj_vis_gap=1, traj_vis_type="all"):
+def generate_poses_from_hdf5(hdf_pth: str, n_base_expert_demos=1000000, traj_vis_gap=1, traj_vis_type="all",num_selected_pts = 0,n_fail_pool_size = 0,):
     if isinstance(traj_vis_type, list):
         assert len(traj_vis_type)
     else:
@@ -111,17 +111,17 @@ def generate_poses_from_hdf5(hdf_pth: str, n_base_expert_demos=1000000, traj_vis
 
     X = []
     color_lst = []
-    dagger_traj_indices = []  # 记录每个点属于哪个dagger轨迹
+    traj_indices = []  # 记录每个点属于哪个dagger轨迹
     current_traj_id = 0
+    n_delta_trajs_gap = n_fail_pool_size//num_selected_pts
 
     f = h5py.File(hdf_pth, "r")
     for i in range(len(f['data'])):
         print(f"reading demo_{i}")
         pos_list = f[f'data/demo_{i}/delta_pos_curgoal']  # 6d_pos(mm,deg) of the matrix g_gtar_T
         is_base_expert_epi = i < n_base_expert_demos and vis_base_expert
-        is_dagger_epi = (np.linalg.norm(pos_list[-2][0:3]) > 2 or np.linalg.norm(
-            pos_list[-2][3:6]) > 2) and i >= n_base_expert_demos and vis_dagger
-        is_aggregated_expert_epi = (not is_base_expert_epi) and (not is_dagger_epi) and vis_aggregated_expert
+        is_dagger_epi = i >= n_base_expert_demos and (i+1-n_base_expert_demos) % (n_delta_trajs_gap+n_fail_pool_size) <= n_delta_trajs_gap and vis_dagger
+        is_aggregated_expert_epi = i >= n_base_expert_demos and (i+1-n_base_expert_demos) % (n_delta_trajs_gap+n_fail_pool_size) > n_delta_trajs_gap and vis_aggregated_expert
 
         for idx, raw_pose in enumerate(pos_list):
             if idx == 0 or idx % traj_vis_gap == 0:
@@ -138,32 +138,29 @@ def generate_poses_from_hdf5(hdf_pth: str, n_base_expert_demos=1000000, traj_vis
                     X.append(new_pose)
                     if is_base_expert_epi:
                         color_lst.append('r')
-                        dagger_traj_indices.append(-1)  # 非dagger轨迹标记为-1
+                        traj_indices.append(current_traj_id)  # 记录轨迹ID
                     elif is_dagger_epi:
                         color_lst.append('g')
-                        dagger_traj_indices.append(current_traj_id)  # 记录轨迹ID
+                        traj_indices.append(current_traj_id)  # 记录轨迹ID
                     elif is_aggregated_expert_epi:
                         color_lst.append('b')
-                        dagger_traj_indices.append(-1)  # 非dagger轨迹标记为-1
-
-        # 如果是dagger轨迹，增加轨迹ID
-        if is_dagger_epi:
-            current_traj_id += 1
-
+                        traj_indices.append(current_traj_id)  # 记录轨迹ID
+        if is_base_expert_epi or is_aggregated_expert_epi or is_dagger_epi:
+            current_traj_id += 1  # ✅ 每个demo只增加一次
     X = np.array(X)
-    dagger_traj_indices = np.array(dagger_traj_indices)
+    traj_indices = np.array(traj_indices)
     f.close()
-    return X, color_lst, dagger_traj_indices
+    return X, color_lst, traj_indices
 
 
-def plot_6d_pts_with_dagger_gradient(X: np.ndarray, dagger_traj_indices: np.ndarray, dim=2, method=None,
-                                     color_list=None, point_size=5, alpha=0.6):
+def plot_6d_pts_with_dagger_gradient(X: np.ndarray, traj_indices: np.ndarray, dim=2, method=None,
+                                     color_list=None, point_size=5, alpha=0.6,vis_type=None):
     """
     可视化6维向量，Dagger轨迹使用渐变色
 
     参数:
     X: 输入数据
-    dagger_traj_indices: 每个点对应的dagger轨迹索引，-1表示非dagger轨迹
+    traj_indices: 每个点对应的dagger轨迹索引，-1表示非dagger轨迹
     """
     if method == "tsne":
         tech = TSNE(n_components=dim, random_state=42, perplexity=30)
@@ -185,31 +182,31 @@ def plot_6d_pts_with_dagger_gradient(X: np.ndarray, dagger_traj_indices: np.ndar
 
         if dim == 2:
             # 绘制Base Expert (红色)
-            if np.any(base_expert_mask):
-                plt.scatter(X_tech[base_expert_mask, 0], X_tech[base_expert_mask, 1],
-                            c='r', alpha=alpha, s=point_size, label="Base Expert")
+            if np.any(base_expert_mask) and vis_type == 'Base Expert':
+                points = X_tech[base_expert_mask]
+                traj_ids = traj_indices[base_expert_mask]
 
             # 绘制Aggregated Expert (蓝色)
-            if np.any(aggregated_expert_mask):
-                plt.scatter(X_tech[aggregated_expert_mask, 0], X_tech[aggregated_expert_mask, 1],
-                            c='b', alpha=alpha, s=point_size, label="Aggregated Expert Traj")
+            if np.any(aggregated_expert_mask) and vis_type == "Aggregated Expert":
+                points = X_tech[aggregated_expert_mask]
+                traj_ids = traj_indices[aggregated_expert_mask]
 
             # 绘制Dagger轨迹，使用渐变色
-            if np.any(dagger_mask):
-                dagger_points = X_tech[dagger_mask]
-                dagger_traj_ids = dagger_traj_indices[dagger_mask]
+            if np.any(dagger_mask) and vis_type == 'DAgger':
+                points = X_tech[dagger_mask]
+                traj_ids = traj_indices[dagger_mask]
 
-                # 为每个轨迹分配颜色
-                unique_traj_ids = np.unique(dagger_traj_ids)
-                colormap = cm.viridis
+            # 为每个轨迹分配颜色
+            unique_traj_ids = np.unique(traj_ids)
+            colormap = cm.viridis
 
-                for traj_id in unique_traj_ids:
-                    if traj_id != -1:  # 跳过非dagger轨迹标记
-                        traj_mask = dagger_traj_ids == traj_id
-                        color = colormap(traj_id / max(1, len(unique_traj_ids) - 1))
-                        plt.scatter(dagger_points[traj_mask, 0], dagger_points[traj_mask, 1],
-                                    c=[color], alpha=alpha, s=point_size,
-                                    label=f"Dagger Traj {traj_id}" if traj_id == 0 else "")
+            for traj_id in unique_traj_ids:
+                if traj_id != -1:  # 跳过非dagger轨迹标记
+                    traj_mask = traj_ids == traj_id
+                    color = colormap(traj_id / max(1, len(unique_traj_ids) - 1))
+                    plt.scatter(points[traj_mask, 0], points[traj_mask, 1],
+                                c=[color], alpha=alpha, s=point_size,
+                                label=f"Dagger Traj {traj_id}" if traj_id == 0 else "")
 
             plt.xlabel(f'{method.upper()} Component 1')
             plt.ylabel(f'{method.upper()} Component 2')
@@ -219,32 +216,31 @@ def plot_6d_pts_with_dagger_gradient(X: np.ndarray, dagger_traj_indices: np.ndar
 
             # 绘制Base Expert (红色)
             if np.any(base_expert_mask):
-                ax.scatter(X_tech[base_expert_mask, 0], X_tech[base_expert_mask, 1], X_tech[base_expert_mask, 2],
-                           c='r', alpha=alpha, s=point_size, label="Base Expert")
+                points = X_tech[base_expert_mask]
+                traj_ids = traj_indices[base_expert_mask]
 
             # 绘制Aggregated Expert (蓝色)
             if np.any(aggregated_expert_mask):
-                ax.scatter(X_tech[aggregated_expert_mask, 0], X_tech[aggregated_expert_mask, 1],
-                           X_tech[aggregated_expert_mask, 2],
-                           c='b', alpha=alpha, s=point_size, label="Aggregated Expert Traj")
+                points = X_tech[aggregated_expert_mask]
+                traj_ids = traj_indices[aggregated_expert_mask]
 
             # 绘制Dagger轨迹，使用渐变色
             if np.any(dagger_mask):
-                dagger_points = X_tech[dagger_mask]
-                dagger_traj_ids = dagger_traj_indices[dagger_mask]
+                points = X_tech[dagger_mask]
+                traj_ids = traj_indices[dagger_mask]
 
-                # 为每个轨迹分配颜色
-                unique_traj_ids = np.unique(dagger_traj_ids)
-                colormap = cm.viridis
+            # 为每个轨迹分配颜色
+            unique_traj_ids = np.unique(traj_ids)
+            colormap = cm.viridis
 
-                for traj_id in unique_traj_ids:
-                    if traj_id != -1:  # 跳过非dagger轨迹标记
-                        traj_mask = dagger_traj_ids == traj_id
-                        color = colormap(traj_id / max(1, len(unique_traj_ids) - 1))
-                        ax.scatter(dagger_points[traj_mask, 0], dagger_points[traj_mask, 1],
-                                   dagger_points[traj_mask, 2],
-                                   c=[color], alpha=alpha, s=point_size,
-                                   )
+            for traj_id in unique_traj_ids:
+                if traj_id != -1:  # 跳过非dagger轨迹标记
+                    traj_mask = traj_ids == traj_id
+                    color = colormap(traj_id / max(1, len(unique_traj_ids) - 1))
+                    ax.scatter(points[traj_mask, 0], points[traj_mask, 1],
+                               points[traj_mask, 2],
+                               c=[color], alpha=alpha, s=point_size,
+                               )
 
             ax.set_xlabel(f'{method.upper()} Component 1')
             ax.set_ylabel(f'{method.upper()} Component 2')
@@ -254,18 +250,17 @@ def plot_6d_pts_with_dagger_gradient(X: np.ndarray, dagger_traj_indices: np.ndar
         plt.legend()
 
         # 添加渐变色条
-        if np.any(dagger_mask):
-            # 创建ScalarMappable对象
-            unique_traj_ids = np.unique(dagger_traj_ids[dagger_traj_ids != -1])
-            if len(unique_traj_ids) > 0:
-                norm = plt.Normalize(vmin=min(unique_traj_ids), vmax=max(unique_traj_ids))
-                sm = plt.cm.ScalarMappable(cmap=cm.viridis, norm=norm)
-                sm.set_array([])
+        # 创建ScalarMappable对象
+        unique_traj_ids = np.unique(traj_ids[traj_ids != -1])
+        if len(unique_traj_ids) > 0:
+            norm = plt.Normalize(vmin=min(unique_traj_ids), vmax=max(unique_traj_ids))
+            sm = plt.cm.ScalarMappable(cmap=cm.viridis, norm=norm)
+            sm.set_array([])
 
-                # 添加色条
-                cbar = plt.colorbar(sm, ax=plt.gca() if dim == 2 else ax,
-                                    label='Dagger Trajectory Index')
-                cbar.set_label('Dagger Trajectory Index', rotation=270, labelpad=15)
+            # 添加色条
+            cbar = plt.colorbar(sm, ax=plt.gca() if dim == 2 else ax,
+                                label=f'{vis_type} Trajectory Index')
+            cbar.set_label(f'{vis_type} Trajectory Index', rotation=270, labelpad=15)
 
     else:
         # 如果没有颜色列表，使用默认的单色绘制
@@ -280,7 +275,7 @@ def plot_6d_pts_with_dagger_gradient(X: np.ndarray, dagger_traj_indices: np.ndar
             ax.set_ylabel(f'{method.upper()} Component 2')
             ax.set_zlabel(f'{method.upper()} Component 3')
 
-    plt.title(f'{method.upper()} Projection of 6D Vectors (Dagger Trajectories Colored by Episode)')
+    plt.title(f'{method.upper()} Projection of 6D Vectors ({vis_type} Trajectories Colored by Episode)')
     plt.tight_layout()
     plt.savefig("res.png", dpi=300, bbox_inches='tight')
     plt.show()
@@ -292,14 +287,17 @@ if __name__ == "__main__":
     _random_gen = False
     vis_dim = 3
     vis_method = "pca"  # "pca" or "tsne"
-    hdf_pth = "/media/kiriyamagk/One Touch/AlignAnything/25.10.30/hdf5/mimic.hdf5"
+    hdf_pth = "/media/kiriyamagk/One Touch/AlignAnything_real/25.11.21/hdf5/mimic.hdf5"
 
-    n_base_expert_demos = 200
+    n_base_expert_demos = 176
+    num_selected_pts = 5
+    n_fail_pool_size = 60
     traj_vis_gap = 1  # interval of points to sample within one traj
 
     # traj_vis_type can be "all" or [(opt)"base_expert", (opt)"dagger", (opt)"aggregated_expert"]
     # traj_vis_type = ["dagger", "aggregated_expert"]
     traj_vis_type = ["dagger"]
+    # traj_vis_type = ["aggregated_expert"]
 
     # 点的大小和透明度参数
     point_size = 5
@@ -310,9 +308,16 @@ if __name__ == "__main__":
         plot_6d_pts(X, dim=vis_dim, method=vis_method, color_list=None,
                     point_size=point_size, alpha=alpha_value)
     else:
-        X, color_list, dagger_traj_indices = generate_poses_from_hdf5(hdf_pth, n_base_expert_demos, traj_vis_gap,
-                                                                      traj_vis_type)
+        X, color_list, traj_indices = generate_poses_from_hdf5(hdf_pth, n_base_expert_demos, traj_vis_gap,
+                                                                      traj_vis_type,num_selected_pts,n_fail_pool_size)
+
+        if any(["dagger" in itm for itm in traj_vis_type]):
+            vis_type = "DAgger"
+        elif any(["base" in itm for itm in traj_vis_type]):
+            vis_type = "Base Expert"
+        else:
+            vis_type = "Aggregated Expert"
 
         # 使用新的绘图函数，支持dagger轨迹渐变色
-        plot_6d_pts_with_dagger_gradient(X, dagger_traj_indices, dim=vis_dim, method=vis_method,
-                                         color_list=color_list, point_size=point_size, alpha=alpha_value)
+        plot_6d_pts_with_dagger_gradient(X, traj_indices, dim=vis_dim, method=vis_method,
+                                         color_list=color_list, point_size=point_size, alpha=alpha_value,vis_type = vis_type)

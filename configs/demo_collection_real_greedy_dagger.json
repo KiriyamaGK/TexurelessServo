@@ -89,7 +89,7 @@
             "expert_rectify_traj": true,
             "n_base_expert_trajs": 1,
             "num_selected_pts": 5,
-            "n_fail_pool_size": 20,
+            "n_fail_pool_size": 60,
             "train_epochs": 3,
             "weights": {
                 "s_tr": 1,

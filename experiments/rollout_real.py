@@ -141,6 +141,7 @@ if __name__ == '__main__':
     #===================================manually_set_info===================================
     do_filter = False
     use_folder_goal = False
+    record_demo = False
     if do_filter:
         # from utils.kalman_filter import create_visual_servo_filter
         # kf = create_visual_servo_filter()
@@ -241,7 +242,6 @@ if __name__ == '__main__':
         time.sleep(4)
         if config["pick_and_place_from_slot"]["_plug_in"]["utilized"]:
             plug_res = "null"
-            plug_success_list = []
             keyboard_listener = keyboard.Listener(on_press=_on_key_press)
             keyboard_listener.start()
         # =======================pick and place========================
@@ -262,6 +262,7 @@ if __name__ == '__main__':
         # cv2.namedWindow('Images', cv2.WINDOW_NORMAL)
         success_even_distributed_list = []
         success_list = []
+        plug_success_list = []
         final_error_list = []
         time_list = []
         for idx in range(eval_epoch_num):
@@ -279,6 +280,7 @@ if __name__ == '__main__':
             vel_rot_lst=[]
             diff_list=[]
             video_flag = False
+            cnter = 0
 
             # get goal info
             im_goal_dict = get_goal_info(env)
@@ -304,10 +306,18 @@ if __name__ == '__main__':
             obj_pth=os.path.join(save_base_pth, str(obj_id))
             os.makedirs(obj_pth, exist_ok=True)
 
-            video_path=os.path.join(obj_pth,str(obj_id)+'.mp4')
+            img_video_dir =os.path.join(obj_pth,f'{int(time.time())}')
+            video_path = img_video_dir + "/videos/video.mp4"
+            # img_pth = img_video_dir + "/imgs"
+            if (record_video and video_flag) or record_demo:
+                os.makedirs(os.path.join(img_video_dir, "videos"), exist_ok=True)
+
             if not os.path.exists(video_path):
-                out = cv2.VideoWriter(video_path, mp4, fps, (vis_w*2, vis_h)) if num_cams==1 else cv2.VideoWriter(video_path, mp4, fps, (vis_w*2, vis_h*2))
-                video_flag=True
+                if not record_demo and idx == 0:
+                    out = cv2.VideoWriter(video_path, mp4, fps, (vis_w*2, vis_h)) if num_cams==1 else cv2.VideoWriter(video_path, mp4, fps, (vis_w*2, vis_h*2))
+                    video_flag=True
+                else:
+                    out = cv2.VideoWriter(video_path, mp4, fps,  (vis_w*2, vis_h*2))
             t_0 = time.time()
             # try:
             while True:
@@ -321,26 +331,30 @@ if __name__ == '__main__':
 
                 if cv2_visualize:
                     img_vis = img.copy() if img2 is None else np.vstack((img.copy(), img2.copy()))
-
                     combined_img = np.hstack((img_vis, img_goal_vis))
-
+                    if record_demo:
+                        # cv2.imwrite(img_pth+f"/{str(cnter).zfill(5)}.png", combined_img)
+                        cnter += 1
                     cv2.imshow('Images:cur|goal', combined_img)
-                    if record_video and video_flag:
+                    if (record_video and video_flag) or record_demo:
                         out.write(combined_img)
                     if cv2.waitKey(1) & 0xFF == ord('q'):     #1ms
                         env.init()
                         break
                 img = conditioned_clip_and_resize(img=img, img_h=img_h, img_w=img_w, hdf5_img_size=hdf5_img_size,keep_right=True)[:,:,::-1]
                 img2 = conditioned_clip_and_resize(img=img2, img_h=img_h, img_w=img_w,hdf5_img_size=hdf5_img_size,keep_right=True)[:,:,::-1] if img2 is not None else None
-
+                # import random
+                # if random.uniform(0, 1) > 0.8:
+                #     cv2.imwrite(f"{int(time.time())}_1.png",img)
+                #     cv2.imwrite(f"{int(time.time())}_2.png", img2)
                 obs_dict={
-                    "robot0_eye_in_hand_image": img[:, :, ::-1],
-                    "robot0_eye_in_hand_image_goal": img_goal[:, :, ::-1]
+                    "robot0_eye_in_hand_image": img.copy(),
+                    "robot0_eye_in_hand_image_goal": img_goal.copy()
                 }
 
                 if img2 is not None:
-                    obs_dict["robot0_eye_in_hand_image_2"]=img2[:, :, ::-1]
-                    obs_dict["robot0_eye_in_hand_image_2_goal"]=img_goal2[:, :, ::-1]
+                    obs_dict["robot0_eye_in_hand_image_2"]=img2.copy()
+                    obs_dict["robot0_eye_in_hand_image_2_goal"]=img_goal2.copy()
                 if not cv2_visualize:
                     img_vis = img.copy() if img2 is None else np.vstack((img.copy(), img2.copy()))
                     img_goal_vis = img_goal.copy() if img_goal2 is None else np.vstack((img_goal.copy(), img_goal2.copy()))
@@ -519,7 +533,7 @@ if __name__ == '__main__':
                     env.init()
 
                     # =======================pick and place========================
-                    if video_flag:
+                    if (record_video and video_flag) or record_demo:
                         out.release()
                     break
 

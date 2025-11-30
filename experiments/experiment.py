@@ -99,7 +99,7 @@ class BehaviorCloningExperiment():
         os.makedirs(self._log_dir, exist_ok=False)
         shutil.copy(self.config_path, os.path.join(self._model_out_dir, "config.json"))
         with open(os.path.join(self._model_out_dir, "config.json"), 'r+') as f:
-            data = json.load(f) #json.load:参数是文件对象；json.loads:参数是json格式的字符串
+            data = json.load(f) #json.load:参数是文件对象；json.loads:参数是json格式的字符串，最后返回对象
             if self.additional_demo_info is not None and "init" in self.additional_demo_info["demo_collection"].keys():
                 data['dataset']['additional_demo_info']={"pose_and_orientations":self.additional_demo_info["demo_collection"]["init"]["pose_and_orientations"]}
             data['dataset']['hdf5_img_size'] = self.hdf_img_size

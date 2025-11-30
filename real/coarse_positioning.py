@@ -10,7 +10,7 @@ from ultralytics import YOLO
 
 class Coarse_Locolization:
     def __init__(self,cam_cfg = None,rbt_cfg = None,p_s: Union[List, np.ndarray] = None, p_e: Union[List, np.ndarray] = None, num_devs: int = 0,ctrl_freq: int = 30, model_pth:str = None,motion_vel = 0.0, wpt_radius = 0.0,bbox_center_thresh = 0,conf_thresh = 0.0, color_cn_inv = True,
-                 init_pose = None,do_down_to_grasp=False,grasp_offset_x=0.0,grasp_offset_y=0.0,grasp_offset_z = 0.0,place_pose = None,record = True):
+                 init_pose = None,do_down_to_grasp=False,grasp_offset_x=0.0,grasp_offset_y=0.0,grasp_offset_z = 0.0,place_pose = None,record_pose = True,record_video = True):
         self.cam = Camera(**cam_cfg)
         self.rbt = FR_Robot(**rbt_cfg)
         self.wpts,self.dirr_vec = generate_waypoints(p_s, p_e, num_devs)
@@ -51,9 +51,17 @@ class Coarse_Locolization:
             self.place_pose = place_pose
             self.gripper.move_gripper(0, 60, 60)  # open
             time.sleep(2)
-        self.do_record = record
-        if self.do_record:
+        self.record_pose = record_pose
+        self.record_video = record_video
+        if self.record_video or self.record_pose:
+            self.save_base = "coarse_positioning_results" + f"/{int(time.time())}"
+            os.makedirs(self.save_base, exist_ok=True)
+        if self.record_pose:
             self.record_pose_list = []
+        if self.record_video:
+            mp4 = cv2.VideoWriter_fourcc(*'mp4v')
+            fps = 30
+            self.out = cv2.VideoWriter(self.save_base + "/res.mp4", mp4, fps, (self.cam.width, self.cam.height * 2))
 
     def get_motion_vec_from_bbox(self,xc,yc):
         delta_x = float(xc-self.cam.width/2)
@@ -123,7 +131,7 @@ class Coarse_Locolization:
             #get detect res
             detect_res = get_detect_result(self.model,img,tracker_enabled=True,color_channel_inv=self.color_cn_inv)
             confs = detect_res["confidences"]
-            bboxes = detect_res["bbox"]
+            bboxes = detect_res["bbox"]#xyxy
 
             bbox_img = detect_res["res_img"]
             cv2.imshow("img",bbox_img)
@@ -146,17 +154,17 @@ class Coarse_Locolization:
             pos = self.rbt.get_gripper_TCP_pose()[:]
 
             if self.state_dict["state"] == "on_route":
-                if self.do_record:
+                if self.record_pose:
                     pos +=[0]
                     self.record_pose_list.append(pos)
                 self.update_tgt_pos()
-                self.rbt.servo_cart(self.tgt_pos,mode=0,vel=10.0)
+                self.rbt.servo_cart(self.tgt_pos[0:6],mode=0,vel=10.0)
             else:
                 tgt_bbox = bboxes[bbox_idx]
                 xc = (tgt_bbox[0] + tgt_bbox[2]) / 2
                 yc = (tgt_bbox[1] + tgt_bbox[3]) / 2
                 if self._in_bbox_center_thresh(xc,yc):
-                    if self.do_record:
+                    if self.record_pose:
                         pos += [1]
                         self.record_pose_list.append(pos)
                     if not self.do_down_to_grasp:
@@ -165,20 +173,22 @@ class Coarse_Locolization:
                     else:
                         self.pick_and_place()
                 else:
-                    if self.do_record:
+                    if self.record_pose:
                         pos += [0]
                         self.record_pose_list.append(pos)
-                        cv2.imwrite(f"{idx}.png",bbox_img)
+                    if self.record_video:
+                        self.out.write(bbox_img.copy())
                     delta_motion = self.get_motion_vec_from_bbox(xc,yc)
                     pos[0] += delta_motion[1]
                     pos[1] += delta_motion[0]
-                    self.rbt.servo_cart(pos,mode=0,vel=10.0)
+                    self.rbt.servo_cart(pos[0:6],mode=0,vel=10.0)
             elapsed = 1/self.ctrl_freq - (time.time()-ts)
             time.sleep(elapsed) if elapsed > 0 else None
             idx+=1
-        if self.do_record:
-            os.makedirs("coarse_positioning_results", exist_ok=True)
-            np.save("coarse_locolization_results/"+f"{int(time.time())}.npy",self.record_pose_list,allow_pickle=True)
+        if self.record_pose:
+            np.save(self.save_base + "/res.npy",self.record_pose_list)
+        if self.record_video:
+            self.out.release()
 
     def pick_and_place(self):
         leave_pose = self.rbt.get_gripper_TCP_pose()

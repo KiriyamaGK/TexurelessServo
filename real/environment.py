@@ -209,7 +209,7 @@ class Environment:
             self.robot_ins.move_cart(pose=self.slot_wpts[self.num_slot_wpts - 1 - idx], tool=2, user=0,vel=self.safe_vel)
         print("Stepped back!")
 
-    def pick_table_and_place_slot_test(self,_place_pose: Union[np.ndarray, List], _w_T_g_place: Union[np.ndarray, None]):
+    def pick_table_and_place_slot_test(self,_place_pose: Union[np.ndarray, List], _w_T_g_place: Union[np.ndarray, None],norm_leave:bool=False):
         """
         The function should be utilized only when the gripper is nearby the table goal pose , and is finalized with the gripper at the top of the slot pose.
         :return:
@@ -230,7 +230,13 @@ class Environment:
         self.gripper.move_gripper(600, 60, 60)  # close
         time.sleep(3)
         print("Grasped part!")
-
+        if norm_leave:
+            cur_pose = self.robot_ins.get_gripper_TCP_pose()
+            cur_T = _6d_pose_to_mat(cur_pose)
+            g_place_T_safeup = np.eye(4)
+            g_place_T_safeup[2, 3] = -90.0
+            future_pose = mat_to_6d_pose(cur_T @ g_place_T_safeup)
+            self.robot_ins.move_cart(pose=future_pose, tool=2, user=0, vel=self.safe_vel)
         # execute pre-grasp points
         for idx in range(self.num_wpts):
             self.robot_ins.move_cart(pose=self.wpts[idx], tool=2, user=0, vel=self.safe_vel)
@@ -530,7 +536,7 @@ class Environment:
         else:
             if time.time()-self.vel_timer>=self.in_threshold_range_time and self.vel_in_threshold_flag:
                 need_reinit=True
-                print(f"velocity too small,reinit.....,vel_timer:{self.vel_timer}")
+                print(f"velocity too small,reinit.....,time-vel_timer:{time.time()-self.vel_timer}")
             else:
                 need_reinit=False
 

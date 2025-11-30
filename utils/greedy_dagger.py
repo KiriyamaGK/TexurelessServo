@@ -23,7 +23,11 @@ def greedy_state_selection(states, student_actions,
     action_error_trs = []
     action_error_rots = []
     # =================only for printing=================
-
+    # print("states_len:",len(states))
+    # print("plc_act_len:",len(student_actions))
+    # print("exp_act_len:", len(expert_actions))
+    assert len(student_actions) == len(expert_actions)
+    assert len(student_actions) == len(states)
     for i, state in enumerate(states):
         expert_action = expert_actions[i].astype(np.float64)
         expert_action[3:6] *= np.pi/180.

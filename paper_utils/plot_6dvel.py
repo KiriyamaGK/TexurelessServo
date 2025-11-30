@@ -31,7 +31,7 @@ def plot_vel6d(vel6d_dir,save_dir_name):
         ax1.plot(time_steps, vel6d_data[:, 2], 'b-', linewidth=2, label='Z方向')
         ax1.set_xlabel('时间步', fontproperties=font, fontsize=12)
         ax1.set_ylabel('平移运动量 (mm)', fontproperties=font, fontsize=12)
-        ax1.set_title('平移运动曲线', fontproperties=font, fontsize=14)
+        ax1.set_title('平移动作曲线', fontproperties=font, fontsize=14)
         ax1.grid(True, alpha=0.3)
         ax1.legend(prop=font)
 
@@ -41,7 +41,7 @@ def plot_vel6d(vel6d_dir,save_dir_name):
         ax2.plot(time_steps, vel6d_data[:, 5], 'b-', linewidth=2, label='theta_X方向')
         ax2.set_xlabel('时间步', fontproperties=font, fontsize=12)
         ax2.set_ylabel('旋转运动量 (°)', fontproperties=font, fontsize=12)
-        ax2.set_title('旋转运动曲线', fontproperties=font, fontsize=14)
+        ax2.set_title('旋转动作曲线', fontproperties=font, fontsize=14)
         ax2.grid(True, alpha=0.3)
         ax2.legend(prop=font)
 
@@ -49,7 +49,7 @@ def plot_vel6d(vel6d_dir,save_dir_name):
 
         # 保存图像
         os.makedirs(save_dir_name, exist_ok=True)
-        output_file = os.path.join(save_dir_name,f'vel6d_plot1.png')
+        output_file = os.path.join(save_dir_name,f'vel6d_plot6.png')
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
         print(f"6D速度图已保存到: {output_file}")
 
@@ -67,12 +67,12 @@ def plot_vel6d(vel6d_dir,save_dir_name):
 
 if __name__ == '__main__':
     # 配置参数
-    base_dir = "/home/kiriyamagk/桌面/0628_FORMAL_RESULTS/好的结果/2025-11-08_00-00-00"
+    base_dir = "/home/kiriyamagk/桌面/0628_FORMAL_RESULTS/好的结果/2025-11-23_00-00-00"
     # part_idx = 5
     part_idx = 1
-    save_dir_name = "real_with_dagger"
-    sub_dir = "2025-11-09_21-37-11(epoch599)"
-    timestamp = "1762699554"
+    save_dir_name = "real_with_dagger_new_light"
+    sub_dir = "2025-11-24_17-40-08(epoch360)light"
+    timestamp = "1763977892"
 
     # 构建文件路径
     real_base_dir = os.path.join(base_dir, sub_dir, str(part_idx), "vel6d")

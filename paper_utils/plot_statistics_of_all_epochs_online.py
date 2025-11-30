@@ -44,30 +44,14 @@ def find_chinese_fonts():
 chinese_fonts = find_chinese_fonts()
 
 
-def parse_time_data():
+def parse_time_data(time_data,str_date,episode_bias):
     """解析时间数据"""
-    time_data = {
-        199: "11-01_23.04",
-        247: "11-01_23.17",
-        295: "11-01_23.29",
-        343: "11-01_23.42",
-        391: "11-01_23.54",
-        439: "11-02_00.12",
-        487: "11-02_00.33",
-        535: "11-02_01.00",
-        583: "11-02_01.29",
-        631: "11-02_01.58",
-        679: "11-02_02.30",
-        727: "11-02_03.04",
-        775: "11-02_03.37",
-        823: "11-02_04.13",
-        871: "11-02_04.47",
-        919: "11-02_05.23",
-        967: "11-02_05.58"
-    }
 
     # 计算每个episode的累计时间（从开始时间11-01_22.39计算）
-    start_time = datetime(2023, 11, 1, 22, 39)  # 假设年份为2023
+    _mon,_dhm = str_date.split("-")
+    _day,_hm =  _dhm.split("_")
+    _hour,_min = _hm.split(".")
+    start_time = datetime(2023, int(_mon), int(_day), int(_hour), int(_min))  # 假设年份为2023
     time_deltas = {}
 
     for episode, time_str in time_data.items():
@@ -84,7 +68,7 @@ def parse_time_data():
 
         # 计算时间差
         time_delta = current_time - start_time
-        time_deltas[episode] = time_delta
+        time_deltas[episode+episode_bias] = time_delta
 
     return time_deltas
 
@@ -132,19 +116,19 @@ def load_error_data(base_dir, part_idx=5, epochs_to_process="all"):
     return res_list
 
 
-def plot_errors(res_list, fig_title="在线学习方法的平均误差", save_path="online_learning_errors", save_dir_name=None):
+def plot_errors(res_list, fig_title="在线学习方法的平均误差", save_path="online_learning_errors", save_dir_name=None,time_data = None,str_date = None,episode_bias = 0):
     """绘制误差曲线图"""
     if not res_list:
         print("没有数据可绘制")
         return
 
     # 提取数据
-    epochs = [item["epoch"] for item in res_list]
+    epochs = [item["epoch"] + episode_bias for item in res_list]
     tr_errors = [item["value"] for item in res_list]
     rot_errors = [item["rot"] for item in res_list]
 
     # 获取时间数据
-    time_deltas = parse_time_data()
+    time_deltas = parse_time_data(time_data,str_date,episode_bias)
 
     # 创建更宽的图表
     fig, ax = plt.subplots(figsize=(14, 7))  # 宽度从12增加到14
@@ -214,7 +198,7 @@ def plot_errors(res_list, fig_title="在线学习方法的平均误差", save_pa
             ax.annotate(f'{tr_error:.3f}',
                         (epoch, tr_error),
                         textcoords="offset points",
-                        xytext=(0, 12),
+                        xytext=(0, -18),
                         ha='center',
                         fontsize=10,
                         color='black',
@@ -224,7 +208,7 @@ def plot_errors(res_list, fig_title="在线学习方法的平均误差", save_pa
             ax.annotate(f'{rot_error:.3f}',
                         (epoch, rot_error),
                         textcoords="offset points",
-                        xytext=(0, -18),
+                        xytext=(0, 18),
                         ha='center',
                         fontsize=10,
                         color='black',
@@ -235,7 +219,7 @@ def plot_errors(res_list, fig_title="在线学习方法的平均误差", save_pa
     time_annotation_epochs = [epoch for epoch in epochs if epoch in time_deltas]
     # 如果数据点太多，每隔两个标注一个
     if len(time_annotation_epochs) > 0:
-        time_annotation_epochs = time_annotation_epochs[::3]  # 每隔两个点取一个，所以步长为
+        time_annotation_epochs = time_annotation_epochs[::2]  # 每隔1个点取一个，所以步长为
 
     # 获取y轴范围用于时间标注的垂直位置
     y_min, y_max = ax.get_ylim()
@@ -276,7 +260,7 @@ def plot_errors(res_list, fig_title="在线学习方法的平均误差", save_pa
     ax.set_xlim(min(epochs) - 10, max(epochs) + 10)  # 增加左右边距
 
     # 调整y轴范围，为时间标注留出空间
-    ax.set_ylim(y_min - 0.12 * (y_max - y_min), y_max)
+    ax.set_ylim(y_min - 0.12 * (y_max - y_min), y_max* 1.1)
 
     # 保存图片时明确指定字体
     fig.tight_layout()
@@ -308,10 +292,24 @@ def print_statistics(res_list):
 
 if __name__ == '__main__':
     # 配置参数
-    base_dir = "/home/kiriyamagk/桌面/0628_FORMAL_RESULTS/好的结果/2025-10_30_00-00-00"
-    part_idx = 5
-    # part_idx = 1
-    save_dir_name = "sim_with_dagger"
+    base_dir = "/home/kiriyamagk/桌面/0628_FORMAL_RESULTS/好的结果/2025-11-23_00-00-00"
+    # part_idx = 5
+    part_idx = 1
+    save_dir_name = "real_with_dagger_new"
+    episode_bias = 149
+    time_data = {
+        0: "11-22_14.49",
+        72: "11-22_15.19",
+        144: "11-22_15.51",
+        216: "11-22_16.25",
+        288: "11-22_16.58",
+        360: "11-22_17.32",
+        432: "11-22_18.05",
+        504: "11-22_18.39",
+        576: "11-22_19.13",
+        648: "11-22_19.47",
+    }
+    str_date = "11-22_14.14"
 
     save_path = "online_learning_errors"
     fig_title = "在线学习方法的平均误差"
@@ -322,7 +320,7 @@ if __name__ == '__main__':
 
     # 绘制图表
     if res_list:
-        plot_errors(res_list, fig_title, save_path, save_dir_name)
+        plot_errors(res_list, fig_title, save_path, save_dir_name,time_data,str_date,episode_bias)
         print_statistics(res_list)
     else:
         print("没有找到有效数据")

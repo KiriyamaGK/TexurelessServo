@@ -101,7 +101,7 @@ def generate_random_poses(n_samples:int,_range:list[list]):
     X = np.array(X)
     return X
 
-def generate_poses_from_hdf5(hdf_pth:str,n_base_expert_demos = 1000000,traj_vis_gap = 1,traj_vis_type = "all"):
+def generate_poses_from_hdf5(hdf_pth:str,n_base_expert_demos = 1000000,traj_vis_gap = 1,traj_vis_type = "all",num_selected_pts = 0,n_fail_pool_size = 0):
     if isinstance(traj_vis_type,list):
         assert len(traj_vis_type)
     else:
@@ -111,14 +111,19 @@ def generate_poses_from_hdf5(hdf_pth:str,n_base_expert_demos = 1000000,traj_vis_
     vis_aggregated_expert = traj_vis_type == "all" or "aggregated_expert" in traj_vis_type
     X = []
     color_lst = []
+
+    n_delta_trajs_gap = n_fail_pool_size//num_selected_pts
+
     f = h5py.File(hdf_pth, "r")
     for i in range(len(f['data'])):
         if i>=-1 and i<2800000:
             print(f"reading demo_{i}")
             pos_list = f[f'data/demo_{i}/delta_pos_curgoal']  # 6d_pos(mm,deg) of the matrix g_gtar_T
             is_base_expert_epi = i < n_base_expert_demos and vis_base_expert
-            is_dagger_epi = (np.linalg.norm(pos_list[-2][0:3]) > 2 or np.linalg.norm(pos_list[-2][3:6]) > 2) and i >= n_base_expert_demos and vis_dagger
-            is_aggregated_expert_epi = (not is_base_expert_epi) and (not is_dagger_epi) and vis_aggregated_expert
+            is_dagger_epi = i >= n_base_expert_demos and (i + 1 - n_base_expert_demos) % (
+                        n_delta_trajs_gap + n_fail_pool_size) <= n_delta_trajs_gap and vis_dagger
+            is_aggregated_expert_epi = i >= n_base_expert_demos and (i + 1 - n_base_expert_demos) % (
+                        n_delta_trajs_gap + n_fail_pool_size) > n_delta_trajs_gap and vis_aggregated_expert
             for idx,raw_pose in enumerate(pos_list):
                 if idx == 0 or idx % traj_vis_gap == 0:
                     raw_pose = np.array(raw_pose)
@@ -146,9 +151,12 @@ if __name__ == "__main__":
     _random_gen = False
     vis_dim = 3
     vis_method = "pca" # "pca" or "tsne
-    hdf_pth = "/media/kiriyamagk/One Touch/AlignAnything/25.10.30/hdf5/mimic.hdf5"
+    # hdf_pth = "/media/kiriyamagk/One Touch/AlignAnything/25.10.30/hdf5/mimic.hdf5"
+    hdf_pth = "/media/kiriyamagk/One Touch/AlignAnything_real/25.11.21/hdf5/mimic.hdf5"
     # if not random_gen
-    n_base_expert_demos = 200
+    n_base_expert_demos = 176
+    num_selected_pts = 5
+    n_fail_pool_size = 60
     traj_vis_gap = 1 # interval of points to sample within one traj
     point_size = 5
 
@@ -160,14 +168,14 @@ if __name__ == "__main__":
     # traj_vis_type = ["dagger", "aggregated_expert"]
     # traj_vis_type = ["dagger"]
     # traj_vis_type = [ "aggregated_expert"]
-    traj_vis_type = [ "base_expert"]
-    # traj_vis_type = "all"
+    # traj_vis_type = [ "base_expert"]
+    traj_vis_type = "all"
 
 
     if _random_gen:
         X = generate_random_poses(n_rand_samples,_range)
     else:
-        X, color_list = generate_poses_from_hdf5(hdf_pth,n_base_expert_demos,traj_vis_gap,traj_vis_type)
+        X, color_list = generate_poses_from_hdf5(hdf_pth,n_base_expert_demos,traj_vis_gap,traj_vis_type,num_selected_pts,n_fail_pool_size)
     plot_6d_pts(X,dim=vis_dim,method = vis_method,color_list = color_list,point_size = point_size)
     #要画的图：
     # 1.从dagger轨迹引出若干个专家轨迹，这种图画几张
