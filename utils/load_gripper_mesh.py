@@ -33,13 +33,13 @@ def parse_origin(origin_elem):
     return transform
 
 
-def build_transform_tree(urdf_path, joint_angles=None):
+def build_transform_tree(urdf_path, joint_angles=None): #joint_angles不为空时需要确定主动关节
     """构建URDF的完整变换树，支持设置关节角度"""
     if joint_angles is None:
         joint_angles = {}
     
     tree = ET.parse(urdf_path)
-    root = tree.getroot()
+    root = tree.getroot() #robot的name
 
     # 存储链接的变换矩阵（相对于世界坐标系）
     link_transforms = {}
@@ -98,6 +98,10 @@ def build_transform_tree(urdf_path, joint_angles=None):
         }
         
         joint_transforms[child_link] = base_transform
+    #以上得到了字典joint_info和joint_transforms，
+    #前者key是joint_name，val储存了关节信息，包括了类型，转轴，上下限，和mimic_joint信息，base_transform
+    #后者key是child_link,val储存了base_transform
+    #还得到了字典parent_map，每个键是child_link，值是parent_link
 
     # 计算所有关节的角度（考虑mimic关系）
     def get_joint_angle(joint_name):
@@ -133,9 +137,9 @@ def build_transform_tree(urdf_path, joint_angles=None):
             return base_transform
 
     # 找到基础链接（没有父关节的链接）
-    all_links = {link.get('name') for link in root.findall('link')}
+    all_links = {link.get('name') for link in root.findall('link')} #得到了集合
     all_children = set(parent_map.keys())
-    base_links = all_links - all_children
+    base_links = all_links - all_children #集合差值
 
     if not base_links:
         print("警告: 没有找到基础链接，使用第一个链接")
@@ -152,6 +156,9 @@ def build_transform_tree(urdf_path, joint_angles=None):
             current_link = queue.popleft()
 
             # 找到所有以当前链接为父链接的子链接
+            # 具体而言，current_link有两代后代，找到他的儿子joint，再找到后者的儿子child_link
+            # child_link 的绝对变换 = current_link的绝对变换 x joint相对于current_link的相对变换
+            # joint相对于current_link的相对变换 = joint的0旋转相对于current_link的相对变换 x 旋转变换
             for joint in root.findall('joint'):
                 parent_link_elem = joint.find('parent')
                 if parent_link_elem is not None and parent_link_elem.get('link') == current_link:
@@ -162,7 +169,7 @@ def build_transform_tree(urdf_path, joint_angles=None):
                     angle = get_joint_angle(joint_name)
                     
                     # 获取关节变换矩阵（考虑角度）
-                    joint_transform = get_joint_transform(joint_name, angle)
+                    joint_transform = get_joint_transform(joint_name, angle) # joint 对应的base_transform右乘纯旋转变换，旋转变化就是joint的axis乘以angle对应的旋转矩阵
                     
                     # 计算子链接的变换 = 父链接变换 × 关节变换
                     link_transforms[child_link] = np.dot(
@@ -186,7 +193,7 @@ def load_urdf_with_joint_angles(urdf_path, joint_angles=None, mesh_scale=1.0):
     link_transforms, joint_info = build_transform_tree(urdf_path, joint_angles)
 
     tree = ET.parse(urdf_path)
-    root = tree.getroot()
+    root = tree.getroot() #robot的name
 
     meshes = []
     mesh_info = []
@@ -253,7 +260,7 @@ def show_gripper_at_angles(joint_angles=None):
     if joint_angles is None:
         joint_angles = {}
     
-    urdf_path = "/home/kiriyamagk/桌面/AlignAnything/meshes/zhixing/crt_ctag2f120.urdf"
+    urdf_path = "D:/alignanything/meshes/zhixing/crt_ctag2f120.urdf"
     
     # 加载URDF模型
     meshes, mesh_info, joint_info = load_urdf_with_joint_angles(urdf_path, joint_angles)
