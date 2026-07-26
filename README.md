@@ -1,4 +1,4 @@
-# A Calibration-Free Two-Stage Visual Servoing Framework for Industrial Bin-Picking via Online Imitation Learning
+# TexurelessServo
 
 Official implementation for:
 
