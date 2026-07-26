@@ -1,10 +1,10 @@
-# Calibration-Free Two-Stage Visual Servoing Framework for Industrial Bin-Picking via Online Imitation Learning
+# A Calibration-Free Two-Stage Visual Servoing Framework for Industrial Bin-Picking via Online Imitation Learning
 
 Official implementation for:
 
-**A Calibration-Free Two-Stage Visual Servoing Framework for Industrial Bin-Picking via Online Imitation Learning**
+**[CASE 2026] A Calibration-Free Two-Stage Visual Servoing Framework for Industrial Bin-Picking via Online Imitation Learning**
 
-**Authors:** Zixi Ying\*, Shuhang Kong\*, Xiaowu Kong†, Xuanyang Liu
+**Authors:** Zixi Ying, Shuhang Kong, Xiaowu Kong, Xuanyang Liu
 
 This repository implements a two-stage RGB-only visual servoing framework for semi-structured industrial bin-picking. The pipeline first performs YOLO-based coarse 2D centering, then uses an online imitation learning policy to servo the robot to a precise 6-DoF grasp pose from dual wrist camera images.
 
